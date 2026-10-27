@@ -35,6 +35,7 @@ import {
   type InteractiveMessagePayload,
 } from '@/lib/whatsapp/interactive';
 import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption';
+import { notifyConnectOutbound } from '@/lib/astra-connect';
 import { supabaseAdmin } from '@/lib/flows/admin-client';
 import {
   phoneVariants,
@@ -536,6 +537,24 @@ export async function sendMessageToConversation(
       err instanceof Error ? err.message : err
     );
   }
+
+  // Astra Connect thread sync: every human / template send that did not
+  // come from Connect's AI must be POSTed to /message so Connect's
+  // rolling summary stays complete. Best-effort; never blocks the send.
+  void notifyConnectOutbound({
+    db: supabaseAdmin(),
+    accountId,
+    customerPhone: typeof contact?.phone === 'string' ? contact.phone : null,
+    messageId: waMessageId,
+    author: messageType === 'template' ? 'template' : 'human',
+    text: persistedText,
+    templateName: templateName || null,
+  }).catch((err) =>
+    console.error(
+      '[astra-connect] outbound notify after send failed:',
+      err instanceof Error ? err.message : err
+    )
+  );
 
   return { messageId: messageRecord.id, whatsappMessageId: waMessageId };
 }

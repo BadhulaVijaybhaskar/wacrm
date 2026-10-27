@@ -17,6 +17,11 @@ import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { runAutomationsForTrigger } from '@/lib/automations/engine'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
+import {
+  dispatchInboundToAstraConnect,
+  isAstraConnectActive,
+  loadAstraConnectAccountConfig,
+} from '@/lib/astra-connect'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import {
   handleTemplateWebhookChange,
@@ -954,12 +959,51 @@ async function processMessage(
     }).catch((err) => console.error('[automations] dispatch failed:', err))
   }
 
-  // AI auto-reply. Runs only for plain-text inbound the deterministic
-  // flow runner did NOT consume (flows win over the LLM), and only when
-  // the account has enabled it. Awaited inside `after()` (same reason as
-  // the webhook dispatch below); `dispatchInboundToAiReply` owns its
-  // eligibility gates + try/catch and never throws.
-  if (!flowConsumed && !interactiveReplyId && inboundText.trim()) {
+  // Astra Connect adapter (opt-in per account). When enabled, Connect's
+  // AI Employee owns the reply — wacrm's built-in AI must not also
+  // answer. Forward text and/or media; Connect handles language.
+  const astraConfig = await loadAstraConnectAccountConfig(
+    supabaseAdmin(),
+    accountId
+  )
+  const astraActive = isAstraConnectActive(astraConfig)
+
+  if (astraActive) {
+    const mediaId =
+      message.image?.id ||
+      message.video?.id ||
+      message.document?.id ||
+      message.audio?.id ||
+      message.sticker?.id ||
+      null
+    await dispatchInboundToAstraConnect({
+      db: supabaseAdmin(),
+      accountId,
+      conversationId: conversation.id,
+      contactId: contactRecord.id,
+      configOwnerUserId,
+      messageId: message.id,
+      messageTimestamp: message.timestamp,
+      text: inboundText || contentText,
+      customerPhone:
+        typeof contactRecord.phone === 'string' ? contactRecord.phone : null,
+      customerName:
+        typeof contactRecord.name === 'string' ? contactRecord.name : null,
+      messageType: message.type,
+      mediaId,
+      mediaUrl,
+      mediaMimeType: mediaType,
+      mediaCaption: message.image?.caption || message.video?.caption ||
+        message.document?.caption || null,
+      mediaFilename: message.document?.filename || null,
+    })
+  } else if (!flowConsumed && !interactiveReplyId && inboundText.trim()) {
+    // Built-in AI auto-reply. Runs only for plain-text inbound the
+    // deterministic flow runner did NOT consume (flows win over the
+    // LLM), and only when the account has enabled it. Awaited inside
+    // `after()` (same reason as the webhook dispatch below);
+    // `dispatchInboundToAiReply` owns its eligibility gates + try/catch
+    // and never throws.
     await dispatchInboundToAiReply({
       accountId,
       conversationId: conversation.id,

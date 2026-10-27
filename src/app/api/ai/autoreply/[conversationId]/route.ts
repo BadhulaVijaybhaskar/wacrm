@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit'
+import { notifyConnectHandoff } from '@/lib/astra-connect'
+import { supabaseAdmin } from '@/lib/ai/admin-client'
 
 type Params = { params: Promise<{ conversationId: string }> }
 
@@ -47,7 +49,7 @@ export async function POST(request: Request, { params }: Params) {
     // Confirm the conversation is in the caller's account before writing.
     const { data: conv, error: convErr } = await supabase
       .from('conversations')
-      .select('id')
+      .select('id, astra_conversation_id, contact:contacts(phone)')
       .eq('id', conversationId)
       .eq('account_id', accountId)
       .maybeSingle()
@@ -95,6 +97,30 @@ export async function POST(request: Request, { params }: Params) {
         { status: 500 },
       )
     }
+
+    // Astra Connect: Take over → handoff:true; Resume AI / release →
+    // handoff:false so the AI Employee answers again from the next inbound.
+    const contact = conv.contact as { phone?: string } | { phone?: string }[] | null
+    const contactPhone = Array.isArray(contact)
+      ? contact[0]?.phone
+      : contact?.phone
+    void notifyConnectHandoff({
+      db: supabaseAdmin(),
+      accountId,
+      handoff: paused,
+      astraConversationId:
+        typeof conv.astra_conversation_id === 'string'
+          ? conv.astra_conversation_id
+          : null,
+      customerPhone: contactPhone ?? null,
+      by: userId,
+      reason: paused ? 'agent_takeover' : 'agent_resume',
+    }).catch((err) =>
+      console.error(
+        '[astra-connect] handoff notify after takeover/resume failed:',
+        err instanceof Error ? err.message : err
+      )
+    )
 
     return NextResponse.json({ success: true, paused })
   } catch (err) {

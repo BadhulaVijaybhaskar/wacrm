@@ -193,6 +193,10 @@ vi.mock('@/lib/flows/admin-client', () => ({
   }),
 }));
 
+vi.mock('@/lib/astra-connect', () => ({
+  notifyConnectOutbound: vi.fn(async () => undefined),
+}));
+
 interface CapturedWrites {
   message?: Record<string, unknown>;
   conversation?: Record<string, unknown>;

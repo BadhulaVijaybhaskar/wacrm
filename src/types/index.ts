@@ -192,6 +192,8 @@ export interface Conversation {
   ai_autoreply_disabled?: boolean;
   ai_reply_count?: number;
   ai_handoff_summary?: string | null;
+  /** Astra Connect conversation id (conv_…), migration 043. */
+  astra_conversation_id?: string | null;
 }
 
 // ============================================================
@@ -317,6 +319,14 @@ export interface WhatsAppConfig {
    * inbound attachments expire. Migration 039.
    */
   mirror_inbound_media?: boolean;
+  /**
+   * When true, inbound WhatsApp messages are forwarded to Astra Connect
+   * instead of wacrm's built-in AI auto-reply. Requires CONNECT_ADAPTER_URL
+   * + WACRM_ADAPTER_SECRET on the server. Migration 043.
+   */
+  astra_connect_enabled?: boolean;
+  /** Astra Connect tenant_id sent on every adapter call. Migration 043. */
+  astra_connect_tenant_id?: string | null;
 }
 
 // Raw Meta status enum. We persist this verbatim from Meta (sync + webhook)

@@ -644,11 +644,32 @@ export function MessageThread({
     async (status: ConversationStatus) => {
       if (!conversation) return;
 
-      const supabase = createClient();
-      await supabase
-        .from("conversations")
-        .update({ status })
-        .eq("id", conversation.id);
+      // Route through the status API so Astra Connect gets /handoff
+      // handoff:false when an agent closes the chat. Fall back to a
+      // direct update if the API is unreachable so the inbox still moves.
+      try {
+        const res = await fetch(
+          `/api/conversations/${conversation.id}/status`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status }),
+          },
+        );
+        if (!res.ok) {
+          const supabase = createClient();
+          await supabase
+            .from("conversations")
+            .update({ status })
+            .eq("id", conversation.id);
+        }
+      } catch {
+        const supabase = createClient();
+        await supabase
+          .from("conversations")
+          .update({ status })
+          .eq("id", conversation.id);
+      }
 
       onStatusChange(conversation.id, status);
     },

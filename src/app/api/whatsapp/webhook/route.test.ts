@@ -5,6 +5,9 @@ const h = vi.hoisted(() => ({
   runAutomationsForTrigger: vi.fn(),
   dispatchInboundToFlows: vi.fn(),
   dispatchInboundToAiReply: vi.fn(),
+  dispatchInboundToAstraConnect: vi.fn(),
+  loadAstraConnectAccountConfig: vi.fn(),
+  isAstraConnectActive: vi.fn(),
   dispatchWebhookEvent: vi.fn(),
   state: {
     // Result the message upsert's .select() resolves to. A genuine insert
@@ -275,6 +278,11 @@ vi.mock('@/lib/flows/engine', () => ({
 vi.mock('@/lib/ai/auto-reply', () => ({
   dispatchInboundToAiReply: h.dispatchInboundToAiReply,
 }))
+vi.mock('@/lib/astra-connect', () => ({
+  dispatchInboundToAstraConnect: h.dispatchInboundToAstraConnect,
+  loadAstraConnectAccountConfig: h.loadAstraConnectAccountConfig,
+  isAstraConnectActive: h.isAstraConnectActive,
+}))
 vi.mock('@/lib/webhooks/deliver', () => ({
   dispatchWebhookEvent: h.dispatchWebhookEvent,
 }))
@@ -395,6 +403,9 @@ beforeEach(() => {
   })
   h.dispatchInboundToFlows.mockResolvedValue({ consumed: false })
   h.dispatchInboundToAiReply.mockResolvedValue(undefined)
+  h.dispatchInboundToAstraConnect.mockResolvedValue(undefined)
+  h.loadAstraConnectAccountConfig.mockResolvedValue(null)
+  h.isAstraConnectActive.mockReturnValue(false)
   h.dispatchWebhookEvent.mockResolvedValue(undefined)
   h.runAutomationsForTrigger.mockImplementation(() => {
     h.state.automationStarted++
