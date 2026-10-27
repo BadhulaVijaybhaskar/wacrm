@@ -6,10 +6,16 @@
  */
 
 import { toE164 } from './phone'
-import { buildSignedMediaUrl } from './media'
+import {
+  buildSignedMediaUrlWithExpiry,
+  MEDIA_URL_TTL_SECONDS,
+} from './media'
+import { mediaFilename } from '@/lib/media/filename'
+import type { ContentType } from '@/types'
 import type { ConnectTenantContext } from './read-auth'
 
 const MAX_LIMIT = 100
+const MAX_TAKEOVER_REASON = 500
 
 export function clampLimit(raw: string | null, fallback = 50): number {
   const n = Number(raw)
@@ -65,6 +71,8 @@ export interface ConnectConversationItem {
   tenant_id: string
   astra_conversation_id: string | null
   employee_id: string | null
+  /** WhatsApp phone_number_id for this tenant's number. */
+  phone_number_id: string | null
   status: string
   handoff: HandoffState
   unread_count: number
@@ -79,10 +87,70 @@ export interface ConnectConversationItem {
   }
 }
 
+export type HandoffFilter = 'ai' | 'human'
+
+/** Apply handoff=ai|human before pagination (same rules as response field). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function applyHandoffFilter(q: any, handoff?: HandoffFilter | null) {
+  if (handoff === 'ai') {
+    return q
+      .or('ai_autoreply_disabled.is.null,ai_autoreply_disabled.eq.false')
+      .is('assigned_agent_id', null)
+  }
+  if (handoff === 'human') {
+    return q.or(
+      'ai_autoreply_disabled.eq.true,assigned_agent_id.not.is.null',
+    )
+  }
+  return q
+}
+
+/**
+ * Filter by effective employee id:
+ * COALESCE(conversations.astra_employee_id, whatsapp_config.astra_employee_id)
+ * — the same value the response `employee_id` field shows.
+ */
+export function applyEmployeeIdFilter(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  q: any,
+  employeeId: string | null | undefined,
+  fallbackEmployeeId: string | null,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): any {
+  if (!employeeId) return q
+  if (fallbackEmployeeId === employeeId) {
+    // Rows with an explicit match OR null (coalesce → number default).
+    return q.or(
+      `astra_employee_id.eq.${employeeId},astra_employee_id.is.null`,
+    )
+  }
+  return q.eq('astra_employee_id', employeeId)
+}
+
+export function parseHandoffFilter(
+  raw: string | null | undefined,
+): HandoffFilter | null | { error: 'invalid_handoff' } {
+  if (raw == null || raw === '') return null
+  if (raw === 'ai' || raw === 'human') return raw
+  return { error: 'invalid_handoff' }
+}
+
+export function clampTakeoverReason(
+  raw: unknown,
+): string | null | { error: 'reason_too_long' } {
+  if (raw == null || raw === '') return null
+  if (typeof raw !== 'string') return null
+  const trimmed = raw.trim()
+  if (!trimmed) return null
+  if (trimmed.length > MAX_TAKEOVER_REASON) return { error: 'reason_too_long' }
+  return trimmed
+}
+
 export async function listConnectConversations(args: {
   ctx: ConnectTenantContext
   phoneNumberId?: string | null
   employeeId?: string | null
+  handoff?: HandoffFilter | null
   status?: string | null
   updatedSince?: string | null
   cursor?: string | null
@@ -121,7 +189,8 @@ export async function listConnectConversations(args: {
 
   if (args.status) q = q.eq('status', args.status)
   if (args.updatedSince) q = q.gte('updated_at', args.updatedSince)
-  if (args.employeeId) q = q.eq('astra_employee_id', args.employeeId)
+  q = applyEmployeeIdFilter(q, args.employeeId, args.ctx.employeeId)
+  q = applyHandoffFilter(q, args.handoff)
   if (cursor) {
     // Keyset: (updated_at, id) < cursor for descending order.
     q = q.or(
@@ -148,7 +217,11 @@ export async function listConnectConversations(args: {
   const rows = (data ?? []) as Record<string, unknown>[]
   const page = rows.slice(0, limit)
   const items = page.map((row) =>
-    mapConversationRow(row, args.ctx.employeeId, args.ctx.tenantId),
+    mapConversationRow(row, {
+      fallbackEmployeeId: args.ctx.employeeId,
+      tenantId: args.ctx.tenantId,
+      phoneNumberId: args.ctx.phoneNumberId,
+    }),
   )
   const next =
     rows.length > limit
@@ -169,6 +242,7 @@ export async function conversationListEtag(args: {
   ctx: ConnectTenantContext
   phoneNumberId?: string | null
   employeeId?: string | null
+  handoff?: HandoffFilter | null
   status?: string | null
   updatedSince?: string | null
 }): Promise<string> {
@@ -189,7 +263,8 @@ export async function conversationListEtag(args: {
 
   if (args.status) q = q.eq('status', args.status)
   if (args.updatedSince) q = q.gte('updated_at', args.updatedSince)
-  if (args.employeeId) q = q.eq('astra_employee_id', args.employeeId)
+  q = applyEmployeeIdFilter(q, args.employeeId, args.ctx.employeeId)
+  q = applyHandoffFilter(q, args.handoff)
 
   const { data, count, error } = await q
   if (error) {
@@ -228,10 +303,13 @@ export function etagMatches(
     .some((p) => p === '*' || p === want)
 }
 
-function mapConversationRow(
+export function mapConversationRow(
   row: Record<string, unknown>,
-  fallbackEmployeeId: string | null,
-  tenantId: string,
+  opts: {
+    fallbackEmployeeId: string | null
+    tenantId: string
+    phoneNumberId: string | null
+  },
 ): ConnectConversationItem {
   const contactRaw = row.contact as
     | Record<string, unknown>
@@ -247,16 +325,17 @@ function mapConversationRow(
 
   const employee =
     (typeof row.astra_employee_id === 'string' && row.astra_employee_id) ||
-    fallbackEmployeeId
+    opts.fallbackEmployeeId
 
   return {
     id: String(row.id),
-    tenant_id: tenantId,
+    tenant_id: opts.tenantId,
     astra_conversation_id:
       typeof row.astra_conversation_id === 'string'
         ? row.astra_conversation_id
         : null,
     employee_id: employee,
+    phone_number_id: opts.phoneNumberId,
     status: String(row.status ?? 'open'),
     handoff: handoffStateFromRow({
       ai_autoreply_disabled: Boolean(row.ai_autoreply_disabled),
@@ -282,6 +361,27 @@ function mapConversationRow(
   }
 }
 
+const CONVERSATION_SELECT = `
+  id,
+  account_id,
+  status,
+  unread_count,
+  last_message_text,
+  last_message_at,
+  updated_at,
+  assigned_agent_id,
+  ai_autoreply_disabled,
+  astra_conversation_id,
+  astra_employee_id,
+  contact:contacts(
+    id,
+    phone,
+    name,
+    opted_out,
+    contact_tags(tags(name))
+  )
+`
+
 /** Load one conversation scoped to the tenant account, or null → 404. */
 export async function getTenantConversation(
   ctx: ConnectTenantContext,
@@ -289,14 +389,37 @@ export async function getTenantConversation(
 ): Promise<Record<string, unknown> | null> {
   const { data, error } = await ctx.db
     .from('conversations')
-    .select(
-      'id, account_id, status, unread_count, last_message_text, updated_at, assigned_agent_id, ai_autoreply_disabled, astra_conversation_id, astra_employee_id',
-    )
+    .select(CONVERSATION_SELECT)
     .eq('id', conversationId)
     .eq('account_id', ctx.accountId)
     .maybeSingle()
   if (error || !data) return null
   return data as Record<string, unknown>
+}
+
+/** Map a tenant-scoped conversation row to the list-item shape. */
+export function toConnectConversationItem(
+  row: Record<string, unknown>,
+  ctx: ConnectTenantContext,
+): ConnectConversationItem {
+  return mapConversationRow(row, {
+    fallbackEmployeeId: ctx.employeeId,
+    tenantId: ctx.tenantId,
+    phoneNumberId: ctx.phoneNumberId,
+  })
+}
+
+export interface ConnectMediaObject {
+  id: string
+  filename: string
+  url: string
+  mime: string | null
+  /** @deprecated Prefer `mime`. Kept for older Connect clients. */
+  mime_type: string | null
+  size: number | null
+  expires_at: string
+  duration_s: number | null
+  transcript: string | null
 }
 
 export interface ConnectMessageItem {
@@ -306,7 +429,7 @@ export interface ConnectMessageItem {
   direction: 'inbound' | 'outbound'
   type: string
   text: string | null
-  media: { url: string; mime_type?: string | null } | null
+  media: ConnectMediaObject | null
   template_name: string | null
   status: string
   failure_reason: string | null
@@ -349,7 +472,11 @@ export async function listConnectMessages(args: {
   before?: string | null
   after?: string | null
 }): Promise<
-  | { items: ConnectMessageItem[]; next_cursor: string | null }
+  | {
+      conversation: ConnectConversationItem
+      items: ConnectMessageItem[]
+      next_cursor: string | null
+    }
   | null
   | { error: 'invalid_before' }
 > {
@@ -371,7 +498,7 @@ export async function listConnectMessages(args: {
   let q = args.ctx.db
     .from('messages')
     .select(
-      'id, sender_type, sender_id, content_type, content_text, media_url, media_type, template_name, status, error_title, error_details, message_id, created_at, ai_generated',
+      'id, sender_type, sender_id, content_type, content_text, media_url, media_type, media_filename, media_size_bytes, media_duration_s, media_transcript, template_name, status, error_title, error_details, message_id, created_at, ai_generated',
     )
     .eq('conversation_id', args.conversationId)
     .order('created_at', { ascending: false })
@@ -406,7 +533,11 @@ export async function listConnectMessages(args: {
         })
       : null
 
-  return { items, next_cursor: next }
+  return {
+    conversation: toConnectConversationItem(conv, args.ctx),
+    items,
+    next_cursor: next,
+  }
 }
 
 /**
@@ -449,7 +580,7 @@ export async function messageListEtag(args: {
   return buildCollectionEtag(maxCreated, count ?? 0)
 }
 
-function mapMessageRow(
+export function mapMessageRow(
   row: Record<string, unknown>,
   accountId: string,
   tenantId: string,
@@ -472,17 +603,64 @@ function mapMessageRow(
 
   let media: ConnectMessageItem['media'] = null
   if (typeof row.media_url === 'string' && row.media_url) {
-    // Prefer short-lived signed URL when we have a Meta id-like path;
-    // otherwise pass through durable mirrored https URLs.
-    const signed = buildSignedMediaUrl({
+    const mediaId =
+      typeof row.message_id === 'string' && row.message_id
+        ? row.message_id
+        : String(row.id)
+    const mime =
+      typeof row.media_type === 'string' && row.media_type
+        ? row.media_type
+        : null
+    const signed = buildSignedMediaUrlWithExpiry({
       accountId,
-      mediaId: typeof row.message_id === 'string' ? row.message_id : 'media',
+      mediaId,
       durableUrl: row.media_url,
-      mimeType: typeof row.media_type === 'string' ? row.media_type : undefined,
+      mimeType: mime ?? undefined,
     })
+    const contentType = String(row.content_type ?? 'document') as ContentType
+    const filename =
+      (typeof row.media_filename === 'string' && row.media_filename.trim()) ||
+      mediaFilename({
+        content_type: contentType,
+        content_text:
+          typeof row.content_text === 'string' ? row.content_text : undefined,
+        media_url: row.media_url,
+        media_type: mime,
+        created_at: String(row.created_at ?? new Date().toISOString()),
+      })
+    const sizeRaw = row.media_size_bytes
+    const size =
+      typeof sizeRaw === 'number' && Number.isFinite(sizeRaw)
+        ? sizeRaw
+        : typeof sizeRaw === 'string' && Number.isFinite(Number(sizeRaw))
+          ? Number(sizeRaw)
+          : null
+    const durationRaw = row.media_duration_s
+    const duration_s =
+      typeof durationRaw === 'number' && Number.isFinite(durationRaw)
+        ? durationRaw
+        : typeof durationRaw === 'string' && Number.isFinite(Number(durationRaw))
+          ? Number(durationRaw)
+          : null
+    const transcript =
+      typeof row.media_transcript === 'string' && row.media_transcript.trim()
+        ? row.media_transcript
+        : null
+    const expires_at =
+      signed?.expires_at ??
+      new Date(
+        (Math.floor(Date.now() / 1000) + MEDIA_URL_TTL_SECONDS) * 1000,
+      ).toISOString()
     media = {
-      url: signed ?? row.media_url,
-      mime_type: typeof row.media_type === 'string' ? row.media_type : null,
+      id: mediaId,
+      filename,
+      url: signed?.url ?? row.media_url,
+      mime,
+      mime_type: mime,
+      size,
+      expires_at,
+      duration_s,
+      transcript,
     }
   }
 
@@ -524,6 +702,7 @@ export async function recordHandoffAudit(args: {
   action: 'takeover' | 'handback'
   by?: string | null
   source?: 'api' | 'inbox' | 'adapter'
+  reason?: string | null
 }): Promise<void> {
   await args.db.from('astra_connect_handoff_audit').insert({
     account_id: args.accountId,
@@ -531,6 +710,7 @@ export async function recordHandoffAudit(args: {
     action: args.action,
     by_actor: args.by ?? null,
     source: args.source ?? 'api',
+    reason: args.reason ?? null,
   })
 }
 
@@ -543,6 +723,7 @@ export async function setConversationHandoff(args: {
   handoff: 'human' | 'ai'
   by?: string | null
   source?: 'api' | 'inbox' | 'adapter'
+  reason?: string | null
 }): Promise<{ handoff: HandoffState; changed: boolean } | null> {
   const conv = await getTenantConversation(args.ctx, args.conversationId)
   if (!conv) return null
@@ -594,6 +775,7 @@ export async function setConversationHandoff(args: {
     action: target === 'human' ? 'takeover' : 'handback',
     by: args.by,
     source: args.source ?? 'api',
+    reason: args.reason ?? null,
   })
 
   return { handoff: target, changed: true }

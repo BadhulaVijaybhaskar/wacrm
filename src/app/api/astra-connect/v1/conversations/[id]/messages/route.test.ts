@@ -76,12 +76,31 @@ describe('GET /api/astra-connect/v1/conversations/:id/messages', () => {
     h.messageListEtag.mockResolvedValue('"2026-10-27T16:59:05.000Z:2"')
   })
 
-  it('(a)+(e) returns messages with tenant_id and passes before cursor', async () => {
+  it('(a)+(e) returns conversation + messages with tenant_id and passes before cursor', async () => {
     const before = encodeCursor({
       updatedAt: '2026-10-27T16:59:00.000Z',
       id: '22222222-2222-2222-2222-222222222222',
     })
     h.listConnectMessages.mockResolvedValue({
+      conversation: {
+        id: CONV,
+        tenant_id: TENANT,
+        astra_conversation_id: 'conv_1',
+        employee_id: 'emp_1',
+        phone_number_id: '1065',
+        status: 'open',
+        handoff: 'ai',
+        unread_count: 0,
+        last_message_preview: 'older',
+        updated_at: '2026-10-27T16:58:00.000Z',
+        assignee: null,
+        labels: [],
+        contact: {
+          phone: '+919812345678',
+          name: 'Priya',
+          opted_out: false,
+        },
+      },
       items: [
         {
           id: '33333333-3333-3333-3333-333333333333',
@@ -107,6 +126,8 @@ describe('GET /api/astra-connect/v1/conversations/:id/messages', () => {
     })
     expect(res.status).toBe(200)
     const body = await res.json()
+    expect(body.conversation.id).toBe(CONV)
+    expect(body.conversation.phone_number_id).toBe('1065')
     expect(body.messages[0].tenant_id).toBe(TENANT)
     expect(h.listConnectMessages).toHaveBeenCalledWith(
       expect.objectContaining({ before }),

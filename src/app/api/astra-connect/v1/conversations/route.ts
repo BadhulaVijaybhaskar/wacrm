@@ -9,14 +9,15 @@ import {
   conversationListEtag,
   etagMatches,
   listConnectConversations,
+  parseHandoffFilter,
 } from '@/lib/astra-connect/read-api'
 import { rateLimitResponse } from '@/lib/rate-limit'
 
 /**
  * GET /api/astra-connect/v1/conversations
  *
- * Query: tenant_id (required), employee_id, phone_number_id, status,
- * updated_since, cursor, limit (max 100).
+ * Query: tenant_id (required), employee_id, phone_number_id, handoff,
+ * status, updated_since, cursor, limit (max 100).
  *
  * Auth: X-Astra-Tenant + HMAC over
  * `${ts}.${pathWithQuery}.${tenant}` (Connect console client).
@@ -40,9 +41,18 @@ export async function GET(request: Request) {
     })
     if (!auth.ok) return auth.response
 
+    const handoff = parseHandoffFilter(url.searchParams.get('handoff'))
+    if (handoff && typeof handoff === 'object' && 'error' in handoff) {
+      return NextResponse.json(
+        { error: 'handoff must be ai or human' },
+        { status: 400 },
+      )
+    }
+
     const filters = {
       phoneNumberId: url.searchParams.get('phone_number_id'),
       employeeId: url.searchParams.get('employee_id'),
+      handoff: handoff as 'ai' | 'human' | null,
       status: url.searchParams.get('status'),
       updatedSince: url.searchParams.get('updated_since'),
     }

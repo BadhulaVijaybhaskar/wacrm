@@ -104,6 +104,7 @@ describe('GET /api/astra-connect/v1/conversations', () => {
           tenant_id: TENANT,
           astra_conversation_id: 'conv_1',
           employee_id: 'emp_1',
+          phone_number_id: '106540352242922',
           status: 'open',
           handoff: 'ai',
           unread_count: 0,
@@ -121,15 +122,36 @@ describe('GET /api/astra-connect/v1/conversations', () => {
       next_cursor: null,
     })
 
-    const path = `/api/astra-connect/v1/conversations?tenant_id=${TENANT}&employee_id=emp_1&limit=50`
+    const path = `/api/astra-connect/v1/conversations?tenant_id=${TENANT}&employee_id=emp_1&handoff=ai&limit=50`
     const res = await GET(signedGet(path))
     expect(res.status).toBe(200)
     expect(res.headers.get('etag')).toBe('"2026-10-27T17:00:00.000Z:1"')
     const body = await res.json()
     expect(body.conversations[0].tenant_id).toBe(TENANT)
+    expect(body.conversations[0].phone_number_id).toBe('106540352242922')
+    expect(h.listConnectConversations).toHaveBeenCalledWith(
+      expect.objectContaining({ handoff: 'ai', employeeId: 'emp_1' }),
+    )
     expect(h.consumeConnectRateLimit).toHaveBeenCalledWith(
       expect.objectContaining({ bucket: 'read', tenantId: TENANT }),
     )
+  })
+
+  it('rejects invalid handoff filter', async () => {
+    h.authenticateConnectRequest.mockResolvedValue({
+      ok: true,
+      ctx: {
+        accountId: 'acct-a',
+        tenantId: TENANT,
+        phoneNumberId: '1',
+        employeeId: null,
+        db: {},
+      },
+    })
+    const path = `/api/astra-connect/v1/conversations?tenant_id=${TENANT}&handoff=bot`
+    const res = await GET(signedGet(path))
+    expect(res.status).toBe(400)
+    expect(h.listConnectConversations).not.toHaveBeenCalled()
   })
 
   it('(c) returns 304 when If-None-Match matches ETag', async () => {

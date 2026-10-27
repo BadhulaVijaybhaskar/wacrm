@@ -93,8 +93,65 @@ describe('Connect handoff + tenant isolation', () => {
       changed: true,
     })
     expect(h.setConversationHandoff).toHaveBeenCalledWith(
-      expect.objectContaining({ handoff: 'human', by: 'ops@acme.com' }),
+      expect.objectContaining({
+        handoff: 'human',
+        by: 'ops@acme.com',
+        reason: null,
+      }),
     )
+  })
+
+  it('takeover stores optional reason on the handoff path', async () => {
+    h.authenticateConnectRequest.mockResolvedValue({
+      ok: true,
+      ctx: {
+        accountId: 'acct-a',
+        tenantId: 't_abc',
+        phoneNumberId: '1',
+        employeeId: null,
+        db: {},
+      },
+    })
+    h.setConversationHandoff.mockResolvedValue({
+      handoff: 'human',
+      changed: true,
+    })
+
+    const { req } = signedPost(
+      `/api/astra-connect/v1/conversations/${CONV}/takeover`,
+      {
+        tenant_id: 't_abc',
+        by: 'ops@acme.com',
+        reason: 'Customer escalated to billing',
+      },
+    )
+    const res = await takeover(req, { params: Promise.resolve({ id: CONV }) })
+    expect(res.status).toBe(200)
+    expect(h.setConversationHandoff).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: 'Customer escalated to billing',
+      }),
+    )
+  })
+
+  it('rejects takeover reason over 500 chars', async () => {
+    h.authenticateConnectRequest.mockResolvedValue({
+      ok: true,
+      ctx: {
+        accountId: 'acct-a',
+        tenantId: 't_abc',
+        phoneNumberId: '1',
+        employeeId: null,
+        db: {},
+      },
+    })
+    const { req } = signedPost(
+      `/api/astra-connect/v1/conversations/${CONV}/takeover`,
+      { tenant_id: 't_abc', reason: 'x'.repeat(501) },
+    )
+    const res = await takeover(req, { params: Promise.resolve({ id: CONV }) })
+    expect(res.status).toBe(400)
+    expect(h.setConversationHandoff).not.toHaveBeenCalled()
   })
 
   it('handback resumes AI', async () => {

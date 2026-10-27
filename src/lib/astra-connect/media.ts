@@ -85,6 +85,13 @@ export function verifyMediaToken(
   return payload
 }
 
+export interface SignedMediaUrlResult {
+  url: string
+  /** ISO-8601 expiry of the signed token. */
+  expires_at: string
+  expires_at_unix: number
+}
+
 /**
  * Build a Connect-fetchable media URL on this deployment's public host.
  * Returns null when the site origin or signing secret is missing.
@@ -99,6 +106,20 @@ export function buildSignedMediaUrl(args: {
   origin?: string | null
   secret?: string | null
 }): string | null {
+  return buildSignedMediaUrlWithExpiry(args)?.url ?? null
+}
+
+/** Same as `buildSignedMediaUrl` but also returns the token expiry. */
+export function buildSignedMediaUrlWithExpiry(args: {
+  accountId: string
+  mediaId: string
+  durableUrl?: string | null
+  mimeType?: string | null
+  ttlSeconds?: number
+  nowSeconds?: number
+  origin?: string | null
+  secret?: string | null
+}): SignedMediaUrlResult | null {
   // Explicit `null` means "no value" (do not fall back to env). Omit the
   // field (or pass `undefined`) to use the configured site origin / secret.
   const secret =
@@ -110,16 +131,21 @@ export function buildSignedMediaUrl(args: {
 
   const now = args.nowSeconds ?? Math.floor(Date.now() / 1000)
   const ttl = args.ttlSeconds ?? MEDIA_URL_TTL_SECONDS
+  const expiresAtUnix = now + ttl
   const payload: SignedMediaPayload = {
     a: args.accountId,
     m: args.mediaId,
-    e: now + ttl,
+    e: expiresAtUnix,
   }
   if (args.durableUrl) payload.u = args.durableUrl
   if (args.mimeType) payload.t = args.mimeType
 
   const token = signMediaPayload(payload, secret)
-  return `${origin}/api/astra-connect/media/${encodeURIComponent(token)}`
+  return {
+    url: `${origin}/api/astra-connect/media/${encodeURIComponent(token)}`,
+    expires_at: new Date(expiresAtUnix * 1000).toISOString(),
+    expires_at_unix: expiresAtUnix,
+  }
 }
 
 /** Map Meta inbound message type → Connect media type. */

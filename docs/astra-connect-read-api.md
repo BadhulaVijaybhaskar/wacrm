@@ -94,7 +94,8 @@ messages). When nothing changed the API returns **304** with the same
 | Param | Required | Notes |
 |---|---|---|
 | `tenant_id` | yes | Maps to `whatsapp_config.astra_connect_tenant_id` |
-| `employee_id` | no | Filters `conversations.astra_employee_id` |
+| `employee_id` | no | Filters by effective employee: `COALESCE(conversations.astra_employee_id, whatsapp_config.astra_employee_id)` — same value as the response field |
+| `handoff` | no | `ai` or `human`; applied server-side **before** pagination |
 | `phone_number_id` | no | Must match this tenant's number or returns empty |
 | `status` | no | `open` / `pending` / `closed` |
 | `updated_since` | no | ISO 8601 lower bound on `updated_at` |
@@ -111,6 +112,7 @@ messages). When nothing changed the API returns **304** with the same
       "tenant_id": "t_abc",
       "astra_conversation_id": "conv_abc",
       "employee_id": "emp_1",
+      "phone_number_id": "106540352242922",
       "status": "open",
       "handoff": "ai",
       "unread_count": 2,
@@ -130,9 +132,8 @@ messages). When nothing changed the API returns **304** with the same
 ```
 
 Headers include `ETag`. `handoff` is `"ai"` or `"human"`. `employee_id`
-comes from the conversation row, falling back to the number's
-`whatsapp_config.astra_employee_id`. Every conversation object includes
-`tenant_id`.
+is `COALESCE(conversations.astra_employee_id, whatsapp_config.astra_employee_id)`.
+Every conversation object includes `tenant_id` and `phone_number_id`.
 
 ---
 
@@ -154,8 +155,31 @@ messages. Cross-tenant `:id` → **404**.
 
 ### Response `200`
 
+Top-level `conversation` is the same shape as a list item. `messages` /
+`next_cursor` remain for backward compatibility (same as `items` /
+`next_cursor` conceptually).
+
 ```json
 {
+  "conversation": {
+    "id": "11111111-1111-1111-1111-111111111111",
+    "tenant_id": "t_abc",
+    "astra_conversation_id": "conv_abc",
+    "employee_id": "emp_1",
+    "phone_number_id": "106540352242922",
+    "status": "open",
+    "handoff": "ai",
+    "unread_count": 2,
+    "last_message_preview": "Thanks, see you tomorrow",
+    "updated_at": "2026-10-27T17:00:00.000Z",
+    "assignee": null,
+    "labels": ["vip"],
+    "contact": {
+      "phone": "+919812345678",
+      "name": "Priya",
+      "opted_out": false
+    }
+  },
   "messages": [
     {
       "id": "22222222-2222-2222-2222-222222222222",
@@ -174,16 +198,26 @@ messages. Cross-tenant `:id` → **404**.
     {
       "id": "33333333-3333-3333-3333-333333333333",
       "tenant_id": "t_abc",
-      "direction": "outbound",
-      "type": "text",
-      "text": "Hi Priya — how can I help?",
-      "media": null,
+      "direction": "inbound",
+      "type": "audio",
+      "text": null,
+      "media": {
+        "id": "wamid.AUDIO1",
+        "filename": "voice.ogg",
+        "url": "https://chat.example/api/astra-connect/media/…",
+        "mime": "audio/ogg",
+        "mime_type": "audio/ogg",
+        "size": 4096,
+        "expires_at": "2026-10-27T17:14:00.000Z",
+        "duration_s": 12.5,
+        "transcript": null
+      },
       "template_name": null,
-      "status": "read",
+      "status": "delivered",
       "failure_reason": null,
-      "sender": { "kind": "ai" },
+      "sender": { "kind": "contact" },
       "created_at": "2026-10-27T16:59:05.000Z",
-      "whatsapp_message_id": "wamid.OUT1"
+      "whatsapp_message_id": "wamid.AUDIO1"
     }
   ],
   "next_cursor": null
@@ -191,7 +225,11 @@ messages. Cross-tenant `:id` → **404**.
 ```
 
 Every message object includes `tenant_id`. Media, when present, uses
-short-lived signed URLs from `GET /api/astra-connect/media/[token]`.
+short-lived signed URLs from `GET /api/astra-connect/media/[token]` and
+exposes `{ id, filename, url, mime, size, expires_at, duration_s,
+transcript }`. `mime_type` is kept as an alias of `mime`. `transcript`
+is filled only when `messages.media_transcript` is already set — Chat
+does **not** call a paid transcription provider.
 
 `sender.kind` is `contact` | `human` | `ai`. Human senders may include
 `member_id`.
@@ -206,8 +244,15 @@ until handback. Idempotent. Writes `astra_connect_handoff_audit`.
 ### Body
 
 ```json
-{ "tenant_id": "t_abc", "by": "agent@acme.com" }
+{
+  "tenant_id": "t_abc",
+  "by": "agent@acme.com",
+  "reason": "Customer asked for a human"
+}
 ```
+
+`reason` is optional (max **500** characters). When present it is stored
+on `astra_connect_handoff_audit.reason`.
 
 ### Response `200`
 
@@ -263,5 +308,8 @@ See `docs/astra-connect-read-api.openapi.yaml`.
 
 ## Migration
 
-`supabase/migrations/046_astra_connect_read_api.sql` (apply to
-wacrm-staging by operator).
+- `supabase/migrations/046_astra_connect_read_api.sql`
+- `supabase/migrations/058_astra_connect_read_api_additions.sql` (takeover
+  `reason` + optional message media metadata columns)
+
+Apply to wacrm-staging by operator.

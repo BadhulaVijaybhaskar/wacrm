@@ -1,13 +1,17 @@
 import { NextResponse } from 'next/server'
 import { authenticateConnectRequest } from '@/lib/astra-connect/read-auth'
-import { setConversationHandoff } from '@/lib/astra-connect/read-api'
+import {
+  clampTakeoverReason,
+  setConversationHandoff,
+} from '@/lib/astra-connect/read-api'
 
 type Params = { params: Promise<{ id: string }> }
 
 /**
  * POST /api/astra-connect/v1/conversations/:id/takeover
- * Body: { tenant_id, by? }
+ * Body: { tenant_id, by?, reason? }
  * Sets handoff=human (AI replies stop). Idempotent.
+ * Optional `reason` (max 500 chars) is stored on the handoff audit row.
  */
 export async function POST(request: Request, { params }: Params) {
   try {
@@ -22,6 +26,16 @@ export async function POST(request: Request, { params }: Params) {
     if (!tenantId) {
       return NextResponse.json(
         { error: 'tenant_id is required' },
+        { status: 400 },
+      )
+    }
+
+    const reason = clampTakeoverReason(
+      (body as { reason?: unknown }).reason,
+    )
+    if (reason && typeof reason === 'object' && 'error' in reason) {
+      return NextResponse.json(
+        { error: 'reason must be at most 500 characters' },
         { status: 400 },
       )
     }
@@ -41,6 +55,7 @@ export async function POST(request: Request, { params }: Params) {
       handoff: 'human',
       by,
       source: 'api',
+      reason: typeof reason === 'string' ? reason : null,
     })
 
     if (!result) {
