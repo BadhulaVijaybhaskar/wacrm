@@ -10,8 +10,8 @@ Real DB is **wacrm-staging** (owner applies migrations). New migrations must con
 | Item | Status | SHA | Tests | Screenshot / notes |
 | --- | --- | --- | --- | --- |
 | CHAT-02b brand + Connect UI kit theme | **done** | `fec6672` | `vitest` 1114 passed; `tsc --noEmit` clean | `artifacts/chat-02b/` |
-| Golden rule + CHAT-15 UI control audit | **done** | `3cd1370` | `vitest` 1125 passed; `tsc --noEmit` clean | `docs/ui-control-audit.md`; `artifacts/chat-15/`; password-reset E2E fixed; Auth template create hidden |
-| CHAT-12 security hardening | not started | — | — | Auth on every route, tenant isolation, webhook sigs, rate limits, XSS |
+| Golden rule + CHAT-15 UI control audit | **done** | `06fc665` | `vitest` 1125 passed; `tsc --noEmit` clean | `docs/ui-control-audit.md`; `artifacts/chat-15/`; password-reset E2E fixed; Auth template create hidden |
+| CHAT-12 security hardening | in progress | — | — | Auth on every route, tenant isolation, webhook sigs, rate limits, XSS |
 | CHAT-04b Connect read/takeover API | **done** | `9222bbe` | covered in suite at land | Migration: `046_astra_connect_read_api.sql` |
 | CHAT-05 per-tenant secrets | **done** | `e242732` | suite | Migration: `044_astra_connect_tenant_secret.sql` |
 | Staging smoke + seed + CHAT-14 screenshots | not started | — | — | `deploy/staging` smoke + seed script |
