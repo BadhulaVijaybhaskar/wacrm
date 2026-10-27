@@ -50,7 +50,7 @@ Real DB is **wacrm-staging** (owner applies migrations). Latest on branch starts
 | CHAT-25 Intents | **done** | `55f887d` | `057_intents.sql` | Intent manager + intent_hints; `artifacts/chat-25/` |
 | CHAT-26 Re-verify (13/14/15) | **done** | `9625885` | — | White-label + 1293 tests + UI audit; `artifacts/chat-26/` |
 | CHAT-04b read-API additions | **done** | `fea18a1` | `058_astra_connect_read_api_additions.sql` | conversation on messages; handoff filter; media object; employee COALESCE; takeover reason |
-| CHAT-14 staging smoke seed | **done** | _(tip)_ | — | `deploy/staging/scripts/seed-demo-data.mjs` (+ test + `chat-14-verify.sh`); test data only |
+| CHAT-14 staging smoke seed | **done** | `debdfe4` | — | `deploy/staging/scripts/seed-demo-data.mjs` (+ test + `chat-14-verify.sh`); test data only |
 
 ## Migrations owner must apply on wacrm-staging
 
