@@ -174,6 +174,11 @@ export function SettingsOverview({
       ),
     },
     {
+      section: 'integrations',
+      loading: false,
+      subtitle: t('integrationsHub'),
+    },
+    {
       section: 'members',
       loading: countsLoading,
       subtitle:

@@ -1,44 +1,53 @@
-# Morning list — Astra Chat overnight queue
+# Morning list — Astra Chat
 
-Owner priority (2026-10-27 reset): finish beats breadth. Five shippable items beat twenty half-done.
-Each row: **done** needs SHA + tests + screenshot, otherwise **not started**.
+Running checklist of credentials, OAuth apps, paid plans and env vars that need a **real** account before a connector can go live. Stub/mock mode (`META_STUB=1` or `INTEGRATIONS_STUB=1`) covers tests and local demos.
 
-Real DB is **wacrm-staging** (owner applies migrations). New migrations must continue from `047_`.
+Real DB is **wacrm-staging** (owner applies migrations). Latest on branch starts at `048_`.
 
-## Status
+## Live credentials needed
 
-| Item | Status | SHA | Tests | Screenshot / notes |
+| Integration | What’s needed | Where to get it | Env / setting name |
+| --- | --- | --- | --- |
+| Shared crypto | 32-byte AES key (64 hex chars) | Generate offline; store in host secrets | `ENCRYPTION_KEY` |
+| Meta / WhatsApp | App + WABA + phone | Meta Developer Console | WhatsApp Settings (encrypted tokens); `META_STUB` for fake |
+| Astra Connect | Adapter URL + HMAC secret | Astra Connect tenant | `CONNECT_ADAPTER_URL`, `WACRM_ADAPTER_SECRET`; per-account secret in Settings → Astra Connect |
+| Outbound webhooks | HTTPS receiver that verifies HMAC | Your automation host | Settings → Integrations → Outbound webhooks / `webhook_endpoints` |
+| Zapier | Zapier account + REST Hook app | zapier.com | Settings → Integrations → Zapier (`hook_url`) |
+| Make | Make.com scenario webhook | make.com | Settings → Integrations → Make (`hook_url`) |
+| Shopify | Custom app + webhook secret | Shopify Partners | Settings → Integrations → Shopify (`shop_domain`, `webhook_secret`, `admin_token`) |
+| WooCommerce | REST keys + webhook secret | WP admin → WooCommerce | Settings → Integrations → WooCommerce |
+| Razorpay | Key ID/secret + webhook secret | razorpay.com dashboard | Settings → Integrations → Razorpay |
+| Stripe | Secret + webhook signing secret | dashboard.stripe.com | Settings → Integrations → Stripe |
+| Google Sheets | OAuth client (consent screen) | Google Cloud Console | Settings → Integrations → Google Sheets; cron: `AUTOMATION_CRON_SECRET` |
+| HubSpot | Private app token | HubSpot settings | Settings → Integrations → HubSpot |
+| Zoho CRM | OAuth client + refresh token | Zoho API console | Settings → Integrations → Zoho |
+| Astra CRM | Signed webhook URL | Astra / Frappe CRM | Settings → Integrations → Astra CRM (`webhook_url`, `signing_secret`) |
+| Instagram / Messenger | Meta page + tokens | Meta Developer Console | Settings → Integrations → Instagram / Messenger |
+| Public API | Account API keys | Settings → API keys | Bearer key; scopes in `api_keys` |
+| Automation / flow cron | Shared cron secret | Host env | `AUTOMATION_CRON_SECRET` (and flow cron equivalent) |
+| Billing usage webhook | Optional signed emitter URL | Your billing service | `BILLING_WEBHOOK_URL` |
+
+## Queue status (CHAT-16+)
+
+| Item | Status | SHA | Migrations | Notes |
 | --- | --- | --- | --- | --- |
-| CHAT-02b brand + Connect UI kit theme | **done** | `0c0b42c` | `vitest` 1114 passed; `tsc --noEmit` clean | `artifacts/chat-02b/chat-02b-login.png`, `chat-02b-signup.png`, `chat-02b-forgot-password.png`, `chat-02b-login-dark.png` |
-| Golden rule + CHAT-15 UI control audit | in progress next | — | — | Target: `docs/ui-control-audit.md` |
-| CHAT-12 security hardening | not started | — | — | Auth on every route, tenant isolation, webhook sigs, rate limits, XSS |
-| CHAT-04b Connect read/takeover API | **done** | `9222bbe` | covered in suite at land | Migrations: `046_astra_connect_read_api.sql`. Docs: `docs/astra-connect-read-api.md` |
-| CHAT-05 per-tenant secrets | **done** (landed; only revisit if 04b needs more) | `e242732` | suite | Migration: `044_astra_connect_tenant_secret.sql` |
-| Staging smoke + seed + CHAT-14 screenshots | not started | — | — | `deploy/staging` smoke + seed script |
-| CHAT-03 Settings UI | **done** | `8062658` | suite | — |
-| CHAT-09 Inbox polish | **done** | _(pending)_ | inbox filter/search/unread tests | assign filters, tags edit, message search, mark unread |
-| CHAT-11 | not started | — | — | Spec TBD / deferred |
-| CHAT-10 | not started | — | — | Spec TBD / deferred |
-| CHAT-08 Template manager | **done** | `6f24ded` | stub-decision + preview tests | phone preview; META_STUB/DRY_RUN approve/reject |
-| CHAT-06 usage metering | **done** | `3a28e3e` | suite | Migration: `045_astra_usage_metering.sql` |
-| CHAT-07 Embedded Signup | **done** | `34759b9` | suite | Scaffolding only |
-| CHAT-04 outbound mirror | **done** (gated off) | `04f6113` + gate `cf8b43a` | suite | `CONNECT_MIRROR_OUTBOUND` default off |
-| CHAT-16…25 integrations | not started | — | — | Last; only if time remains |
+| CHAT-16 Integrations hub | **in progress** | — | `048_integrations_hub.sql` | Settings → Integrations |
+| CHAT-17 Outbound webhooks / Zapier / Make | not started | — | — | Polish + event catalog + REST hooks |
+| CHAT-18 Shopify + WooCommerce | not started | — | — | |
+| CHAT-19 Razorpay + Stripe | not started | — | — | |
+| CHAT-20 Google Sheets | not started | — | — | |
+| CHAT-21 CRM push | not started | — | — | |
+| CHAT-22 IG + Messenger inbox | not started | — | — | |
+| CHAT-23 Flow builder | not started | — | — | |
+| CHAT-24 CTWA ads | not started | — | — | |
+| CHAT-25 Intents | not started | — | — | |
+| CHAT-26 Re-verify (13/14/15) | not started | — | — | |
 
 ## Migrations owner must apply on wacrm-staging
-
-Already on branch (apply if not yet on staging):
 
 - `043_astra_connect_adapter.sql`
 - `044_astra_connect_tenant_secret.sql`
 - `045_astra_usage_metering.sql`
 - `046_astra_connect_read_api.sql`
-
-No new migration in CHAT-02b.
-
-## Next up
-
-1. CHAT-15 crawl of every screen → `docs/ui-control-audit.md`, fix or hide dead controls (golden rule).
-2. CHAT-12 security + expanded tests.
-3. Staging smoke readiness + seed + CHAT-14 verification screenshots.
-4. Only then remaining value-ordered CHAT items; skip anything that cannot ship cleanly.
+- `047_consent_ledger.sql`
+- `048_integrations_hub.sql` ← CHAT-16

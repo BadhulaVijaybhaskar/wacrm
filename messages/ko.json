@@ -1365,7 +1365,8 @@
       "fieldsCount": "커스텀 필드 {count}개",
       "appearance": "{mode} 모드 · {theme} 색상",
       "yourAccount": "내 계정",
-      "loading": "불러오는 중…"
+      "loading": "불러오는 중…",
+      "integrationsHub": "커머스, 결제, CRM, 시트 및 웹훅"
     },
     "members": {
       "title": "팀원",
@@ -1720,7 +1721,8 @@
       "deals": "딜 & 통화",
       "members": "팀원",
       "api": "API 키",
-      "astra-connect": "Astra Connect"
+      "astra-connect": "Astra Connect",
+      "integrations": "통합"
     },
     "groups": {
       "account": "계정",
@@ -1971,6 +1973,19 @@
       "employeeLabel": "Employee id",
       "employeePlaceholder": "emp_… (optional)",
       "employeeHint": "Optional. Ties this WhatsApp number to a Connect AI employee for thread filtering."
+    },
+    "integrations": {
+      "title": "Integrations",
+      "description": "Connect commerce, payments, CRM, sheets and automation tools. Credentials are encrypted per account; Test uses META_STUB / INTEGRATIONS_STUB mocks — never live third-party calls from this environment.",
+      "adminHint": "Only admins can connect or disconnect integrations.",
+      "loading": "Loading integrations…",
+      "loadFailed": "Failed to load integrations",
+      "networkError": "Network error",
+      "logFailed": "Failed to load event log",
+      "eventLogTitle": "Event log — {provider}",
+      "eventLogDesc": "Append-only activity for this connector (connect, disconnect, tests, deliveries).",
+      "noEvents": "No events yet.",
+      "refreshLog": "Refresh"
     }
   },
   "SignupPage": {
