@@ -1720,7 +1720,7 @@
       "fields": "Campos y etiquetas",
       "deals": "Negocios y moneda",
       "members": "Miembros del equipo",
-      "api": "Claves de API",
+      "api": "API y webhooks",
       "astra-connect": "Astra Connect",
       "integrations": "Integraciones"
     },
@@ -1986,6 +1986,32 @@
       "eventLogDesc": "Append-only activity for this connector (connect, disconnect, tests, deliveries).",
       "noEvents": "No events yet.",
       "refreshLog": "Refresh"
+    },
+    "webhooks": {
+      "title": "Outbound webhooks",
+      "description": "HTTPS endpoints that receive signed events (messages, contacts, conversations, opt-out, orders). Secrets are shown once; deliveries retry with backoff.",
+      "docsHint": "Full reference:",
+      "docsLink": "Public API docs",
+      "addEndpoint": "Add endpoint",
+      "loading": "Loading webhooks…",
+      "empty": "No webhook endpoints yet.",
+      "loadFailed": "Failed to load webhooks",
+      "networkError": "Network error",
+      "createFailed": "Could not create webhook",
+      "createSuccess": "Webhook created",
+      "deleteFailed": "Could not delete webhook",
+      "deleteSuccess": "Webhook deleted",
+      "updateFailed": "Could not update webhook",
+      "active": "Active",
+      "inactive": "Inactive",
+      "enable": "Enable",
+      "disable": "Disable",
+      "events": "Events",
+      "createDesc": "Subscribe to events. We POST JSON with an X-Wacrm-Signature header.",
+      "create": "Create endpoint",
+      "secretTitle": "Copy your signing secret",
+      "secretDesc": "Shown once. Use it to verify X-Wacrm-Signature on deliveries.",
+      "copied": "Secret copied"
     }
   },
   "SignupPage": {

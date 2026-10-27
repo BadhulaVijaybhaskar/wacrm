@@ -82,6 +82,7 @@ export async function middleware(request: NextRequest) {
     '/notifications',
     '/settings',
     '/legal',
+    '/developers',
   ]
   // CHAT-14 stub preview is public (mock data only).
   if (request.nextUrl.pathname.startsWith('/ui-preview/')) {
@@ -104,6 +105,7 @@ export async function middleware(request: NextRequest) {
       '/api/invitations/',
       '/api/automations/cron',
       '/api/flows/cron',
+      '/api/webhooks/cron',
     ]
     const isPublic = publicApiPrefixes.some(
       (prefix) => path === prefix || path.startsWith(prefix),

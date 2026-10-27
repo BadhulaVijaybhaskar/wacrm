@@ -298,11 +298,36 @@ things happen in your account. **Migration required:** apply
 
 ### Events
 
-| Event                    | Fires when                                        |
-| ------------------------ | ------------------------------------------------- |
-| `message.received`       | An inbound message arrives from a contact         |
-| `message.status_updated` | A message you sent changed delivery status        |
-| `conversation.created`   | A new conversation is opened for a contact        |
+| Event                       | Fires when                                              |
+| --------------------------- | ------------------------------------------------------- |
+| `message.received`          | An inbound message arrives from a contact               |
+| `message.sent`              | An outbound message was accepted for delivery           |
+| `message.status`            | A message delivery status changed                       |
+| `message.status_updated`    | Legacy alias of `message.status`                        |
+| `contact.created`           | A contact was created                                   |
+| `contact.updated`           | A contact was updated                                   |
+| `conversation.created`      | A new conversation is opened                            |
+| `conversation.assigned`     | A conversation was assigned                             |
+| `conversation.closed`       | A conversation was closed                               |
+| `optout`                    | A contact opted out or back in                          |
+| `order.created`             | Ecommerce order created                                 |
+| `order.fulfilled`           | Ecommerce order fulfilled                               |
+| `order.cancelled`           | Ecommerce order cancelled                               |
+| `order.abandoned_checkout`  | Abandoned checkout                                      |
+
+Failed deliveries are enqueued to `webhook_delivery_queue` (migration
+`049_webhook_retry_queue.sql`) and retried by
+`POST /api/webhooks/cron` with header `x-cron-secret: $AUTOMATION_CRON_SECRET`.
+
+### Zapier / Make REST Hooks
+
+Scope: `webhooks:manage`.
+
+- `POST /api/v1/hooks/subscribe` — body `{ "hookUrl": "https://…", "event": "message.received" }` (also accepts `target_url` / `events[]`). Returns the endpoint `id` (and `secret` on first create).
+- `POST` or `DELETE /api/v1/hooks/unsubscribe` — body `{ "id" }` or `{ "hookUrl" }` (sets `is_active=false`).
+- `GET /api/v1/hooks/sample?event=message.received` — sample payload for perform-list / docs.
+
+In-app docs: **Developers → API** (`/developers/api`). Dashboard management: **Settings → API & webhooks**.
 
 ### Managing endpoints
 

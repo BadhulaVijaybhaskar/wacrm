@@ -19,6 +19,7 @@ import { FieldsAndTagsPanel } from '@/components/settings/fields-and-tags-panel'
 import { DealsSettings } from '@/components/settings/deals-settings';
 import { MembersTab } from '@/components/settings/members-tab';
 import { ApiKeysSettings } from '@/components/settings/api-keys-settings';
+import { WebhooksSettings } from '@/components/settings/webhooks-settings';
 import { IntegrationsHub } from '@/components/settings/integrations-hub';
 import {
   resolveSection,
@@ -83,7 +84,12 @@ function SettingsPageInner() {
     fields: <FieldsAndTagsPanel />,
     deals: <DealsSettings />,
     members: <MembersTab />,
-    api: <ApiKeysSettings />,
+    api: (
+      <>
+        <ApiKeysSettings />
+        <WebhooksSettings />
+      </>
+    ),
     integrations: <IntegrationsHub />,
   };
 

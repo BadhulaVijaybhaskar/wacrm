@@ -11,6 +11,10 @@ vi.mock('@/lib/webhooks/ssrf', () => ({
   isDeliverableUrl: vi.fn(async () => true),
 }));
 
+vi.mock('@/lib/webhooks/retry-queue', () => ({
+  enqueueWebhookRetry: vi.fn(async () => undefined),
+}));
+
 import { dispatchWebhookEvent, MAX_CONSECUTIVE_FAILURES } from './deliver';
 import { isDeliverableUrl } from './ssrf';
 

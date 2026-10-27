@@ -26,6 +26,7 @@ import { decrypt } from '@/lib/whatsapp/encryption';
 import { buildSignatureHeader } from '@/lib/webhooks/sign';
 import { isDeliverableUrl } from '@/lib/webhooks/ssrf';
 import type { WebhookEvent } from '@/lib/webhooks/events';
+import { enqueueWebhookRetry } from '@/lib/webhooks/retry-queue';
 
 /** Per-endpoint HTTP timeout. Kept short — this runs in `after()`. */
 export const DELIVERY_TIMEOUT_MS = 5000;
@@ -35,6 +36,7 @@ export const MAX_CONSECUTIVE_FAILURES = 15;
 
 interface EndpointRow {
   id: string;
+  account_id?: string;
   url: string;
   secret: string;
 }
@@ -63,18 +65,19 @@ export async function dispatchWebhookEvent(
     // HMAC over the raw request body. `id` is a per-delivery uuid the
     // receiver can dedupe on (deliveries are at-least-once and may
     // repeat / arrive out of order).
-    const payload = JSON.stringify({
+    const payloadObject = {
       id: randomUUID(),
       event,
       occurred_at: new Date().toISOString(),
       account_id: accountId,
       data,
-    });
+    };
+    const payload = JSON.stringify(payloadObject);
     const tsSeconds = Math.floor(Date.now() / 1000);
 
     await Promise.allSettled(
       (rows as EndpointRow[]).map((row) =>
-        deliverOne(db, row, event, payload, tsSeconds)
+        deliverOne(db, { ...row, account_id: accountId }, event, payload, tsSeconds, payloadObject)
       )
     );
   } catch (err) {
@@ -88,7 +91,8 @@ async function deliverOne(
   row: EndpointRow,
   event: WebhookEvent,
   payload: string,
-  tsSeconds: number
+  tsSeconds: number,
+  payloadObject: unknown,
 ): Promise<void> {
   // SSRF guard: refuse to POST to a host that resolves to a private /
   // loopback / link-local address. Counts as a failure so a
@@ -96,6 +100,15 @@ async function deliverOne(
   if (!(await isDeliverableUrl(row.url))) {
     console.warn('[webhooks] refusing non-public delivery target for', row.id);
     await recordFailure(db, row);
+    if (row.account_id) {
+      await enqueueWebhookRetry(db, {
+        accountId: row.account_id,
+        endpointId: row.id,
+        event,
+        payload: payloadObject,
+        errorMessage: 'Non-public delivery target',
+      });
+    }
     return;
   }
 
@@ -139,6 +152,15 @@ async function deliverOne(
       err instanceof Error ? err.message : err
     );
     await recordFailure(db, row);
+    if (row.account_id) {
+      await enqueueWebhookRetry(db, {
+        accountId: row.account_id,
+        endpointId: row.id,
+        event,
+        payload: payloadObject,
+        errorMessage: err instanceof Error ? err.message : 'Delivery failed',
+      });
+    }
   }
 }
 
