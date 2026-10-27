@@ -16,19 +16,33 @@ describe('BrandLockup', () => {
 
   it('dark mode markup always includes astra-chat-lockup-dark.png (CSS swap)', () => {
     const html = renderToStaticMarkup(
-      createElement(BrandLockup, { size: 'full', width: 320, height: 76 }),
+      createElement(BrandLockup, {
+        size: 'full',
+        width: 320,
+        height: 28,
+        className: 'h-7 max-h-7',
+      }),
     )
     expect(html).toContain('astra-chat-lockup-dark.png')
     expect(html).toContain('data-brand-lockup="dark"')
     expect(html).toContain('data-brand-lockup="light"')
     expect(html).toContain('brand-lockup-dark')
+    expect(html).toContain('brand-lockup-img')
+    expect(html).toContain('h-7')
+    expect(html).toContain('max-h-7')
   })
 
-  it('forceDark renders only the dark asset', () => {
+  it('forceDark renders only the dark asset with height cap classes', () => {
     const html = renderToStaticMarkup(
-      createElement(BrandLockup, { forceDark: true, size: 275 }),
+      createElement(BrandLockup, {
+        forceDark: true,
+        size: 275,
+        className: 'h-7 max-h-7',
+      }),
     )
     expect(html).toContain('astra-chat-lockup-dark-275.png')
     expect(html).not.toContain('data-brand-lockup="light"')
+    expect(html).toContain('object-contain')
+    expect(html).toContain('h-7')
   })
 })

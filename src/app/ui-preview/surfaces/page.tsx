@@ -6,7 +6,7 @@
 
 import { TemplatePhonePreview } from '@/components/settings/template-phone-preview';
 
-export default function Chat14PreviewPage() {
+export default function UiPreviewSurfacesPage() {
   return (
     <main className="min-h-screen bg-[radial-gradient(ellipse_at_top,_#e8eef7,_#f7f4ef)] p-6 text-slate-900">
       <h1 className="font-serif text-3xl tracking-tight">UI preview</h1>

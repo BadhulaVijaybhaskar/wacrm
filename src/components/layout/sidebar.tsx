@@ -305,7 +305,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                   width={148}
                   height={28}
                   forceDark
-                  className="h-7 max-w-[148px] object-contain object-left"
+                  className="h-7 max-h-7 w-auto max-w-[148px] object-contain object-left"
                 />
               )}
             </Link>

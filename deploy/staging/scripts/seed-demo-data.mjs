@@ -146,28 +146,65 @@ export const DEMO_BROADCAST = Object.freeze({
   status: 'sent',
 });
 
-export function buildSeedPlan({ accountId, userId }) {
+/** Gap between seeded message bubbles (and contact thread offsets). */
+export const SEED_STEP_MS = 10 * 60 * 1000;
+
+/**
+ * Derive message / last_message / note timestamps from one base instant so
+ * the inbox list relative time, bubble clock times, and note stamp stay
+ * coherent after re-seed.
+ *
+ * @param {number} baseMs  Epoch ms for the *latest* event in this thread
+ * @param {number} messageCount
+ * @returns {{ messageAts: string[], lastMessageAt: string, noteAt: string }}
+ */
+export function buildThreadTimeline(baseMs, messageCount) {
+  const count = Math.max(0, messageCount | 0);
+  const messageAts = Array.from({ length: count }, (_, i) =>
+    new Date(baseMs - (count - 1 - i) * SEED_STEP_MS).toISOString(),
+  );
+  const lastMessageAt =
+    messageAts.length > 0
+      ? messageAts[messageAts.length - 1]
+      : new Date(baseMs).toISOString();
+  // Note sits with the latest message so list + note share one clock.
+  const noteAt = lastMessageAt;
+  return { messageAts, lastMessageAt, noteAt };
+}
+
+export function buildSeedPlan({ accountId, userId, nowMs = Date.now() }) {
   if (!accountId || !userId) {
     throw new Error('accountId and userId are required');
   }
+  // Newest contact thread ends at `nowMs - SEED_STEP_MS` so relative times
+  // read as "N minutes ago" rather than "just now" in screenshots.
+  const seedBaseMs = nowMs - SEED_STEP_MS;
   return {
     accountId,
     userId,
+    seedBaseMs,
     agent: { ...DEMO_AGENT },
     tag: { ...DEMO_TAG, account_id: accountId, user_id: userId },
     noteText: DEMO_NOTE,
-    contacts: DEMO_CONTACTS.map((c) => ({
-      phone: c.phone,
-      name: c.name,
-      email: c.email,
-      company: c.company,
-      account_id: accountId,
-      user_id: userId,
-      withConversation: c.withConversation,
-      handoff: c.handoff ?? 'ai',
-      lastMessage: c.lastMessage ?? null,
-      messages: c.messages ?? [],
-    })),
+    contacts: DEMO_CONTACTS.map((c, index) => {
+      // Stagger threads: Priya (0) is newest; older contacts sit further back.
+      const threadBaseMs = seedBaseMs - index * SEED_STEP_MS;
+      const messages = c.messages ?? [];
+      const timeline = buildThreadTimeline(threadBaseMs, messages.length);
+      return {
+        phone: c.phone,
+        name: c.name,
+        email: c.email,
+        company: c.company,
+        account_id: accountId,
+        user_id: userId,
+        withConversation: c.withConversation,
+        handoff: c.handoff ?? 'ai',
+        lastMessage: c.lastMessage ?? null,
+        messages,
+        timeline,
+      };
+    }),
     broadcast: {
       ...DEMO_BROADCAST,
       account_id: accountId,
@@ -233,10 +270,14 @@ async function ensureConversation(db, plan, contact) {
     .eq('contact_id', contact.id)
     .maybeSingle();
 
+  const lastMessageAt = contact.lastMessage
+    ? (contact.timeline?.lastMessageAt ?? new Date(plan.seedBaseMs).toISOString())
+    : null;
+
   const patch = {
     status: 'open',
     last_message_text: contact.lastMessage,
-    last_message_at: contact.lastMessage ? new Date().toISOString() : null,
+    last_message_at: lastMessageAt,
     assigned_agent_id: contact.handoff === 'human' ? plan.userId : null,
     ai_autoreply_disabled: contact.handoff === 'human',
     ai_handoff_summary:
@@ -263,26 +304,44 @@ async function ensureConversation(db, plan, contact) {
   return data.id;
 }
 
-async function ensureMessages(db, conversationId, messages) {
+async function ensureMessages(db, conversationId, messages, timeline) {
   if (!messages.length) return;
-  const { count } = await db
+  const messageAts =
+    timeline?.messageAts ??
+    buildThreadTimeline(Date.now() - SEED_STEP_MS, messages.length).messageAts;
+
+  const { data: existing } = await db
     .from('messages')
-    .select('id', { count: 'exact', head: true })
-    .eq('conversation_id', conversationId);
-  if ((count ?? 0) > 0) return;
+    .select('id')
+    .eq('conversation_id', conversationId)
+    .order('created_at', { ascending: true });
+
+  if (existing?.length) {
+    // Re-seed timestamps so list relative time + bubble clocks stay aligned.
+    const n = Math.min(existing.length, messageAts.length);
+    for (let i = 0; i < n; i++) {
+      const { error } = await db
+        .from('messages')
+        .update({ created_at: messageAts[i] })
+        .eq('id', existing[i].id);
+      if (error) throw error;
+    }
+    return;
+  }
+
   const rows = messages.map((m, i) => ({
     conversation_id: conversationId,
     sender_type: m.sender,
     content_type: 'text',
     content_text: m.text,
     status: 'delivered',
-    created_at: new Date(Date.now() - (messages.length - i) * 600_000).toISOString(),
+    created_at: messageAts[i],
   }));
   const { error } = await db.from('messages').insert(rows);
   if (error) throw error;
 }
 
-async function ensureNote(db, plan, contactId) {
+async function ensureNote(db, plan, contactId, noteAt) {
   // Replace any prior internal seed notes on this contact.
   await db
     .from('contact_notes')
@@ -291,6 +350,8 @@ async function ensureNote(db, plan, contactId) {
     .eq('contact_id', contactId)
     .ilike('note_text', '%seed%');
 
+  const stampedAt = noteAt ?? new Date(plan.seedBaseMs).toISOString();
+
   const { data: existing } = await db
     .from('contact_notes')
     .select('id')
@@ -298,7 +359,14 @@ async function ensureNote(db, plan, contactId) {
     .eq('contact_id', contactId)
     .eq('note_text', plan.noteText)
     .maybeSingle();
-  if (existing?.id) return existing.id;
+  if (existing?.id) {
+    const { error } = await db
+      .from('contact_notes')
+      .update({ created_at: stampedAt })
+      .eq('id', existing.id);
+    if (error) throw error;
+    return existing.id;
+  }
   const { data, error } = await db
     .from('contact_notes')
     .insert({
@@ -306,6 +374,7 @@ async function ensureNote(db, plan, contactId) {
       user_id: plan.userId,
       contact_id: contactId,
       note_text: plan.noteText,
+      created_at: stampedAt,
     })
     .select('id')
     .single();
@@ -456,10 +525,10 @@ async function main(argv = process.argv.slice(2)) {
     const id = await upsertContact(db, plan, c);
     contactIds.push(id);
     await linkTag(db, id, tagId);
-    await ensureNote(db, plan, id);
+    await ensureNote(db, plan, id, c.timeline?.noteAt);
     if (c.withConversation) {
       const convId = await ensureConversation(db, plan, { ...c, id });
-      await ensureMessages(db, convId, c.messages);
+      await ensureMessages(db, convId, c.messages, c.timeline);
       conversationCount += 1;
     }
   }

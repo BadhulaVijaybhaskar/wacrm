@@ -30,7 +30,7 @@ Saved under `artifacts/chat-14/` (also copied to `/opt/cursor/artifacts/chat-14/
 | `preview-full-desktop.png` | Full CHAT-14 preview page |
 | `chat-14-login-desktop.png` / `chat-14-login-mobile.png` | Live `/login` (no session DB in this env) |
 
-UI feature shots were taken from `/ui-preview/chat14` (mock data, no auth DB). Live authenticated inbox/settings were not available in this environment (placeholder Supabase).
+UI feature shots were taken from `/ui-preview/surfaces` (mock data, no auth DB; formerly `/ui-preview/chat14`). Live authenticated inbox/settings were not available in this environment (placeholder Supabase).
 
 ## Per-task report (CHAT-08 → CHAT-14)
 
@@ -78,7 +78,7 @@ UI feature shots were taken from `/ui-preview/chat14` (mock data, no auth DB). L
 
 ### CHAT-14 — Final verification
 - **SHA:** _(this commit)_
-- **Files:** verification doc, screenshot artifacts, `/ui-preview/chat14` stub page, middleware preview allow, broadcast-core test expectation fix (`contactId`)
+- **Files:** verification doc, screenshot artifacts, `/ui-preview/surfaces` stub page, middleware preview allow, broadcast-core test expectation fix (`contactId`)
 - **Migrations:** none
 - **Tests:** reconfirmed full suite 1236 / cross 9 / smoke 10
 - **Gaps:** screenshots use stub preview (no authenticated Supabase session in agent env)

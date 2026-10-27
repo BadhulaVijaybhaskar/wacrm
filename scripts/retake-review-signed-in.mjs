@@ -147,6 +147,48 @@ async function collectConsoleErrors(page, bucket) {
   });
 }
 
+/** Fail if the mobile header lockup spills past the header chrome. */
+async function assertHeaderLockupFits(page, label) {
+  const probe = await page.evaluate(() => {
+    const header = document.querySelector('header.av-top, header');
+    if (!header) return { ok: false, reason: 'no-header' };
+    const lockup = header.querySelector('.brand-lockup, [data-brand-lockup]');
+    if (!lockup) {
+      // Desktop chrome hides the lockup — OK when viewport ≥ md.
+      const w = window.innerWidth;
+      return { ok: w >= 768, reason: w >= 768 ? 'desktop-no-lockup' : 'missing-lockup', width: w };
+    }
+    const root = lockup.classList?.contains('brand-lockup')
+      ? lockup
+      : lockup.closest('.brand-lockup') || lockup;
+    const h = header.getBoundingClientRect();
+    const l = root.getBoundingClientRect();
+    const img =
+      root.querySelector('[data-brand-lockup="light"], [data-brand-lockup="dark"]') ||
+      root;
+    const ib = img.getBoundingClientRect();
+    const spill =
+      l.bottom > h.bottom + 1 ||
+      l.top < h.top - 1 ||
+      ib.bottom > h.bottom + 1 ||
+      l.height > 32;
+    return {
+      ok: !spill,
+      reason: spill ? 'spill' : 'ok',
+      header: { top: h.top, bottom: h.bottom, height: h.height },
+      lockup: { top: l.top, bottom: l.bottom, height: l.height, width: l.width },
+      img: { top: ib.top, bottom: ib.bottom, height: ib.height },
+      width: window.innerWidth,
+    };
+  });
+  if (!probe.ok) {
+    throw new Error(
+      `[shot-guard] ${label}: header lockup overflow ${JSON.stringify(probe)}`,
+    );
+  }
+  console.log('header-lockup-ok', label, probe.width);
+}
+
 async function main() {
   const browser = await chromium.launch({
     headless: true,
@@ -249,6 +291,14 @@ async function main() {
   await login(p2);
   await setMode(p2, 'light');
 
+  // Visual guard: lockup must fit the header at the review viewports.
+  for (const w of [390, 768, 1024, 1440]) {
+    await p2.setViewportSize({ width: w, height: 900 });
+    await p2.goto(`${BASE}/settings?tab=profile`, { waitUntil: 'load' });
+    await p2.waitForTimeout(500);
+    await assertHeaderLockupFits(p2, `settings@${w}`);
+  }
+
   for (const [w, h, name, full] of [
     [390, 844, 'integrations-390.png', true],
     [1024, 768, 'integrations-1024.png', false],
@@ -259,6 +309,7 @@ async function main() {
       waitUntil: 'load',
     });
     await p2.waitForTimeout(700);
+    await assertHeaderLockupFits(p2, name);
     if (w === 390) await scrollIntegrationsToCrm(p2);
     await shot(p2, name, { fullPage: full });
   }
@@ -266,6 +317,7 @@ async function main() {
   await p2.setViewportSize({ width: 390, height: 844 });
   await p2.goto(`${BASE}/settings?tab=profile`, { waitUntil: 'load' });
   await p2.waitForTimeout(700);
+  await assertHeaderLockupFits(p2, 'settings-390.png');
   await shot(p2, 'settings-390.png');
 
   await browser.close();

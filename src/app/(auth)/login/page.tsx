@@ -77,7 +77,12 @@ function LoginPageInner() {
     <div className="acl-wrap">
       <Card className="acl-card !block !gap-0 !py-0">
         <CardHeader className="items-center px-0 text-center">
-          <BrandLockup size={275} width={275} height={65} className="acl-lockup mb-5" />
+          <BrandLockup
+            size={275}
+            width={220}
+            height={48}
+            className="acl-lockup mx-auto"
+          />
           <CardTitle className="acl-title">
             {inviteToken ? t('titleAccept') : t('titleWelcome')}
           </CardTitle>

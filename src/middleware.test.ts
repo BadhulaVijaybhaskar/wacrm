@@ -181,7 +181,7 @@ describe("middleware — /ui-preview production gate", () => {
     mockUser = null;
 
     const res = await middleware(
-      new NextRequest("https://app.test/ui-preview/chat14"),
+      new NextRequest("https://app.test/ui-preview/surfaces"),
     );
 
     expect(res.status).toBe(404);
@@ -193,7 +193,7 @@ describe("middleware — /ui-preview production gate", () => {
     mockUser = null;
 
     const res = await middleware(
-      new NextRequest("https://app.test/ui-preview/chat14"),
+      new NextRequest("https://app.test/ui-preview/surfaces"),
     );
 
     expect(res.status).not.toBe(404);

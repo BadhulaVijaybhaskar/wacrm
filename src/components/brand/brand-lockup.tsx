@@ -36,13 +36,16 @@ interface BrandLockupProps {
  * Both light and dark assets are always in the DOM; visibility is CSS-driven
  * via `html.dark` / `html[data-mode]` (see `app/globals.css`). That avoids a
  * hydration mismatch when the theme-boot script flips mode before React
- * hydrates — previously a single `<img src>` chosen from `useTheme()` could
- * SSR the light lockup and then paint the dark one on the client.
+ * hydrates.
+ *
+ * Intrinsic PNG size is large (~275×92). Call sites MUST pass a height cap
+ * (`h-7`, `acl-lockup`, etc.). The wrapper uses aspect-ratio + overflow;
+ * images are absolutely positioned so they cannot spill the header.
  */
 export function BrandLockup({
   size = 275,
   width = 275,
-  height = 65,
+  height = 28,
   className,
   alt = 'Astra Chat',
   forceDark = false,
@@ -55,14 +58,17 @@ export function BrandLockup({
         alt={alt}
         width={width}
         height={height}
-        className={cn('h-auto w-auto', className)}
+        className={cn(
+          'block h-full max-h-full w-auto max-w-full object-contain object-left',
+          className,
+        )}
         decoding="async"
       />
     );
   }
 
   return (
-    <span className={cn('brand-lockup inline-grid', className)}>
+    <span className={cn('brand-lockup', className)}>
       {/* eslint-disable-next-line @next/next/no-img-element -- brand PNG */}
       <img
         src={LIGHT[size]}
@@ -70,7 +76,7 @@ export function BrandLockup({
         width={width}
         height={height}
         data-brand-lockup="light"
-        className="brand-lockup-light col-start-1 row-start-1 h-auto w-auto"
+        className="brand-lockup-light brand-lockup-img"
         decoding="async"
       />
       {/* eslint-disable-next-line @next/next/no-img-element -- brand PNG */}
@@ -81,7 +87,7 @@ export function BrandLockup({
         width={width}
         height={height}
         data-brand-lockup="dark"
-        className="brand-lockup-dark col-start-1 row-start-1 h-auto w-auto"
+        className="brand-lockup-dark brand-lockup-img"
         decoding="async"
       />
     </span>
