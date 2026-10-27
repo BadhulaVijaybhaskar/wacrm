@@ -1,0 +1,108 @@
+== CHAT-14 verify 2026-10-27T18:15:42Z ==
+== seed dry-run ==
+{
+  "dry_run": true,
+  "plan": {
+    "accountId": "11111111-1111-4111-8111-111111111111",
+    "userId": "22222222-2222-4222-8222-222222222222",
+    "tag": {
+      "name": "Astra Chat Demo",
+      "color": "#145CF6",
+      "account_id": "11111111-1111-4111-8111-111111111111",
+      "user_id": "22222222-2222-4222-8222-222222222222"
+    },
+    "contacts": [
+      {
+        "phone": "+15550100001",
+        "name": "Priya Sharma",
+        "email": "priya.demo@astrachat.example",
+        "company": "Astra Chat Demo Co",
+        "account_id": "11111111-1111-4111-8111-111111111111",
+        "user_id": "22222222-2222-4222-8222-222222222222"
+      },
+      {
+        "phone": "+15550100002",
+        "name": "Jordan Lee",
+        "email": "jordan.demo@astrachat.example",
+        "company": "Astra Chat Demo Co",
+        "account_id": "11111111-1111-4111-8111-111111111111",
+        "user_id": "22222222-2222-4222-8222-222222222222"
+      }
+    ],
+    "noteText": "Seeded by deploy/staging/scripts/seed-demo-data.mjs for Astra Chat staging smoke."
+  }
+}
+PASS seed-demo-data --dry-run
+== seed unit tests ==
+TAP version 13
+# Subtest: buildSeedPlan brands Astra Chat and is deterministic
+ok 1 - buildSeedPlan brands Astra Chat and is deterministic
+  ---
+  duration_ms: 0.649114
+  type: 'test'
+  ...
+# Subtest: buildSeedPlan refuses missing ids
+ok 2 - buildSeedPlan refuses missing ids
+  ---
+  duration_ms: 0.321426
+  type: 'test'
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 2
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 67.299775
+PASS seed-demo-data.test.mjs
+== connect-stub unit tests ==
+TAP version 13
+# Subtest: connect-stub: inbound, replay, message, handoff, auth
+ok 1 - connect-stub: inbound, replay, message, handoff, auth
+  ---
+  duration_ms: 88.637015
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 131.775682
+PASS connect-stub server.test.js
+== live stub smoke ==
+== health ==
+PASS [stub /health]: HTTP 200
+== inbound reply ==
+PASS [inbound]: HTTP 200
+PASS [inbound]: reply_text present
+PASS [inbound]: conversation_id=conv_stub_7b3e729529dd
+== idempotent replay ==
+PASS [inbound replay]: HTTP 200
+PASS [inbound replay]: duplicate=true
+== bad signature ==
+PASS [bad signature]: HTTP 401
+PASS [bad signature]: code=bad_signature
+== stale timestamp ==
+PASS [stale signature]: HTTP 401
+PASS [stale signature]: code=stale_signature
+== human /message ==
+PASS [/message]: HTTP 200
+PASS [/message]: stored=true
+== handoff:false ==
+PASS [handoff:false]: HTTP 200
+PASS [handoff]: handoff=false
+== media URL shape (https host for WACRM_MEDIA_HOSTS) ==
+PASS [media]: NEXT_PUBLIC_SITE_URL is https://wa.astraconnect.io
+== 429 rate limit (best-effort; needs RATE_LIMIT_EVERY on stub) ==
+PASS [429]: got rate_limited with Retry-After
+
+All smoke checks passed.
+PASS staging-smoke.sh against local stub
+== summary fails=0 ==
+CHAT-14 verification OK

@@ -14,7 +14,7 @@ Real DB is **wacrm-staging** (owner applies migrations). New migrations must con
 | CHAT-12 security hardening | **done** | `92bd6fd` | `vitest` 1132 passed; `tsc --noEmit` clean | `docs/chat-12-security.md`; `artifacts/chat-12/chat-12-security.png`; admin gates + engine RL + middleware API tests |
 | CHAT-04b Connect read/takeover API | **done** | `9222bbe` | covered in suite at land | Migration: `046_astra_connect_read_api.sql` |
 | CHAT-05 per-tenant secrets | **done** | `e242732` | suite | Migration: `044_astra_connect_tenant_secret.sql` |
-| Staging smoke + seed + CHAT-14 screenshots | not started | — | — | `deploy/staging` smoke + seed script |
+| Staging smoke + seed + CHAT-14 screenshots | **done** | `b2556ca` | seed + stub `node:test`; `chat-14-verify.sh` green | `deploy/staging/scripts/{seed-demo-data,chat-14-verify,staging-smoke}*`; `artifacts/chat-14/` |
 | CHAT-03 Settings UI | **done** | `8062658` | suite | — |
 | CHAT-09 | not started | — | — | Spec TBD / deferred |
 | CHAT-11 | not started | — | — | Spec TBD / deferred |
@@ -38,5 +38,5 @@ No new migration in CHAT-02b or CHAT-15.
 
 ## Next up
 
-1. Staging smoke readiness + seed + CHAT-14 verification screenshots.
-2. Remaining value-ordered CHAT items only if they can ship cleanly; otherwise leave **not started**.
+1. Remaining value-ordered CHAT items (03 done; 09/11/10/08/06/07 as listed) only if they can ship cleanly; otherwise leave **not started**.
+2. Integrations CHAT-16…25 last.
