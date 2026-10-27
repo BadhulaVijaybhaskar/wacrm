@@ -45,15 +45,18 @@ function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+/** Connect staging always sends Retry-After: 55 on 429. */
+export const DEFAULT_RETRY_AFTER_SECONDS = 55
+
 function parseRetryAfter(header: string | null): number {
-  if (!header) return 60
+  if (!header) return DEFAULT_RETRY_AFTER_SECONDS
   const asInt = Number(header)
   if (Number.isFinite(asInt) && asInt >= 0) return asInt
   const when = Date.parse(header)
   if (Number.isFinite(when)) {
     return Math.max(0, Math.ceil((when - Date.now()) / 1000))
   }
-  return 60
+  return DEFAULT_RETRY_AFTER_SECONDS
 }
 
 async function fetchOnce(

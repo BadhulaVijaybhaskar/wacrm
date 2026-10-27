@@ -1669,7 +1669,8 @@
       "fields": "Fields & tags",
       "deals": "Deals & currency",
       "members": "Team members",
-      "api": "API keys"
+      "api": "API keys",
+      "astra-connect": "Astra Connect"
     },
     "groups": {
       "account": "Account",
@@ -1883,6 +1884,34 @@
       "editDoc": "Edit",
       "deleteDoc": "Delete",
       "loading": "Loading…"
+    },
+    "astraConnect": {
+      "title": "Astra Connect",
+      "description": "Forward inbound WhatsApp messages to Astra Connect’s AI Employee. When active, Astra Chat’s built-in auto-reply stands down for this account.",
+      "adminOnly": "Only admins and owners can change Astra Connect settings.",
+      "loading": "Loading…",
+      "loadFailed": "Failed to load Astra Connect settings",
+      "networkError": "Could not reach the server. Try again?",
+      "saveFailed": "Failed to save Astra Connect settings",
+      "saved": "Astra Connect settings saved",
+      "statusEnvReady": "Server configured",
+      "statusEnvMissing": "Server not configured",
+      "statusActive": "Adapter on",
+      "statusInactive": "Adapter off",
+      "envMissingTitle": "Server env incomplete",
+      "envMissingDesc": "Ask an operator to set CONNECT_ADAPTER_URL and the shared adapter secret on this deployment before enabling the adapter.",
+      "whatsappMissingTitle": "WhatsApp not connected",
+      "whatsappMissingDesc": "Connect a WhatsApp Business number under Settings → WhatsApp first. The adapter needs that phone number id.",
+      "cardTitle": "Per-account adapter",
+      "cardDesc": "Enable the adapter for this workspace and set the Astra Connect tenant id.",
+      "enabledLabel": "Forward to Astra Connect",
+      "enabledHint": "Inbound customer messages are sent to Astra Connect; replies and handoffs stay in Astra Chat’s inbox.",
+      "tenantLabel": "Tenant id",
+      "tenantPlaceholder": "t_…",
+      "tenantHint": "Required when the adapter is on. Copy it from Astra Connect.",
+      "phoneNumberId": "WhatsApp phone number id: {id}",
+      "saving": "Saving…",
+      "save": "Save"
     }
   },
   "SignupPage": {

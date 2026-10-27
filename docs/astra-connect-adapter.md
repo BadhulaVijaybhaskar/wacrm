@@ -17,12 +17,17 @@ Contract source of truth: Astra Connect `docs/wacrm-adapter-contract.md` (v2).
      `WACRM_MEDIA_HOSTS`)
 2. Apply migration `043_astra_connect_adapter.sql` (do not apply from this
    PR against a live project until ready).
-3. Per account (admin):
+3. Per account (admin): open **Settings → Astra Connect** in Astra Chat,
+   or call
    `PATCH /api/whatsapp/config/astra-connect`
-   `{ "enabled": true, "tenant_id": "t_…" }`
+   `{ "enabled": true, "tenant_id": "t_…" }`.
 
-When the adapter is on, wacrm's built-in AI auto-reply does **not** also
-reply for that account.
+   `GET /api/whatsapp/config/astra-connect` returns
+   `{ env_configured, enabled, tenant_id, phone_number_id, has_whatsapp_config }`
+   so the Settings UI can show whether the server env is ready.
+
+When the adapter is on, Astra Chat's built-in AI auto-reply does **not**
+also reply for that account.
 
 ## Behaviour
 
@@ -35,5 +40,8 @@ reply for that account.
 | Media | Mirrored (or re-fetched from Meta), exposed as ~15 min signed URL under `/api/astra-connect/media/[token]` |
 
 Client policy: 30 s timeout; one retry on network/5xx with the same
-`message_id`; on 429 wait `Retry-After` and resend; otherwise hand the
-thread to a human.
+`message_id`; on 429 wait `Retry-After` (Connect sends `55`) and resend
+with the same body; otherwise hand the thread to a human.
+
+HMAC signatures use lowercase hex when we sign. Verification accepts
+either lowercase or uppercase hex (Connect accepts both).

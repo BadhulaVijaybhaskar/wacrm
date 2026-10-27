@@ -1669,7 +1669,8 @@
       "fields": "Campos y etiquetas",
       "deals": "Negocios y moneda",
       "members": "Miembros del equipo",
-      "api": "Claves de API"
+      "api": "Claves de API",
+      "astra-connect": "Astra Connect"
     },
     "groups": {
       "account": "Cuenta",
@@ -1883,6 +1884,34 @@
       "editDoc": "Editar",
       "deleteDoc": "Eliminar",
       "loading": "Cargando…"
+    },
+    "astraConnect": {
+      "title": "Astra Connect",
+      "description": "Reenvía mensajes entrantes de WhatsApp al empleado de IA de Astra Connect. Cuando está activo, la respuesta automática integrada de Astra Chat se desactiva para esta cuenta.",
+      "adminOnly": "Solo administradores y propietarios pueden cambiar la configuración de Astra Connect.",
+      "loading": "Cargando…",
+      "loadFailed": "No se pudo cargar la configuración de Astra Connect",
+      "networkError": "No se pudo contactar al servidor. ¿Reintentar?",
+      "saveFailed": "No se pudo guardar la configuración de Astra Connect",
+      "saved": "Configuración de Astra Connect guardada",
+      "statusEnvReady": "Servidor configurado",
+      "statusEnvMissing": "Servidor sin configurar",
+      "statusActive": "Adaptador activo",
+      "statusInactive": "Adaptador inactivo",
+      "envMissingTitle": "Entorno incompleto",
+      "envMissingDesc": "Pide a un operador que configure CONNECT_ADAPTER_URL y el secreto compartido del adaptador en este despliegue antes de activarlo.",
+      "whatsappMissingTitle": "WhatsApp no conectado",
+      "whatsappMissingDesc": "Conecta primero un número de WhatsApp Business en Ajustes → WhatsApp. El adaptador necesita ese phone number id.",
+      "cardTitle": "Adaptador por cuenta",
+      "cardDesc": "Activa el adaptador para este espacio de trabajo y define el tenant id de Astra Connect.",
+      "enabledLabel": "Reenviar a Astra Connect",
+      "enabledHint": "Los mensajes entrantes se envían a Astra Connect; las respuestas y traspasos siguen en la bandeja de Astra Chat.",
+      "tenantLabel": "Tenant id",
+      "tenantPlaceholder": "t_…",
+      "tenantHint": "Obligatorio cuando el adaptador está activo. Cópialo desde Astra Connect.",
+      "phoneNumberId": "WhatsApp phone number id: {id}",
+      "saving": "Guardando…",
+      "save": "Guardar"
     }
   },
   "SignupPage": {

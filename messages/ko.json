@@ -1669,7 +1669,8 @@
       "fields": "필드 & 태그",
       "deals": "딜 & 통화",
       "members": "팀원",
-      "api": "API 키"
+      "api": "API 키",
+      "astra-connect": "Astra Connect"
     },
     "groups": {
       "account": "계정",
@@ -1883,6 +1884,34 @@
       "editDoc": "수정",
       "deleteDoc": "삭제",
       "loading": "불러오는 중…"
+    },
+    "astraConnect": {
+      "title": "Astra Connect",
+      "description": "수신 WhatsApp 메시지를 Astra Connect AI Employee로 전달합니다. 켜져 있으면 이 계정의 Astra Chat 기본 자동 응답은 중지됩니다.",
+      "adminOnly": "관리자와 소유자만 Astra Connect 설정을 변경할 수 있습니다.",
+      "loading": "불러오는 중…",
+      "loadFailed": "Astra Connect 설정을 불러오지 못했습니다",
+      "networkError": "서버에 연결할 수 없습니다. 다시 시도할까요?",
+      "saveFailed": "Astra Connect 설정을 저장하지 못했습니다",
+      "saved": "Astra Connect 설정이 저장되었습니다",
+      "statusEnvReady": "서버 구성됨",
+      "statusEnvMissing": "서버 미구성",
+      "statusActive": "어댑터 켜짐",
+      "statusInactive": "어댑터 꺼짐",
+      "envMissingTitle": "서버 환경 미완료",
+      "envMissingDesc": "어댑터를 켜기 전에 운영자에게 CONNECT_ADAPTER_URL과 공유 어댑터 시크릿을 이 배포에 설정하도록 요청하세요.",
+      "whatsappMissingTitle": "WhatsApp 미연결",
+      "whatsappMissingDesc": "먼저 설정 → WhatsApp에서 WhatsApp Business 번호를 연결하세요. 어댑터에 phone number id가 필요합니다.",
+      "cardTitle": "계정별 어댑터",
+      "cardDesc": "이 워크스페이스용 어댑터를 켜고 Astra Connect tenant id를 설정합니다.",
+      "enabledLabel": "Astra Connect로 전달",
+      "enabledHint": "수신 고객 메시지는 Astra Connect로 보내지며, 답장과 핸드오프는 Astra Chat 받은편지함에 유지됩니다.",
+      "tenantLabel": "Tenant id",
+      "tenantPlaceholder": "t_…",
+      "tenantHint": "어댑터가 켜져 있을 때 필요합니다. Astra Connect에서 복사하세요.",
+      "phoneNumberId": "WhatsApp phone number id: {id}",
+      "saving": "저장 중…",
+      "save": "저장"
     }
   },
   "SignupPage": {

@@ -70,6 +70,15 @@ describe('verifyAstraSignature', () => {
       verifyAstraSignature(sig.replace('sha256=', ''), body, secret, ts, ts)
     ).toBe(false)
   })
+
+  it('accepts uppercase hex signatures (Connect accepts either case)', () => {
+    const upper = sig.replace(
+      /sha256=([0-9a-f]+)/,
+      (_m, hex: string) => `sha256=${hex.toUpperCase()}`,
+    )
+    expect(upper).toMatch(/sha256=[0-9A-F]+/)
+    expect(verifyAstraSignature(upper, body, secret, ts, ts)).toBe(true)
+  })
 })
 
 describe('astraAuthHeaders', () => {
