@@ -1766,6 +1766,8 @@
       "role": "Role",
       "joined": "Joined",
       "userId": "User ID",
+      "copyId": "Copy ID",
+      "idCopied": "User ID copied",
       "loading": "Loading your profile…",
       "saving": "Saving…",
       "saveChanges": "Save changes",

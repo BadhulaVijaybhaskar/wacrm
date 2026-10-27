@@ -1,6 +1,5 @@
 'use client';
 
-import { useTheme } from '@/hooks/use-theme';
 import { cn } from '@/lib/utils';
 
 type LockupSize = 275 | 'full';
@@ -14,6 +13,8 @@ const DARK: Record<LockupSize, string> = {
   275: '/brand/astra-chat-lockup-dark-275.png',
   full: '/brand/astra-chat-lockup-dark.png',
 };
+
+export { LIGHT as BRAND_LOCKUP_LIGHT, DARK as BRAND_LOCKUP_DARK };
 
 interface BrandLockupProps {
   /** Prefers the 275px export used on auth + compact chrome. */
@@ -30,8 +31,13 @@ interface BrandLockupProps {
 }
 
 /**
- * Theme-aware Astra Chat wordmark lockup. Mark colours stay official;
- * dark mode swaps to the derived white-wordmark variant.
+ * Theme-aware Astra Chat wordmark lockup.
+ *
+ * Both light and dark assets are always in the DOM; visibility is CSS-driven
+ * via `html.dark` / `html[data-mode]` (see `app/globals.css`). That avoids a
+ * hydration mismatch when the theme-boot script flips mode before React
+ * hydrates — previously a single `<img src>` chosen from `useTheme()` could
+ * SSR the light lockup and then paint the dark one on the client.
  */
 export function BrandLockup({
   size = 275,
@@ -41,20 +47,44 @@ export function BrandLockup({
   alt = 'Astra Chat',
   forceDark = false,
 }: BrandLockupProps) {
-  const { mode } = useTheme();
-  const useDark = forceDark || mode === 'dark';
-  const src = useDark ? DARK[size] : LIGHT[size];
+  if (forceDark) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- brand PNG
+      <img
+        src={DARK[size]}
+        alt={alt}
+        width={width}
+        height={height}
+        className={cn('h-auto w-auto', className)}
+        decoding="async"
+      />
+    );
+  }
 
   return (
-    // eslint-disable-next-line @next/next/no-img-element -- brand PNG; theme swaps src
-    <img
-      src={src}
-      alt={alt}
-      width={width}
-      height={height}
-      className={cn('h-auto w-auto', className)}
-      decoding="async"
-    />
+    <span className={cn('brand-lockup inline-grid', className)}>
+      {/* eslint-disable-next-line @next/next/no-img-element -- brand PNG */}
+      <img
+        src={LIGHT[size]}
+        alt={alt}
+        width={width}
+        height={height}
+        data-brand-lockup="light"
+        className="brand-lockup-light col-start-1 row-start-1 h-auto w-auto"
+        decoding="async"
+      />
+      {/* eslint-disable-next-line @next/next/no-img-element -- brand PNG */}
+      <img
+        src={DARK[size]}
+        alt=""
+        aria-hidden="true"
+        width={width}
+        height={height}
+        data-brand-lockup="dark"
+        className="brand-lockup-dark col-start-1 row-start-1 h-auto w-auto"
+        decoding="async"
+      />
+    </span>
   );
 }
 

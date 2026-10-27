@@ -1765,6 +1765,8 @@
       "role": "Função",
       "joined": "Entrou em",
       "userId": "ID do usuário",
+      "copyId": "Copiar ID",
+      "idCopied": "ID do usuário copiado",
       "loading": "Carregando seu perfil…",
       "saving": "Salvando…",
       "saveChanges": "Salvar alterações",

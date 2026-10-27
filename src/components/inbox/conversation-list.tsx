@@ -529,7 +529,7 @@ function ConversationItem({
 
   const timeAgo = conversation.last_message_at
     ? formatDistanceToNow(new Date(conversation.last_message_at), {
-        addSuffix: false,
+        addSuffix: true,
       })
     : "";
 

@@ -1765,6 +1765,8 @@
       "role": "역할",
       "joined": "가입일",
       "userId": "사용자 ID",
+      "copyId": "ID 복사",
+      "idCopied": "사용자 ID가 복사됨",
       "loading": "프로필을 불러오는 중…",
       "saving": "저장 중…",
       "saveChanges": "변경 사항 저장",

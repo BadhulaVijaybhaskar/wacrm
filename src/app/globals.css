@@ -662,3 +662,40 @@ html.dark {
     transition: none;
   }
 }
+
+/*
+ * Brand lockup: both light + dark PNGs stay in the DOM. Visibility is
+ * CSS-driven so SSR/hydration never disagree on `src` (fixes dark-on-dark
+ * wordmark when theme-boot flips to dark before React hydrates).
+ */
+.brand-lockup-light {
+  display: block;
+}
+.brand-lockup-dark {
+  display: none;
+}
+
+html.dark .brand-lockup-light,
+html[data-mode='dark'] .brand-lockup-light {
+  display: none;
+}
+html.dark .brand-lockup-dark,
+html[data-mode='dark'] .brand-lockup-dark {
+  display: block;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not(.dark):not([data-mode='light']) .brand-lockup-light {
+    display: none;
+  }
+  html:not(.dark):not([data-mode='light']) .brand-lockup-dark {
+    display: block;
+  }
+}
+
+html[data-mode='light'] .brand-lockup-light {
+  display: block;
+}
+html[data-mode='light'] .brand-lockup-dark {
+  display: none;
+}

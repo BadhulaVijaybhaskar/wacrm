@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Loader2, Upload, Trash2, Mail, CircleAlert } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
+import { Copy, Loader2, Upload, Trash2, Mail, CircleAlert } from 'lucide-react';
 
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
@@ -16,9 +17,9 @@ import {
 } from '@/components/ui/avatar';
 import { Card, CardContent } from '@/components/ui/card';
 import { useTranslations } from 'next-intl';
-import { formatAppDate } from '@/lib/format/date';
 import { SettingsPanelHead } from './settings-panel-head';
 import { BrowserNotificationsCard } from './browser-notifications-card';
+import { ROLE_META } from './role-meta';
 
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 const ALLOWED_MIME = new Set([
@@ -35,7 +36,8 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function ProfileForm() {
   const t = useTranslations('Settings.profile');
-  const { user, profile, refreshProfile } = useAuth();
+  const tRoles = useTranslations('Settings.roles');
+  const { user, profile, accountRole, refreshProfile } = useAuth();
   const supabase = createClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -200,7 +202,22 @@ export function ProfileForm() {
       pendingAvatar !== null ||
       removeAvatar);
 
-  const joined = user?.created_at ? formatAppDate(user.created_at) : '—';
+  const joined = user?.created_at
+    ? formatDistanceToNow(new Date(user.created_at), { addSuffix: true })
+    : '—';
+  const roleMeta = accountRole ? ROLE_META[accountRole] : null;
+  const RoleIcon = roleMeta?.icon;
+  const roleLabel = accountRole ? tRoles(accountRole) : (profile?.role ?? '—');
+
+  const copyUserId = async () => {
+    if (!user?.id) return;
+    try {
+      await navigator.clipboard.writeText(user.id);
+      toast.success(t('idCopied'));
+    } catch {
+      toast.error(t('saveFailed', { message: 'clipboard unavailable' }));
+    }
+  };
 
   return (
     <section className="max-w-2xl animate-in fade-in-50 duration-200">
@@ -308,8 +325,11 @@ export function ProfileForm() {
             <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
               <div>
                 <dt className="text-muted-foreground">{t('role')}</dt>
-                <dd className="mt-0.5 font-mono text-foreground">
-                  {profile?.role ?? 'user'}
+                <dd className="mt-0.5 flex items-center gap-1.5 text-foreground">
+                  {RoleIcon ? (
+                    <RoleIcon className="size-3.5 text-amber-600 dark:text-amber-300" />
+                  ) : null}
+                  <span className="font-medium">{roleLabel}</span>
                 </dd>
               </div>
               <div>
@@ -318,8 +338,18 @@ export function ProfileForm() {
               </div>
               <div className="sm:col-span-2">
                 <dt className="text-muted-foreground">{t('userId')}</dt>
-                <dd className="mt-0.5 break-all font-mono text-xs text-muted-foreground">
-                  {user?.id ?? '—'}
+                <dd className="mt-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1.5"
+                    onClick={() => void copyUserId()}
+                    disabled={!user?.id}
+                  >
+                    <Copy className="size-3.5" />
+                    {t('copyId')}
+                  </Button>
                 </dd>
               </div>
             </dl>

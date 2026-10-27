@@ -147,6 +147,9 @@ const THEME_BOOT_SCRIPT = `
     if (MODES.indexOf(connectMode) !== -1) mode = connectMode;
     else if (typeof record.dark === "boolean") mode = record.dark ? "dark" : "light";
     else if (MODES.indexOf(legacyMode) !== -1) mode = legacyMode;
+    else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+      mode = "dark";
+    }
 
     apply();
     localStorage.setItem(${JSON.stringify(MODE_STORAGE_KEY)}, mode);
