@@ -36,6 +36,7 @@ import {
 } from '@/lib/whatsapp/interactive';
 import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption';
 import { notifyConnectOutbound } from '@/lib/astra-connect';
+import { recordWhatsappUsage } from '@/lib/astra-billing';
 import { supabaseAdmin } from '@/lib/flows/admin-client';
 import {
   phoneVariants,
@@ -555,6 +556,13 @@ export async function sendMessageToConversation(
       err instanceof Error ? err.message : err
     )
   );
+
+  // Best-effort billing metering — never blocks the send.
+  void recordWhatsappUsage({
+    db: supabaseAdmin(),
+    accountId,
+    kind: messageType === 'template' ? 'template_send' : 'outbound_message',
+  });
 
   return { messageId: messageRecord.id, whatsappMessageId: waMessageId };
 }

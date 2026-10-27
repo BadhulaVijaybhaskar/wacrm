@@ -6,6 +6,7 @@ import {
 } from '@/lib/flows/meta-send'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import { notifyConnectOutbound } from '@/lib/astra-connect'
+import { recordWhatsappUsage } from '@/lib/astra-billing'
 import {
   phoneVariants,
   isRecipientNotAllowedError,
@@ -268,6 +269,12 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
       err instanceof Error ? err.message : err,
     ),
   )
+
+  void recordWhatsappUsage({
+    db,
+    accountId: input.accountId,
+    kind: input.kind === 'template' ? 'template_send' : 'outbound_message',
+  })
 
   return { whatsapp_message_id: waMessageId }
 }

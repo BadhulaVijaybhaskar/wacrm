@@ -283,6 +283,9 @@ vi.mock('@/lib/astra-connect', () => ({
   loadAstraConnectAccountConfig: h.loadAstraConnectAccountConfig,
   isAstraConnectActive: h.isAstraConnectActive,
 }))
+vi.mock('@/lib/astra-billing', () => ({
+  recordWhatsappUsage: vi.fn(async () => undefined),
+}))
 vi.mock('@/lib/webhooks/deliver', () => ({
   dispatchWebhookEvent: h.dispatchWebhookEvent,
 }))

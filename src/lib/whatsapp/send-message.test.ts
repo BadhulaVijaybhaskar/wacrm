@@ -197,6 +197,10 @@ vi.mock('@/lib/astra-connect', () => ({
   notifyConnectOutbound: vi.fn(async () => undefined),
 }));
 
+vi.mock('@/lib/astra-billing', () => ({
+  recordWhatsappUsage: vi.fn(async () => undefined),
+}));
+
 interface CapturedWrites {
   message?: Record<string, unknown>;
   conversation?: Record<string, unknown>;

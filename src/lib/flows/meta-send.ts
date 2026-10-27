@@ -10,6 +10,7 @@ import {
 import type { InteractiveMessagePayload } from '@/lib/whatsapp/interactive'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import { notifyConnectOutbound } from '@/lib/astra-connect'
+import { recordWhatsappUsage } from '@/lib/astra-billing'
 import {
   phoneVariants,
   isRecipientNotAllowedError,
@@ -185,6 +186,12 @@ export async function engineSendText(
     ),
   )
 
+  void recordWhatsappUsage({
+    db,
+    accountId: args.accountId,
+    kind: 'outbound_message',
+  })
+
   return { whatsapp_message_id: waMessageId }
 }
 
@@ -314,6 +321,12 @@ export async function engineSendMedia(
       err instanceof Error ? err.message : err,
     ),
   )
+
+  void recordWhatsappUsage({
+    db,
+    accountId: args.accountId,
+    kind: 'outbound_message',
+  })
 
   return { whatsapp_message_id: waMessageId }
 }
@@ -520,6 +533,12 @@ async function sendInteractiveViaMeta(
       err instanceof Error ? err.message : err,
     ),
   )
+
+  void recordWhatsappUsage({
+    db,
+    accountId: input.accountId,
+    kind: 'outbound_message',
+  })
 
   return { whatsapp_message_id: waMessageId }
 }

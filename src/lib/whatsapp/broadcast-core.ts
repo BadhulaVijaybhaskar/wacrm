@@ -21,6 +21,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { sendTemplateMessage } from '@/lib/whatsapp/meta-api';
 import { decrypt } from '@/lib/whatsapp/encryption';
 import { notifyConnectOutbound } from '@/lib/astra-connect';
+import { recordWhatsappUsage } from '@/lib/astra-billing';
 import {
   parseInternationalPhone,
   phoneVariants,
@@ -317,6 +318,12 @@ export async function deliverBroadcast(
           err instanceof Error ? err.message : err,
         ),
       );
+
+      void recordWhatsappUsage({
+        db,
+        accountId: plan.accountId,
+        kind: 'template_send',
+      });
     } else {      await db
         .from('broadcast_recipients')
         .update({

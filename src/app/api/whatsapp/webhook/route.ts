@@ -22,6 +22,7 @@ import {
   isAstraConnectActive,
   loadAstraConnectAccountConfig,
 } from '@/lib/astra-connect'
+import { recordWhatsappUsage } from '@/lib/astra-billing'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import {
   handleTemplateWebhookChange,
@@ -712,6 +713,11 @@ async function processMessage(
       conversation_id: conversation.id,
       contact_id: contactRecord.id,
     })
+    void recordWhatsappUsage({
+      db: supabaseAdmin(),
+      accountId,
+      kind: 'conversation',
+    })
   }
 
   // Reactions short-circuit here — they aren't messages. We never insert
@@ -831,6 +837,13 @@ async function processMessage(
     )
     return
   }
+
+  // Best-effort billing metering — only after the idempotent insert wins.
+  void recordWhatsappUsage({
+    db: supabaseAdmin(),
+    accountId,
+    kind: 'inbound_message',
+  })
 
   // Update conversation. The unread bump is done DB-side (migration 037's
   // bump_conversation_on_inbound) rather than as a read-modify-write of the

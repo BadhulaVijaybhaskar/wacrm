@@ -3,6 +3,7 @@ import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { sendTemplateMessage } from '@/lib/whatsapp/meta-api'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import { notifyConnectOutbound } from '@/lib/astra-connect'
+import { recordWhatsappUsage } from '@/lib/astra-billing'
 import type { SendTimeParams } from '@/lib/whatsapp/template-send-builder'
 import { resolveTemplateRow } from '@/lib/whatsapp/template-body'
 import {
@@ -231,6 +232,11 @@ export async function POST(request: Request) {
             err instanceof Error ? err.message : err,
           ),
         )
+        void recordWhatsappUsage({
+          db: supabase,
+          accountId,
+          kind: 'template_send',
+        })
       } else {        console.error(
           `Failed to send broadcast to ${recipient.phone}:`,
           lastError
