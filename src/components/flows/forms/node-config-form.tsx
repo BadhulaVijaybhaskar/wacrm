@@ -206,6 +206,115 @@ export function NodeConfigForm({
         />
       );
 
+    case "http_fetch":
+      return (
+        <>
+          <div>
+            <label className="mb-1 block text-xs text-muted-foreground">
+              Method
+            </label>
+            <select
+              value={(cfg as { method?: string }).method ?? "POST"}
+              onChange={(e) => onUpdateConfig({ method: e.target.value })}
+              className="w-full rounded-md border border-border bg-muted px-2 py-1.5 text-xs"
+            >
+              {["GET", "POST", "PUT", "PATCH", "DELETE"].map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs text-muted-foreground">
+              URL
+            </label>
+            <Input
+              value={(cfg as { url?: string }).url ?? ""}
+              onChange={(e) => onUpdateConfig({ url: e.target.value })}
+              placeholder="https://example.com/hook"
+              className="bg-muted font-mono text-xs"
+            />
+          </div>
+          <TextRow
+            label="Body (optional JSON)"
+            value={(cfg as { body?: string }).body ?? ""}
+            onChange={(v) => onUpdateConfig({ body: v })}
+            rows={3}
+          />
+          <div>
+            <label className="mb-1 block text-xs text-muted-foreground">
+              Response var
+            </label>
+            <Input
+              value={(cfg as { response_var?: string }).response_var ?? ""}
+              onChange={(e) =>
+                onUpdateConfig({
+                  response_var: e.target.value.replace(/[^a-zA-Z0-9_]/g, ""),
+                })
+              }
+              placeholder="api_response"
+              className="bg-muted font-mono text-xs"
+            />
+          </div>
+          <NextNodeRow
+            value={(cfg as { next_node_key?: string }).next_node_key ?? ""}
+            allNodes={allNodes}
+            currentKey={node.node_key}
+            onChange={(v) => onUpdateConfig({ next_node_key: v })}
+            label={t("advancesTo")}
+          />
+        </>
+      );
+
+    case "delay":
+      return (
+        <>
+          <div>
+            <label className="mb-1 block text-xs text-muted-foreground">
+              Wait (seconds)
+            </label>
+            <Input
+              type="number"
+              min={1}
+              value={String((cfg as { seconds?: number }).seconds ?? 60)}
+              onChange={(e) =>
+                onUpdateConfig({
+                  seconds: Math.max(1, Number(e.target.value) || 1),
+                })
+              }
+              className="bg-muted text-xs"
+            />
+          </div>
+          <NextNodeRow
+            value={(cfg as { next_node_key?: string }).next_node_key ?? ""}
+            allNodes={allNodes}
+            currentKey={node.node_key}
+            onChange={(v) => onUpdateConfig({ next_node_key: v })}
+            label={t("advancesTo")}
+          />
+        </>
+      );
+
+    case "hand_to_ai":
+      return (
+        <>
+          <TextRow
+            label={t("internalNote")}
+            value={(cfg as { note?: string }).note ?? ""}
+            onChange={(v) => onUpdateConfig({ note: v })}
+            rows={2}
+          />
+          <NextNodeRow
+            value={(cfg as { next_node_key?: string }).next_node_key ?? ""}
+            allNodes={allNodes}
+            currentKey={node.node_key}
+            onChange={(v) => onUpdateConfig({ next_node_key: v })}
+            label={t("advancesTo")}
+          />
+        </>
+      );
+
     case "end":
       return (
         <p className="text-xs text-muted-foreground">

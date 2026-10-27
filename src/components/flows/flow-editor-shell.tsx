@@ -30,6 +30,7 @@ import { GitFork, List } from "lucide-react";
 import { FlowBuilder } from "./flow-builder";
 import { FlowCanvas } from "./flow-canvas";
 import { FlowEditorProvider } from "./flow-editor-state";
+import { FlowSimulator } from "./flow-simulator";
 import { EditorHeader } from "./header";
 import { ValidationPanel } from "./validation-panel";
 import { NODE_META, nodeColors, type NodeType } from "./shared";
@@ -139,15 +140,20 @@ export function FlowEditorShell({ initialFlow, initialNodes }: Props) {
           </div>
         )}
 
-        {/* ---- stage: the active view, owning its own overflow ---- */}
-        <div className="relative mx-6 min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-card-2">
-          {effectiveView === "canvas" ? (
-            <FlowCanvas />
-          ) : (
-            <div className="absolute inset-0 overflow-y-auto">
-              <FlowBuilder />
-            </div>
-          )}
+        {/* ---- stage: the active view + test simulator ---- */}
+        <div className="mx-6 grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_280px]">
+          <div className="relative min-h-0 overflow-hidden rounded-xl border border-border bg-card-2">
+            {effectiveView === "canvas" ? (
+              <FlowCanvas />
+            ) : (
+              <div className="absolute inset-0 overflow-y-auto">
+                <FlowBuilder />
+              </div>
+            )}
+          </div>
+          <div className="hidden min-h-0 lg:block">
+            <FlowSimulator />
+          </div>
         </div>
 
         {/* ---- validation / activate-readiness bar ---- */}

@@ -17,8 +17,10 @@
  */
 
 import {
+  Bot,
   Flag,
   GitFork,
+  Globe,
   Inbox,
   ListChecks,
   ListPlus,
@@ -26,6 +28,7 @@ import {
   Paperclip,
   PlayCircle,
   Tag,
+  Timer,
   UserPlus,
   Workflow,
 } from 'lucide-react';
@@ -50,6 +53,9 @@ export type NodeType =
   | 'condition'
   | 'set_tag'
   | 'handoff'
+  | 'http_fetch'
+  | 'delay'
+  | 'hand_to_ai'
   | 'end';
 
 export interface BuilderNode {
@@ -151,6 +157,24 @@ export const NODE_META: Record<
     color: 'text-amber-400',
     category: 'flow',
   },
+  http_fetch: {
+    slugSeed: 'API call',
+    icon: Globe,
+    color: 'text-lime-400',
+    category: 'logic',
+  },
+  delay: {
+    slugSeed: 'Delay',
+    icon: Timer,
+    color: 'text-orange-400',
+    category: 'logic',
+  },
+  hand_to_ai: {
+    slugSeed: 'Hand to AI',
+    icon: Bot,
+    color: 'text-violet-400',
+    category: 'flow',
+  },
   end: {
     slugSeed: 'End',
     icon: Flag,
@@ -196,6 +220,9 @@ const NODE_HUE: Record<NodeType, { l: number; c: number; h: number }> = {
   condition: { l: 0.72, c: 0.15, h: 65 }, // amber — a fork in the road
   set_tag: { l: 0.65, c: 0.15, h: 350 }, // pink
   handoff: { l: 0.65, c: 0.17, h: 16 }, // rose — hands off
+  http_fetch: { l: 0.7, c: 0.14, h: 130 }, // lime — API
+  delay: { l: 0.7, c: 0.12, h: 55 }, // orange — wait
+  hand_to_ai: { l: 0.62, c: 0.16, h: 300 }, // violet — AI
   end: { l: 0.55, c: 0.01, h: 260 }, // neutral grey — terminal
 };
 
@@ -413,6 +440,19 @@ export function summarizeNode(
     case 'handoff': {
       const note = typeof cfg.note === 'string' ? cfg.note : '';
       return note.length > 0 ? truncate(note) : null;
+    }
+    case 'http_fetch': {
+      const method = typeof cfg.method === 'string' ? cfg.method : 'GET';
+      const url = typeof cfg.url === 'string' ? cfg.url : '';
+      return url ? `${method} ${truncate(url, 50)}` : method;
+    }
+    case 'delay': {
+      const seconds = typeof cfg.seconds === 'number' ? cfg.seconds : Number(cfg.seconds ?? 0);
+      return seconds > 0 ? `Wait ${seconds}s` : null;
+    }
+    case 'hand_to_ai': {
+      const note = typeof cfg.note === 'string' ? cfg.note : '';
+      return note.length > 0 ? truncate(note) : 'AI employee';
     }
   }
 }

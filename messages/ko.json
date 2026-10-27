@@ -1301,6 +1301,18 @@
         "end": {
           "label": "종료",
           "blurb": "플로우를 종료합니다"
+        },
+        "http_fetch": {
+          "label": "API call",
+          "blurb": "Call an HTTPS endpoint and store the response."
+        },
+        "delay": {
+          "label": "Delay",
+          "blurb": "Wait before continuing the flow."
+        },
+        "hand_to_ai": {
+          "label": "Hand to AI",
+          "blurb": "Pass the conversation to the AI employee."
         }
       }
     },

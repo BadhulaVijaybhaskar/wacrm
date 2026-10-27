@@ -90,7 +90,10 @@ describe("defaultConfigFor", () => {
     "collect_input",
     "condition",
     "set_tag",
+    "http_fetch",
+    "delay",
     "handoff",
+    "hand_to_ai",
     "end",
   ];
 

@@ -37,8 +37,8 @@ Real DB is **wacrm-staging** (owner applies migrations). Latest on branch starts
 | CHAT-19 Razorpay + Stripe | **done** | `7373a1c` | `051_payment_links.sql` | Composer payment link + status webhooks |
 | CHAT-20 Google Sheets | **done** | `6518982` | `052_google_sheets_sync.sql` | OAuth scaffold + import/export + cron |
 | CHAT-21 CRM push | **done** | `333bb79` | `053_crm_push.sql` | HubSpot/Zoho/Astra CRM push + retry log |
-| CHAT-22 IG + Messenger inbox | **in progress** | — | `054_messaging_channels.sql` | Channel field + Meta messaging stub |
-| CHAT-23 Flow builder | not started | — | — | |
+| CHAT-22 IG + Messenger inbox | **done** | `69ed709` | `054_messaging_channels.sql` | Channel field + Meta messaging stub |
+| CHAT-23 Flow builder | **done** | _(pending commit)_ | `055_flow_builder_nodes.sql` | Visual nodes + test simulator; `artifacts/chat-23/` |
 | CHAT-24 CTWA ads | not started | — | — | |
 | CHAT-25 Intents | not started | — | — | |
 | CHAT-26 Re-verify (13/14/15) | not started | — | — | |
@@ -57,3 +57,4 @@ Real DB is **wacrm-staging** (owner applies migrations). Latest on branch starts
 - `052_google_sheets_sync.sql` ← CHAT-20
 - `053_crm_push.sql` ← CHAT-21
 - `054_messaging_channels.sql` ← CHAT-22
+- `055_flow_builder_nodes.sql` ← CHAT-23

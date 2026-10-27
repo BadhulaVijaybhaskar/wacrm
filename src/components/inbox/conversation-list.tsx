@@ -17,7 +17,7 @@ import type {
   MessagingChannel,
   Tag,
 } from "@/types";
-import { Search, ChevronDown, X, Instagram, MessageCircle } from "lucide-react";
+import { Search, ChevronDown, X, Camera, MessageCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useTranslations } from "next-intl";
 import { useAuth } from "@/hooks/use-auth";
@@ -62,7 +62,7 @@ type InboxFilter =
 
 function ChannelIcon({ channel }: { channel?: MessagingChannel }) {
   if (channel === "instagram") {
-    return <Instagram className="size-3.5 shrink-0 text-pink-600" aria-label="Instagram" />;
+    return <Camera className="size-3.5 shrink-0 text-pink-600" aria-label="Instagram" />;
   }
   if (channel === "messenger") {
     return <MessageCircle className="size-3.5 shrink-0 text-blue-600" aria-label="Messenger" />;

@@ -176,13 +176,33 @@ export interface SetTagNodeConfig {
 // Terminal nodes carry no config — they just stop the run.
 export type EndNodeConfig = Record<string, never>;
 
+/** Outbound HTTP call (Zapier-style API step). Stubbed under META_STUB. */
+export interface HttpFetchNodeConfig {
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  url: string;
+  /** Optional JSON body for non-GET. */
+  body?: string;
+  /** Store response text under this vars key. */
+  response_var?: string;
+  next_node_key: string;
+}
+
+export interface DelayNodeConfig {
+  /** Wait this many seconds before advancing (cron / pending runner). */
+  seconds: number;
+  next_node_key: string;
+}
+
+/** Hand the conversation to the AI employee / auto-reply bot. */
+export interface HandToAiNodeConfig {
+  note?: string;
+  next_node_key?: string;
+}
+
 /**
- * Total union — every concrete node_type the v1 engine understands.
+ * Total union — every concrete node_type the engine understands.
  * Add new node types here and the engine's switch will flag missing
  * cases via TypeScript's exhaustiveness check.
- *
- * v1.5+ additions (collect_input, condition, set_tag, http_fetch) will
- * extend this union — out-of-scope for the v1 engine PR.
  */
 export type FlowNodeConfig =
   | { node_type: "start"; config: StartNodeConfig }
@@ -194,6 +214,9 @@ export type FlowNodeConfig =
   | { node_type: "condition"; config: ConditionNodeConfig }
   | { node_type: "set_tag"; config: SetTagNodeConfig }
   | { node_type: "handoff"; config: HandoffNodeConfig }
+  | { node_type: "http_fetch"; config: HttpFetchNodeConfig }
+  | { node_type: "delay"; config: DelayNodeConfig }
+  | { node_type: "hand_to_ai"; config: HandToAiNodeConfig }
   | { node_type: "end"; config: EndNodeConfig };
 
 export type FlowNodeType = FlowNodeConfig["node_type"];

@@ -185,6 +185,18 @@ export function defaultConfigFor(type: NodeType): Record<string, unknown> {
       return { mode: "add", tag_id: "", next_node_key: "" };
     case "handoff":
       return { note: "" };
+    case "http_fetch":
+      return {
+        method: "POST",
+        url: "https://example.com/hook",
+        body: "",
+        response_var: "api_response",
+        next_node_key: "",
+      };
+    case "delay":
+      return { seconds: 60, next_node_key: "" };
+    case "hand_to_ai":
+      return { note: "", next_node_key: "" };
     case "end":
       return {};
   }

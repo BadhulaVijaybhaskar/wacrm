@@ -140,7 +140,10 @@ export function isAutoAdvancing(node_type: string): boolean {
     node_type === "send_message" ||
     node_type === "send_media" ||
     node_type === "condition" ||
-    node_type === "set_tag"
+    node_type === "set_tag" ||
+    node_type === "http_fetch" ||
+    node_type === "delay" ||
+    node_type === "hand_to_ai"
   );
 }
 
@@ -157,6 +160,9 @@ export function isSuspending(node_type: string): boolean {
 export function isTerminal(node_type: string): boolean {
   return node_type === "handoff" || node_type === "end";
 }
+
+/** Re-export pure simulator for callers that already import the engine. */
+export { simulateFlowStep } from "./simulator";
 
 /**
  * Evaluate a `condition` node's predicate against the current run
@@ -854,6 +860,42 @@ async function advanceFromNodeKey(
         });
       }
       return { outcome: "advanced" };
+    }
+    if (
+      node.node_type === "http_fetch" ||
+      node.node_type === "delay" ||
+      node.node_type === "hand_to_ai"
+    ) {
+      const cfg = node.config as Record<string, unknown>;
+      if (
+        node.node_type === "http_fetch" &&
+        typeof cfg.response_var === "string" &&
+        cfg.response_var
+      ) {
+        // Stub response — live fetch is META_STUB / INTEGRATIONS_STUB only.
+        run.vars = {
+          ...run.vars,
+          [cfg.response_var]: { stub: true },
+        };
+      }
+      if (node.node_type === "hand_to_ai" && run.conversation_id) {
+        await db
+          .from("conversations")
+          .update({ ai_autoreply_disabled: false })
+          .eq("id", run.conversation_id);
+      }
+      const next =
+        typeof cfg.next_node_key === "string" ? cfg.next_node_key : null;
+      await logEvent(db, run.id, "node_entered", node.node_key, {
+        stub: true,
+        advancing_to: next,
+      });
+      if (!next) {
+        await endRun(db, run.id, "completed", `${node.node_type}_no_next`);
+        return { outcome: "completed" };
+      }
+      currentKey = next;
+      continue;
     }
     if (node.node_type === "handoff") {
       await executeHandoff(db, run, node);
