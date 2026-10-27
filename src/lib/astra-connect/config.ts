@@ -78,7 +78,7 @@ export async function loadAstraConnectAccountConfig(
   const { data, error } = await db
     .from('whatsapp_config')
     .select(
-      'phone_number_id, astra_connect_enabled, astra_connect_tenant_id, astra_connect_secret_encrypted, astra_connect_secret_previous_encrypted, astra_connect_secret_previous_expires_at',
+      'phone_number_id, astra_connect_enabled, astra_connect_tenant_id, astra_employee_id, astra_connect_secret_encrypted, astra_connect_secret_previous_encrypted, astra_connect_secret_previous_expires_at',
     )
     .eq('account_id', accountId)
     .maybeSingle()
@@ -93,6 +93,11 @@ export async function loadAstraConnectAccountConfig(
     typeof data.astra_connect_tenant_id === 'string'
       ? data.astra_connect_tenant_id.trim()
       : ''
+
+  const employeeId =
+    typeof data.astra_employee_id === 'string' && data.astra_employee_id.trim()
+      ? data.astra_employee_id.trim()
+      : null
 
   const secrets: StoredAdapterSecrets = {
     currentEncrypted:
@@ -114,6 +119,7 @@ export async function loadAstraConnectAccountConfig(
     tenantId,
     phoneNumberId: String(data.phone_number_id ?? ''),
     whatsappNumber: null,
+    employeeId,
     secrets,
   }
 }

@@ -1925,7 +1925,10 @@
       "secretPlaceholderSet": "••••••••  (déjalo en blanco para conservar el actual)",
       "secretHint": "Secreto HMAC por cuenta (≥16 caracteres). Se guarda cifrado. Si se define, sustituye el valor global del servidor para este espacio. Al rotar, el anterior sigue válido 24 horas.",
       "secretClear": "Quitar el secreto por cuenta (usar el del servidor)",
-      "secretRotationActive": "El secreto anterior se acepta hasta {when}"
+      "secretRotationActive": "El secreto anterior se acepta hasta {when}",
+      "employeeLabel": "Employee id",
+      "employeePlaceholder": "emp_… (optional)",
+      "employeeHint": "Optional. Ties this WhatsApp number to a Connect AI employee for thread filtering."
     }
   },
   "SignupPage": {

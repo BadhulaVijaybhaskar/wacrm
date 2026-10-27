@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit'
 import { notifyConnectHandoff } from '@/lib/astra-connect'
+import { recordHandoffAudit } from '@/lib/astra-connect/read-api'
 import { supabaseAdmin } from '@/lib/ai/admin-client'
 
 type Params = { params: Promise<{ conversationId: string }> }
@@ -104,6 +105,20 @@ export async function POST(request: Request, { params }: Params) {
     const contactPhone = Array.isArray(contact)
       ? contact[0]?.phone
       : contact?.phone
+    void recordHandoffAudit({
+      db: supabaseAdmin(),
+      accountId,
+      conversationId,
+      action: paused ? 'takeover' : 'handback',
+      by: userId,
+      source: 'inbox',
+    }).catch((err) =>
+      console.error(
+        '[astra-connect] handoff audit after inbox toggle failed:',
+        err instanceof Error ? err.message : err,
+      ),
+    )
+
     void notifyConnectHandoff({
       db: supabaseAdmin(),
       accountId,

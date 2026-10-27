@@ -1,0 +1,244 @@
+openapi: 3.0.3
+info:
+  title: Astra Connect read & handoff API
+  version: "1.0.0"
+  description: |
+    Server-to-server endpoints for Astra Connect to read WhatsApp threads
+    owned by Astra Chat and to take over / hand back AI. Authenticated with
+    X-Astra-Timestamp + X-Astra-Signature (HMAC-SHA256). GET requests sign
+    timestamp + path-and-query; POST requests sign timestamp + raw body.
+servers:
+  - url: https://chat.example.com
+security:
+  - AstraHmac: []
+paths:
+  /api/astra-connect/v1/conversations:
+    get:
+      operationId: listConversations
+      summary: List conversations for a tenant
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - name: employee_id
+          in: query
+          schema: { type: string }
+        - name: phone_number_id
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string, enum: [open, pending, closed] }
+        - name: updated_since
+          in: query
+          schema: { type: string, format: date-time }
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        "200":
+          description: Conversation page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [conversations, next_cursor]
+                properties:
+                  conversations:
+                    type: array
+                    items: { $ref: "#/components/schemas/Conversation" }
+                  next_cursor:
+                    type: string
+                    nullable: true
+        "401": { description: Invalid or missing signature }
+        "404": { description: Unknown tenant }
+        "429": { description: Rate limited }
+  /api/astra-connect/v1/conversations/{id}/messages:
+    get:
+      operationId: listMessages
+      summary: List messages in a conversation
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: before
+          in: query
+          schema: { type: string, format: date-time }
+        - name: after
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Message page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [messages, next_cursor]
+                properties:
+                  messages:
+                    type: array
+                    items: { $ref: "#/components/schemas/Message" }
+                  next_cursor:
+                    type: string
+                    nullable: true
+        "404": { description: Conversation not in this tenant }
+  /api/astra-connect/v1/conversations/{id}/takeover:
+    post:
+      operationId: takeoverConversation
+      summary: Hand thread to human (stop AI)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenant_id]
+              properties:
+                tenant_id: { type: string }
+                by: { type: string }
+      responses:
+        "200":
+          description: Handoff state after takeover
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HandoffResult" }
+        "404": { description: Not found }
+  /api/astra-connect/v1/conversations/{id}/handback:
+    post:
+      operationId: handbackConversation
+      summary: Resume AI on a thread
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenant_id]
+              properties:
+                tenant_id: { type: string }
+                by: { type: string }
+      responses:
+        "200":
+          description: Handoff state after handback
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HandoffResult" }
+        "404": { description: Not found }
+components:
+  securitySchemes:
+    AstraHmac:
+      type: apiKey
+      in: header
+      name: X-Astra-Signature
+      description: |
+        Pair with X-Astra-Timestamp. Signature is sha256=<hex> over
+        `${timestamp}.${payload}` where payload is path+query for GET
+        and the raw JSON body for POST.
+  parameters:
+    TenantId:
+      name: tenant_id
+      in: query
+      required: true
+      schema: { type: string }
+  schemas:
+    Conversation:
+      type: object
+      required:
+        - id
+        - astra_conversation_id
+        - employee_id
+        - status
+        - handoff
+        - unread_count
+        - last_message_preview
+        - updated_at
+        - assignee
+        - labels
+        - contact
+      properties:
+        id: { type: string, format: uuid }
+        astra_conversation_id: { type: string, nullable: true }
+        employee_id: { type: string, nullable: true }
+        status: { type: string, enum: [open, pending, closed] }
+        handoff: { type: string, enum: [ai, human] }
+        unread_count: { type: integer }
+        last_message_preview: { type: string, nullable: true }
+        updated_at: { type: string, format: date-time }
+        assignee:
+          type: object
+          nullable: true
+          properties:
+            id: { type: string, format: uuid }
+        labels:
+          type: array
+          items: { type: string }
+        contact:
+          type: object
+          required: [phone, name, opted_out]
+          properties:
+            phone: { type: string, nullable: true }
+            name: { type: string, nullable: true }
+            opted_out: { type: boolean }
+    Message:
+      type: object
+      required:
+        - id
+        - direction
+        - type
+        - text
+        - media
+        - template_name
+        - status
+        - failure_reason
+        - sender
+        - created_at
+        - whatsapp_message_id
+      properties:
+        id: { type: string, format: uuid }
+        direction: { type: string, enum: [inbound, outbound] }
+        type: { type: string }
+        text: { type: string, nullable: true }
+        media:
+          type: object
+          nullable: true
+          properties:
+            url: { type: string }
+            mime_type: { type: string, nullable: true }
+        template_name: { type: string, nullable: true }
+        status: { type: string }
+        failure_reason: { type: string, nullable: true }
+        sender:
+          type: object
+          required: [kind]
+          properties:
+            kind: { type: string, enum: [contact, human, ai] }
+            member_id: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        whatsapp_message_id: { type: string, nullable: true }
+    HandoffResult:
+      type: object
+      required: [conversation_id, handoff, changed]
+      properties:
+        conversation_id: { type: string, format: uuid }
+        handoff: { type: string, enum: [ai, human] }
+        changed: { type: boolean }

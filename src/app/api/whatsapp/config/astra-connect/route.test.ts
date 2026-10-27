@@ -60,6 +60,7 @@ describe('GET /api/whatsapp/config/astra-connect', () => {
       env_configured: true,
       enabled: true,
       tenant_id: 't_abc',
+      employee_id: null,
       phone_number_id: '106540352242922',
       has_whatsapp_config: true,
       has_secret: false,

@@ -44,6 +44,8 @@ export interface AstraInboundResponse {
   reply_text: string | null
   handoff: boolean
   conversation_id: string | null
+  /** Optional Connect employee that owns this thread. */
+  employee_id?: string | null
   duplicate?: boolean
   reason?: string
 }
@@ -118,6 +120,8 @@ export interface AstraConnectAccountConfig {
   phoneNumberId: string
   /** Display / fallback WhatsApp business number when known. */
   whatsappNumber?: string | null
+  /** Optional Connect employee id bound to this WhatsApp number. */
+  employeeId?: string | null
   /** Encrypted per-account HMAC secret (+ optional previous during rotation). */
   secrets?: StoredAdapterSecrets | null
 }

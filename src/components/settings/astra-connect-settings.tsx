@@ -35,6 +35,7 @@ interface AstraConnectState {
   env_configured: boolean;
   enabled: boolean;
   tenant_id: string | null;
+  employee_id: string | null;
   phone_number_id: string | null;
   has_whatsapp_config: boolean;
   has_secret?: boolean;
@@ -51,6 +52,7 @@ export function AstraConnectSettings() {
   const [state, setState] = useState<AstraConnectState | null>(null);
   const [enabled, setEnabled] = useState(false);
   const [tenantId, setTenantId] = useState('');
+  const [employeeId, setEmployeeId] = useState('');
   const [secret, setSecret] = useState('');
   const [clearSecret, setClearSecret] = useState(false);
 
@@ -70,6 +72,7 @@ export function AstraConnectSettings() {
       setState(data);
       setEnabled(data.enabled);
       setTenantId(data.tenant_id ?? '');
+      setEmployeeId(data.employee_id ?? '');
       setSecret('');
       setClearSecret(false);
     } catch (err) {
@@ -91,6 +94,7 @@ export function AstraConnectSettings() {
       const body: Record<string, unknown> = {
         enabled,
         tenant_id: tenantId.trim() || null,
+        employee_id: employeeId.trim() || null,
       };
       if (clearSecret) {
         body.secret = null;
@@ -117,18 +121,27 @@ export function AstraConnectSettings() {
               env_configured: next.env_configured,
               enabled: next.enabled,
               tenant_id: next.tenant_id,
+              employee_id: next.employee_id,
               phone_number_id: next.phone_number_id,
+              has_secret: next.has_secret,
+              rotation_active: next.rotation_active,
+              previous_expires_at: next.previous_expires_at,
             }
           : {
               env_configured: next.env_configured,
               enabled: next.enabled,
               tenant_id: next.tenant_id,
+              employee_id: next.employee_id,
               phone_number_id: next.phone_number_id,
               has_whatsapp_config: true,
+              has_secret: next.has_secret,
+              rotation_active: next.rotation_active,
+              previous_expires_at: next.previous_expires_at,
             },
       );
       setEnabled(next.enabled);
       setTenantId(next.tenant_id ?? '');
+      setEmployeeId(next.employee_id ?? '');
       setSecret('');
       setClearSecret(false);
       toast.success(t('saved'));
@@ -215,6 +228,19 @@ export function AstraConnectSettings() {
                 className="border-border bg-muted"
               />
               <p className="text-xs text-muted-foreground">{t('tenantHint')}</p>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="astra-connect-employee">{t('employeeLabel')}</Label>
+              <Input
+                id="astra-connect-employee"
+                value={employeeId}
+                onChange={(e) => setEmployeeId(e.target.value)}
+                placeholder={t('employeePlaceholder')}
+                disabled={!canEditSettings || saving}
+                className="border-border bg-muted"
+              />
+              <p className="text-xs text-muted-foreground">{t('employeeHint')}</p>
             </div>
 
             <div className="flex flex-col gap-2">

@@ -76,13 +76,16 @@ async function handToHuman(
 async function rememberAstraConversation(
   db: InboundDispatchDb,
   conversationId: string,
-  astraConversationId: string | null | undefined
+  astraConversationId: string | null | undefined,
+  employeeId?: string | null,
 ): Promise<void> {
-  if (!astraConversationId) return
-  await db
-    .from('conversations')
-    .update({ astra_conversation_id: astraConversationId })
-    .eq('id', conversationId)
+  const update: Record<string, unknown> = {}
+  if (astraConversationId) update.astra_conversation_id = astraConversationId
+  if (typeof employeeId === 'string' && employeeId.trim()) {
+    update.astra_employee_id = employeeId.trim()
+  }
+  if (Object.keys(update).length === 0) return
+  await db.from('conversations').update(update).eq('id', conversationId)
 }
 
 export async function dispatchInboundToAstraConnect(
@@ -182,10 +185,20 @@ export async function dispatchInboundToAstraConnect(
     }
 
     const data = result.data
+    // Prefer employee_id from Connect; else fall back to the number default.
+    const employeeFromConnect =
+      typeof data.employee_id === 'string' && data.employee_id.trim()
+        ? data.employee_id.trim()
+        : null
+    const employeeFallback =
+      typeof account.employeeId === 'string' && account.employeeId
+        ? account.employeeId
+        : null
     await rememberAstraConversation(
       args.db,
       args.conversationId,
-      data.conversation_id
+      data.conversation_id,
+      employeeFromConnect ?? employeeFallback,
     )
 
     if (data.handoff) {

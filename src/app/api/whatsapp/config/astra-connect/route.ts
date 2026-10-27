@@ -38,7 +38,7 @@ export async function GET() {
     const { data, error } = await supabase
       .from('whatsapp_config')
       .select(
-        'astra_connect_enabled, astra_connect_tenant_id, phone_number_id, astra_connect_secret_encrypted, astra_connect_secret_previous_expires_at',
+        'astra_connect_enabled, astra_connect_tenant_id, astra_employee_id, phone_number_id, astra_connect_secret_encrypted, astra_connect_secret_previous_expires_at',
       )
       .eq('account_id', accountId)
       .maybeSingle()
@@ -52,6 +52,7 @@ export async function GET() {
       env_configured: isAdapterEnvConfigured(),
       enabled: data?.astra_connect_enabled === true,
       tenant_id: data?.astra_connect_tenant_id ?? null,
+      employee_id: data?.astra_employee_id ?? null,
       phone_number_id: data?.phone_number_id ?? null,
       has_whatsapp_config: Boolean(data),
       ...secretStatus(data),
@@ -93,6 +94,18 @@ export async function PATCH(request: Request) {
       const tenant =
         typeof body.tenant_id === 'string' ? body.tenant_id.trim() : null
       update.astra_connect_tenant_id = tenant || null
+    }
+
+    if ('employee_id' in body) {
+      if (body.employee_id !== null && typeof body.employee_id !== 'string') {
+        return NextResponse.json(
+          { error: 'employee_id must be a string or null' },
+          { status: 400 },
+        )
+      }
+      const employee =
+        typeof body.employee_id === 'string' ? body.employee_id.trim() : null
+      update.astra_employee_id = employee || null
     }
 
     if ('secret' in body) {
@@ -142,7 +155,7 @@ export async function PATCH(request: Request) {
 
     if (Object.keys(update).length === 1) {
       return NextResponse.json(
-        { error: 'Provide enabled, tenant_id, and/or secret' },
+        { error: 'Provide enabled, tenant_id, employee_id, and/or secret' },
         { status: 400 }
       )
     }
@@ -173,7 +186,7 @@ export async function PATCH(request: Request) {
       .update(update)
       .eq('account_id', accountId)
       .select(
-        'astra_connect_enabled, astra_connect_tenant_id, phone_number_id, astra_connect_secret_encrypted, astra_connect_secret_previous_expires_at',
+        'astra_connect_enabled, astra_connect_tenant_id, astra_employee_id, phone_number_id, astra_connect_secret_encrypted, astra_connect_secret_previous_expires_at',
       )
       .maybeSingle()
 
@@ -192,6 +205,7 @@ export async function PATCH(request: Request) {
       env_configured: isAdapterEnvConfigured(),
       enabled: data.astra_connect_enabled === true,
       tenant_id: data.astra_connect_tenant_id ?? null,
+      employee_id: data.astra_employee_id ?? null,
       phone_number_id: data.phone_number_id ?? null,
       ...secretStatus(data),
     })
