@@ -52,7 +52,7 @@ Real DB is **wacrm-staging** (owner applies migrations). Latest on branch starts
 | CHAT-04b read-API additions | **done** | `fea18a1` | `058_astra_connect_read_api_additions.sql` | conversation on messages; handoff filter; media object; employee COALESCE; takeover reason |
 | CHAT-14 staging smoke seed | **done** | `debdfe4` | — | `deploy/staging/scripts/seed-demo-data.mjs` (+ test + `chat-14-verify.sh`); test data only |
 | Review scrub + dual webhook headers | **done** | `ad70829` | — | Upstream scrub; `X-Astra-*` + `X-Wacrm-*` dual-send through 2026-11-26 |
-| Signed-in seed polish | **done** | — | — | Demo Agent seed; dismissible WhatsApp banner; integrations auto-fill ≥280px; shots in `artifacts/review-signed-in/` |
+| Signed-in seed polish | **done** | `5f17fb3` | — | Demo Agent seed; dismissible WhatsApp banner; integrations auto-fill ≥280px; shots in `artifacts/review-signed-in/` |
 
 ## Migrations owner must apply on wacrm-staging
 
