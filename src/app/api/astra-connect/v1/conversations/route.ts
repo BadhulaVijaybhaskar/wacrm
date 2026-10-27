@@ -19,7 +19,7 @@ import { rateLimitResponse } from '@/lib/rate-limit'
  * updated_since, cursor, limit (max 100).
  *
  * Auth: X-Astra-Tenant + HMAC over
- * `${timestamp}.${pathname}${search}.${tenant}`.
+ * `${ts}.${pathWithQuery}.${tenant}` (Connect console client).
  * Supports ETag / If-None-Match (304).
  */
 export async function GET(request: Request) {

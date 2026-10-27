@@ -11,9 +11,12 @@ info:
       - X-Astra-Signature (sha256=<hex>)
       - X-Astra-Tenant (must match tenant_id query/body)
 
-    HMAC signed string:
-      - GET/HEAD: `${timestamp}.${pathname}${search}.${tenant}`
-      - POST: `${timestamp}.${rawBody}` (tenant header still required)
+    HMAC signed string (Connect console client Astraconnect 647b711;
+    HMAC-SHA256 hex, 300s window):
+      - GET/HEAD: `${ts}.${pathWithQuery}.${tenant}`
+      - POST: `${ts}.${rawBody}.${tenant}`
+    where `tenant` is the X-Astra-Tenant header value.
+    (Inbound webhook adapter contract v2 remains `${ts}.${rawBody}`.)
 
     Reads: 600/min/tenant. Takeover/handback: 120/min/tenant.
     304 responses cost 0.25 of a read unit.
@@ -197,9 +200,10 @@ components:
       in: header
       name: X-Astra-Signature
       description: |
-        Pair with X-Astra-Timestamp. Signature is sha256=<hex> over
-        `${timestamp}.${pathname}${search}.${tenant}` for GET and
-        `${timestamp}.${rawBody}` for POST.
+        Pair with X-Astra-Timestamp and X-Astra-Tenant. Signature is
+        sha256=<hex> (HMAC-SHA256, 300s window) over
+        `${ts}.${pathWithQuery}.${tenant}` for GET and
+        `${ts}.${rawBody}.${tenant}` for POST.
     AstraTenant:
       type: apiKey
       in: header

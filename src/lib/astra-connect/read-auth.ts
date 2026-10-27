@@ -6,10 +6,14 @@
  *   X-Astra-Signature: sha256=<hex>   (lowercase or uppercase hex)
  *   X-Astra-Tenant: <tenant_id>       (required on every v1 call)
  *
- * Signed message:
+ * Signed message (matches Connect console client Astraconnect 647b711):
  *   GET/HEAD: `${timestamp}.${pathname}${search}.${tenant}`
- *   POST/…:   `${timestamp}.${rawBody}`
- *     (X-Astra-Tenant is still required on POST and must match body.tenant_id)
+ *   POST/…:   `${timestamp}.${rawBody}.${tenant}`
+ * where `tenant` is the X-Astra-Tenant header value (must match query/body
+ * tenant_id). HMAC-SHA256 hex as `X-Astra-Signature: sha256=<hex>`, 300s window.
+ *
+ * The inbound webhook adapter contract v2 (`${timestamp}.${rawBody}` only)
+ * is separate and unchanged.
  *
  * Secret resolution: per-tenant current (+ previous within 24h rotation
  * window), then global WACRM_ADAPTER_SECRET.
@@ -58,22 +62,24 @@ export type ConnectRateBucket = 'read' | 'handoff' | 'none'
  * Build the payload portion of the HMAC signed string (everything after
  * `${timestamp}.`).
  *
- * GET/HEAD: path + query + `.` + tenant header value.
- * POST: raw body only (tenant is NOT appended, but the header is still required).
+ * GET/HEAD: `${pathname}${search}.${tenant}`
+ * POST/…:   `${rawBody}.${tenant}`
+ *
+ * `tenant` is the X-Astra-Tenant header value.
  */
 export function connectSignedPayload(
   request: Request,
   rawBody: string,
   tenantId?: string,
 ): string {
+  const tenant = (tenantId ?? '').trim()
   const method = request.method.toUpperCase()
   if (method === 'GET' || method === 'HEAD') {
     const url = new URL(request.url)
     const pathAndQuery = `${url.pathname}${url.search}`
-    const tenant = (tenantId ?? '').trim()
     return tenant ? `${pathAndQuery}.${tenant}` : pathAndQuery
   }
-  return rawBody
+  return tenant ? `${rawBody}.${tenant}` : rawBody
 }
 
 export function readAstraHeaders(request: Request): {

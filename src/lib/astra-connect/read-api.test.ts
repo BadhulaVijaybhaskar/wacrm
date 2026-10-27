@@ -103,13 +103,40 @@ describe('Connect request signing + X-Astra-Tenant (b)', () => {
     )
   })
 
-  it('POST signed payload is raw body only (tenant not appended)', () => {
+  it('POST signed payload is rawBody.tenant', () => {
     const body = JSON.stringify({ tenant_id: 't1', by: 'x' })
     const req = new Request(
       'https://chat.example/api/astra-connect/v1/conversations/c1/takeover',
       { method: 'POST', body },
     )
-    expect(connectSignedPayload(req, body, 't1')).toBe(body)
+    expect(connectSignedPayload(req, body, 't1')).toBe(`${body}.t1`)
+  })
+
+  it('accepts signatures over rawBody.tenant for POST', () => {
+    const body = JSON.stringify({ tenant_id: 't_abc', by: 'ops' })
+    const payload = `${body}.t_abc`
+    const ts = 1_700_000_000
+    const sig = buildAstraSignature(payload, secret, ts)
+    expect(
+      verifyConnectRequest({
+        signature: sig,
+        payload,
+        timestamp: ts,
+        secrets: [secret],
+        nowSeconds: ts,
+      }),
+    ).toBe(true)
+    // Signature over body alone must not verify against body.tenant.
+    const bodyOnlySig = buildAstraSignature(body, secret, ts)
+    expect(
+      verifyConnectRequest({
+        signature: bodyOnlySig,
+        payload,
+        timestamp: ts,
+        secrets: [secret],
+        nowSeconds: ts,
+      }),
+    ).toBe(false)
   })
 
   it('accepts signatures over path-with-query.tenant', () => {

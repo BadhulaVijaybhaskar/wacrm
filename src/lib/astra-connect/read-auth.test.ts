@@ -115,6 +115,59 @@ describe('authenticateConnectRequest — X-Astra-Tenant', () => {
     expect(result.ok).toBe(true)
     if (result.ok) expect(result.ctx.tenantId).toBe(TENANT)
   })
+
+  it('accepts POST signed as rawBody.tenant (Astraconnect 647b711)', async () => {
+    const raw = JSON.stringify({ tenant_id: TENANT, by: 'ops@acme.com' })
+    const ts = Math.floor(Date.now() / 1000)
+    const sig = buildAstraSignature(`${raw}.${TENANT}`, SECRET, ts)
+    const req = new Request(
+      `https://chat.example/api/astra-connect/v1/conversations/c1/takeover`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Astra-Timestamp': String(ts),
+          'X-Astra-Signature': sig,
+          'X-Astra-Tenant': TENANT,
+        },
+        body: raw,
+      },
+    )
+    const result = await authenticateConnectRequest({
+      request: req,
+      tenantId: TENANT,
+      rawBody: raw,
+      rateLimit: 'none',
+    })
+    expect(result.ok).toBe(true)
+  })
+
+  it('rejects POST signed without the tenant suffix', async () => {
+    const raw = JSON.stringify({ tenant_id: TENANT, by: 'ops@acme.com' })
+    const ts = Math.floor(Date.now() / 1000)
+    const sig = buildAstraSignature(raw, SECRET, ts)
+    const req = new Request(
+      `https://chat.example/api/astra-connect/v1/conversations/c1/takeover`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Astra-Timestamp': String(ts),
+          'X-Astra-Signature': sig,
+          'X-Astra-Tenant': TENANT,
+        },
+        body: raw,
+      },
+    )
+    const result = await authenticateConnectRequest({
+      request: req,
+      tenantId: TENANT,
+      rawBody: raw,
+      rateLimit: 'none',
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.response.status).toBe(401)
+  })
 })
 
 describe('consumeConnectRateLimit — 304 weight', () => {

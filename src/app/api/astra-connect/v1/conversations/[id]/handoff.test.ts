@@ -37,8 +37,13 @@ const OTHER = '99999999-9999-9999-9999-999999999999'
 
 function signedPost(urlPath: string, body: object) {
   const raw = JSON.stringify(body)
+  const tenant =
+    typeof (body as { tenant_id?: string }).tenant_id === 'string'
+      ? (body as { tenant_id: string }).tenant_id
+      : 't_abc'
   const ts = Math.floor(Date.now() / 1000)
-  const sig = buildAstraSignature(raw, SECRET, ts)
+  // Connect v1: `${ts}.${rawBody}.${tenant}` (Astraconnect 647b711).
+  const sig = buildAstraSignature(`${raw}.${tenant}`, SECRET, ts)
   return {
     req: new Request(`https://chat.example${urlPath}`, {
       method: 'POST',
@@ -46,6 +51,7 @@ function signedPost(urlPath: string, body: object) {
         'Content-Type': 'application/json',
         'X-Astra-Timestamp': String(ts),
         'X-Astra-Signature': sig,
+        'X-Astra-Tenant': tenant,
       },
       body: raw,
     }),

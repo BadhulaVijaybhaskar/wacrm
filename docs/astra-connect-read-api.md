@@ -25,21 +25,33 @@ It must equal the `tenant_id` query parameter (GET) or JSON body field
 
 ### Signed message
 
-| Method | Signed payload (after `${timestamp}.`) |
+Matches the Connect console client (Astraconnect `647b711`). Signature is
+HMAC-SHA256 hex as `X-Astra-Signature: sha256=<hex>`, with a **300s**
+timestamp window.
+
+| Method | Full signed string |
 |---|---|
-| `GET` / `HEAD` | `${pathname}${search}.${tenant}` |
-| `POST` (and other bodies) | `${rawBody}` |
+| `GET` / `HEAD` | `${ts}.${pathWithQuery}.${tenant}` |
+| `POST` (and other bodies) | `${ts}.${rawBody}.${tenant}` |
 
-The tenant value in the GET signed string is the `X-Astra-Tenant`
-header (which must already match `tenant_id` in the query). POST bodies
-are signed as-is; the tenant header is still required and must match
-`tenant_id` in the JSON.
+`tenant` is the `X-Astra-Tenant` header value (which must already match
+`tenant_id` in the query or JSON body).
 
-Example GET signing string:
+Example GET:
 
 ```
 1710000000./api/astra-connect/v1/conversations?tenant_id=t_abc&employee_id=emp_1&limit=50.t_abc
 ```
+
+Example POST:
+
+```
+1710000000.{"tenant_id":"t_abc","by":"ops@acme.com"}.t_abc
+```
+
+The **inbound webhook adapter contract v2** (Connect ← Chat outbound
+adapter posts) still signs `${ts}.${rawBody}` only — that contract is
+unchanged.
 
 Secret resolution (first match wins for outbound; all accepted for verify):
 
