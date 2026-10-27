@@ -110,6 +110,7 @@ export async function middleware(request: NextRequest) {
       '/api/integrations/woocommerce/webhook',
       '/api/integrations/razorpay/webhook',
       '/api/integrations/stripe/webhook',
+      '/api/integrations/google_sheets/cron',
     ]
     const isPublic = publicApiPrefixes.some(
       (prefix) => path === prefix || path.startsWith(prefix),

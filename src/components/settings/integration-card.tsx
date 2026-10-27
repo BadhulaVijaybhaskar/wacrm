@@ -53,7 +53,7 @@ export function IntegrationCard({
   const [connectOpen, setConnectOpen] = useState(false);
   const [fields, setFields] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<
-    'connect' | 'disconnect' | 'test' | 'catalog' | null
+    'connect' | 'disconnect' | 'test' | 'catalog' | 'sheets' | null
   >(null);
 
   const statusLabel = useMemo(() => {
@@ -121,6 +121,60 @@ export function IntegrationCard({
       }
       onChanged(payload.connection as PublicIntegrationConnection);
       toast.success(`${meta.name} disconnected`);
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const sheetsSync = async (direction: 'import' | 'export') => {
+    setBusy('sheets');
+    try {
+      const res = await fetch(
+        '/api/account/integrations/google_sheets/sync',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ direction }),
+        },
+      );
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(
+          typeof payload.error === 'string' ? payload.error : 'Sheets sync failed',
+        );
+        return;
+      }
+      toast.success(
+        direction === 'import'
+          ? `Imported ${payload.rowsOk ?? 0} (errors ${payload.rowsError ?? 0})`
+          : `Exported ${payload.rowsOk ?? 0} rows`,
+      );
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const startSheetsOAuth = async () => {
+    setBusy('sheets');
+    try {
+      const res = await fetch(
+        '/api/account/integrations/google_sheets/oauth/start',
+        { cache: 'no-store' },
+      );
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(
+          typeof payload.error === 'string' ? payload.error : 'OAuth start failed',
+        );
+        return;
+      }
+      if (typeof payload.url === 'string') {
+        window.location.href = payload.url;
+      }
     } catch {
       toast.error('Network error');
     } finally {
@@ -289,6 +343,42 @@ export function IntegrationCard({
               ) : null}
               Sync catalog
             </Button>
+          ) : null}
+          {meta.id === 'google_sheets' &&
+          canEdit &&
+          connection.status === 'connected' ? (
+            <>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={busy !== null}
+                onClick={() => void startSheetsOAuth()}
+              >
+                OAuth
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={busy !== null}
+                onClick={() => void sheetsSync('import')}
+              >
+                {busy === 'sheets' ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : null}
+                Import
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={busy !== null}
+                onClick={() => void sheetsSync('export')}
+              >
+                Export
+              </Button>
+            </>
           ) : null}
           <Button
             type="button"

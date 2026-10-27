@@ -34,8 +34,8 @@ Real DB is **wacrm-staging** (owner applies migrations). Latest on branch starts
 | CHAT-16 Integrations hub | **done** | `8d0a314` | `048_integrations_hub.sql` | Settings → Integrations; `artifacts/chat-16/` |
 | CHAT-17 Outbound webhooks / Zapier / Make | **done** | `2d7e851` | `049_webhook_retry_queue.sql` | Event catalog, REST hooks, retry cron, `/developers/api` |
 | CHAT-18 Shopify + WooCommerce | **done** | `2e0337a` | `050_ecommerce_integrations.sql` | Webhooks + notify queue + catalog stub |
-| CHAT-19 Razorpay + Stripe | **in progress** | — | `051_payment_links.sql` | Composer payment link + status webhooks |
-| CHAT-20 Google Sheets | not started | — | — | |
+| CHAT-19 Razorpay + Stripe | **done** | `7373a1c` | `051_payment_links.sql` | Composer payment link + status webhooks |
+| CHAT-20 Google Sheets | **in progress** | — | `052_google_sheets_sync.sql` | OAuth scaffold + import/export + cron |
 | CHAT-21 CRM push | not started | — | — | |
 | CHAT-22 IG + Messenger inbox | not started | — | — | |
 | CHAT-23 Flow builder | not started | — | — | |
@@ -54,3 +54,4 @@ Real DB is **wacrm-staging** (owner applies migrations). Latest on branch starts
 - `049_webhook_retry_queue.sql` ← CHAT-17
 - `050_ecommerce_integrations.sql` ← CHAT-18
 - `051_payment_links.sql` ← CHAT-19
+- `052_google_sheets_sync.sql` ← CHAT-20
