@@ -99,8 +99,13 @@ export function buildSignedMediaUrl(args: {
   origin?: string | null
   secret?: string | null
 }): string | null {
-  const secret = args.secret ?? mediaSigningSecret()
-  const origin = (args.origin ?? publicSiteOrigin())?.replace(/\/+$/, '')
+  // Explicit `null` means "no value" (do not fall back to env). Omit the
+  // field (or pass `undefined`) to use the configured site origin / secret.
+  const secret =
+    args.secret !== undefined ? args.secret : mediaSigningSecret()
+  const origin = (
+    args.origin !== undefined ? args.origin : publicSiteOrigin()
+  )?.replace(/\/+$/, '')
   if (!secret || !origin) return null
 
   const now = args.nowSeconds ?? Math.floor(Date.now() / 1000)

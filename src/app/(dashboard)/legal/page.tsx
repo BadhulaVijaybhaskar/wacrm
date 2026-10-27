@@ -1,32 +1,12 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { THIRD_PARTY_NOTICE } from "@/lib/legal/notice";
 
 export const metadata: Metadata = {
   title: "Legal notices",
 };
 
-async function readNotice(): Promise<string> {
-  const candidates = [
-    // Shipped with the standalone Docker image via `public/`.
-    path.join(process.cwd(), "public", "legal", "NOTICE.txt"),
-    // Repo root during `next dev` / local `next start`.
-    path.join(process.cwd(), "NOTICE"),
-  ];
-  for (const candidate of candidates) {
-    try {
-      return await readFile(candidate, "utf8");
-    } catch {
-      // try next
-    }
-  }
-  return "Third-party license notices are unavailable in this build.";
-}
-
-export default async function LegalNoticesPage() {
-  const notice = await readNotice();
-
+export default function LegalNoticesPage() {
   return (
     <div className="mx-auto max-w-3xl px-1 py-2">
       <div className="flex items-baseline justify-between gap-4">
@@ -44,7 +24,7 @@ export default async function LegalNoticesPage() {
         Third-party open-source licenses included with this product.
       </p>
       <pre className="mt-6 max-h-[70vh] overflow-auto rounded-lg border border-border bg-muted/40 p-4 text-xs leading-relaxed whitespace-pre-wrap text-foreground">
-        {notice}
+        {THIRD_PARTY_NOTICE}
       </pre>
     </div>
   );
