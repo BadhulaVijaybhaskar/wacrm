@@ -16,6 +16,7 @@ import {
   LogOut,
   MessageSquare,
   Radio,
+  Scale,
   Settings,
   Shield,
   User,
@@ -188,9 +189,14 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
             close button is hidden since the sidebar is always-visible. */}
         <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border px-4">
           <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <MessageSquare className="h-4 w-4" />
-            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand/astra-chat-mark.svg"
+              alt=""
+              width={32}
+              height={32}
+              className="h-8 w-8 rounded-lg"
+            />
             <span className="text-sm font-semibold text-foreground">
               {t("title")}
             </span>
@@ -383,6 +389,18 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               >
                 <Settings className="size-4" />
                 {t("menuSettings")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                render={
+                  <Link
+                    href="/legal"
+                    onClick={onClose}
+                    className="text-popover-foreground focus:bg-accent focus:text-accent-foreground"
+                  />
+                }
+              >
+                <Scale className="size-4" />
+                {t("menuLegal")}
               </DropdownMenuItem>
               <DropdownMenuSeparator className="bg-border" />
               <DropdownMenuItem

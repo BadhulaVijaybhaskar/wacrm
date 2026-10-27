@@ -69,6 +69,12 @@ const nextConfig: NextConfig = {
   // Harmless outside Docker: `next start` keeps working as before.
   output: "standalone",
 
+  // White-label / staging: never expose Next.js in response headers
+  // or ship production browser source maps (they leak file paths and
+  // can surface repository URLs from comments).
+  poweredByHeader: false,
+  productionBrowserSourceMaps: false,
+
   /**
    * Cross-origin dev access (Next.js 16).
    *

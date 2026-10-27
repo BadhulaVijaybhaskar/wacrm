@@ -1,0 +1,104 @@
+Astra Chat — Third-party notices
+
+This product includes software developed by third parties.
+
+---
+
+@base-ui/react@1.6.0
+License: MIT
+
+@dagrejs/dagre@3.1.0
+License: MIT
+
+@dnd-kit/core@6.3.1
+License: MIT
+
+@dnd-kit/sortable@10.0.0
+License: MIT
+
+@dnd-kit/utilities@3.2.2
+License: MIT
+
+@supabase/ssr@0.12.0
+License: MIT
+
+@supabase/supabase-js@2.108.2
+License: MIT
+
+@tailwindcss/postcss
+License: See package
+
+@types/node@26.1.2
+License: MIT
+
+@types/react@19.2.14
+License: MIT
+
+@types/react-dom@19.2.3
+License: MIT
+
+@xyflow/react@12.11.3
+License: MIT
+
+class-variance-authority
+License: See package
+
+clsx
+License: See package
+
+date-fns@4.4.0
+License: MIT
+
+eslint@9.39.4
+License: MIT
+
+eslint-config-next
+License: See package
+
+lucide-react@1.30.0
+License: ISC
+
+next@16.3.5
+License: MIT
+
+next-intl
+License: See package
+
+opus-recorder@8.0.5
+License: MIT
+
+prettier@3.9.6
+License: MIT
+
+prettier-plugin-tailwindcss
+License: See package
+
+react@19.2.4
+License: MIT
+
+react-dom@19.2.4
+License: MIT
+
+recharts@3.10.1
+License: MIT
+
+shadcn
+License: See package
+
+sonner
+License: See package
+
+tailwind-merge
+License: See package
+
+tailwindcss@4.3.3
+License: MIT
+
+tw-animate-css
+License: See package
+
+typescript@6.0.3
+License: Apache-2.0
+
+vitest@4.1.11
+License: MIT

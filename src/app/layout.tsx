@@ -22,16 +22,29 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: "wacrm",
-    template: "%s — wacrm",
+    default: "Astra Chat",
+    template: "%s — Astra Chat",
   },
-  description: "Self-hostable CRM template for WhatsApp.",
+  description: "Astra Chat — messaging workspace for Astra Connect.",
+  applicationName: "Astra Chat",
   robots: {
     index: false,
     follow: false,
   },
   icons: {
     icon: [{ url: "/icon" }],
+    apple: [{ url: "/icon" }],
+  },
+  openGraph: {
+    title: "Astra Chat",
+    description: "Astra Chat — messaging workspace for Astra Connect.",
+    siteName: "Astra Chat",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "Astra Chat",
+    description: "Astra Chat — messaging workspace for Astra Connect.",
   },
   formatDetection: {
     email: false,
