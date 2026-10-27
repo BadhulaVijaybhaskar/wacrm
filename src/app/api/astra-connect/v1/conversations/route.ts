@@ -3,58 +3,62 @@ import {
   authenticateConnectRequest,
   CONNECT_READ_NOT_MODIFIED_COST,
   consumeConnectRateLimit,
+  isUpstreamUnavailable,
+  upstreamUnavailableResponse,
 } from '@/lib/astra-connect/read-auth'
 import {
-  clampLimit,
   conversationListEtag,
   etagMatches,
   listConnectConversations,
-  parseHandoffFilter,
 } from '@/lib/astra-connect/read-api'
+import {
+  conversationsQuerySchema,
+  zodErrorMessage,
+} from '@/lib/astra-connect/read-schemas'
 import { rateLimitResponse } from '@/lib/rate-limit'
 
 /**
  * GET /api/astra-connect/v1/conversations
  *
  * Query: tenant_id (required), employee_id, phone_number_id, handoff,
- * status, updated_since, cursor, limit (max 100).
+ * status, updated_since, cursor, limit (1–100, default 50).
  *
- * Auth: X-Astra-Tenant + HMAC over
- * `${ts}.${pathWithQuery}.${tenant}` (Connect console client).
+ * Auth order: zod 400 → timestamp 401 → HMAC → DB.
  * Supports ETag / If-None-Match (304).
  */
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url)
-    const tenantId = url.searchParams.get('tenant_id')?.trim() ?? ''
-    if (!tenantId) {
+    const parsed = conversationsQuerySchema.safeParse({
+      tenant_id: url.searchParams.get('tenant_id') ?? undefined,
+      employee_id: url.searchParams.get('employee_id') ?? undefined,
+      phone_number_id: url.searchParams.get('phone_number_id') ?? undefined,
+      handoff: url.searchParams.get('handoff') ?? undefined,
+      status: url.searchParams.get('status') ?? undefined,
+      updated_since: url.searchParams.get('updated_since') ?? undefined,
+      cursor: url.searchParams.get('cursor') ?? undefined,
+      limit: url.searchParams.get('limit') ?? undefined,
+    })
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: 'tenant_id is required' },
+        { error: zodErrorMessage(parsed.error) },
         { status: 400 },
       )
     }
 
     const auth = await authenticateConnectRequest({
       request,
-      tenantId,
+      tenantId: parsed.data.tenant_id,
       rateLimit: 'none',
     })
     if (!auth.ok) return auth.response
 
-    const handoff = parseHandoffFilter(url.searchParams.get('handoff'))
-    if (handoff && typeof handoff === 'object' && 'error' in handoff) {
-      return NextResponse.json(
-        { error: 'handoff must be ai or human' },
-        { status: 400 },
-      )
-    }
-
     const filters = {
-      phoneNumberId: url.searchParams.get('phone_number_id'),
-      employeeId: url.searchParams.get('employee_id'),
-      handoff: handoff as 'ai' | 'human' | null,
-      status: url.searchParams.get('status'),
-      updatedSince: url.searchParams.get('updated_since'),
+      phoneNumberId: parsed.data.phone_number_id,
+      employeeId: parsed.data.employee_id,
+      handoff: parsed.data.handoff,
+      status: parsed.data.status,
+      updatedSince: parsed.data.updated_since,
     }
 
     const etag = await conversationListEtag({
@@ -76,17 +80,17 @@ export async function GET(request: Request) {
       })
     }
 
-    const limit = consumeConnectRateLimit({
+    const rate = consumeConnectRateLimit({
       tenantId: auth.ctx.tenantId,
       bucket: 'read',
     })
-    if (!limit.success) return rateLimitResponse(limit)
+    if (!rate.success) return rateLimitResponse(rate)
 
     const result = await listConnectConversations({
       ctx: auth.ctx,
       ...filters,
-      cursor: url.searchParams.get('cursor'),
-      limit: clampLimit(url.searchParams.get('limit')),
+      cursor: parsed.data.cursor,
+      limit: parsed.data.limit,
     })
 
     return NextResponse.json(
@@ -102,6 +106,7 @@ export async function GET(request: Request) {
     )
   } catch (err) {
     console.error('[astra-connect v1 conversations]', err)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    if (isUpstreamUnavailable(err)) return upstreamUnavailableResponse()
+    return upstreamUnavailableResponse()
   }
 }

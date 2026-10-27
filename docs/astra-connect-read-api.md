@@ -23,6 +23,26 @@ It must equal the `tenant_id` query parameter (GET) or JSON body field
 (POST). A missing header → **400**. A mismatch (cross-tenant probe) →
 **404**.
 
+### Validation order
+
+Fail closed **before** any DB work when possible:
+
+1. **Zod** on query/body (and required structural headers) → **400**
+   (e.g. missing `tenant_id`, `limit=abc`, `handoff=bot`)
+2. **Timestamp window** (±300s) → **401**
+3. **HMAC** against global `WACRM_ADAPTER_SECRET` when set (**no DB**).
+   Only if that fails and CHAT-05 per-tenant secrets are enabled
+   (`ENCRYPTION_KEY` set) does Chat look up the tenant secret.
+4. **DB** — resolve tenant → account; load the conversation
+
+| Condition | Status |
+|---|---|
+| Bad / missing signature | **401** |
+| Stale timestamp | **401** |
+| Unknown conversation / tenant mismatch | **404** (never 403; never reveal whether a tenant exists) |
+| Valid HMAC but unknown `tenant_id` | **404** |
+| Supabase / config unavailable | **503** `{ code: "upstream_unavailable" }` + `Retry-After` |
+
 ### Signed message
 
 Matches the Connect console client (Astraconnect `647b711`). Signature is
@@ -53,14 +73,12 @@ The **inbound webhook adapter contract v2** (Connect ← Chat outbound
 adapter posts) still signs `${ts}.${rawBody}` only — that contract is
 unchanged.
 
-Secret resolution (first match wins for outbound; all accepted for verify):
+Secret resolution for verify:
 
-1. Per-tenant current secret (`whatsapp_config.astra_connect_secret_encrypted`)
-2. Previous secret while within the 24h rotation window
-3. Global `WACRM_ADAPTER_SECRET`
-
-Unknown `tenant_id` or failed auth → **404** (never 403) so tenants cannot
-probe each other.
+1. Global `WACRM_ADAPTER_SECRET` (checked first, no DB)
+2. Per-tenant current secret (`whatsapp_config.astra_connect_secret_encrypted`)
+   when CHAT-05 is enabled and the global check fails
+3. Previous secret while within the 24h rotation window
 
 ## Rate limit
 
@@ -100,7 +118,7 @@ messages). When nothing changed the API returns **304** with the same
 | `status` | no | `open` / `pending` / `closed` |
 | `updated_since` | no | ISO 8601 lower bound on `updated_at` |
 | `cursor` | no | Opaque keyset cursor from a prior response |
-| `limit` | no | Default 50, max 100 |
+| `limit` | no | Default 50, max 100; non-integer → **400** |
 
 ### Response `200`
 
@@ -146,7 +164,7 @@ Every conversation object includes `tenant_id` and `phone_number_id`.
 | `tenant_id` | yes | |
 | `before` | no | Preferred **older-page cursor**: opaque keyset from `next_cursor`, or an ISO-8601 upper bound on `created_at` |
 | `cursor` | no | Alias for an opaque keyset cursor (same encoding as `next_cursor`) |
-| `limit` | no | Default 50, max 100 |
+| `limit` | no | Default 50, max 100; non-integer → **400** |
 | `after` | no | ISO lower bound on `created_at` |
 
 Ordering is **newest first**, stable by `(created_at DESC, id DESC)`.

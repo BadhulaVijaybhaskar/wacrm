@@ -12,16 +12,24 @@
  * where `tenant` is the X-Astra-Tenant header value (must match query/body
  * tenant_id). HMAC-SHA256 hex as `X-Astra-Signature: sha256=<hex>`, 300s window.
  *
- * The inbound webhook adapter contract v2 (`${timestamp}.${rawBody}` only)
- * is separate and unchanged.
+ * Auth order (fail closed before DB when possible):
+ *   1. Structural header checks (missing tenant → 400; missing sig headers → 401)
+ *   2. Timestamp window → 401
+ *   3. HMAC against global WACRM_ADAPTER_SECRET (no DB). If that fails and
+ *      CHAT-05 per-tenant secrets are enabled, look up the tenant secret.
+ *   4. Resolve tenant → account in DB
  *
- * Secret resolution: per-tenant current (+ previous within 24h rotation
- * window), then global WACRM_ADAPTER_SECRET.
+ * DB/config failures → 503 `{ code: 'upstream_unavailable' }` + Retry-After.
+ * Unknown tenant / cross-tenant probe → 404 (never reveal existence).
  */
 
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { verifyAstraSignature } from './sign'
+import {
+  isAstraTimestampInWindow,
+  verifyAstraHmac,
+  verifyAstraSignature,
+} from './sign'
 import {
   resolveAdapterSecrets,
   type StoredAdapterSecrets,
@@ -35,14 +43,70 @@ export const CONNECT_HANDOFF_RATE = { limit: 120, windowMs: 60_000 } as const
 /** 304 Not Modified responses consume a quarter of a read unit. */
 export const CONNECT_READ_NOT_MODIFIED_COST = 0.25
 
+/** Retry-After for Connect when Supabase/config is unavailable. */
+export const UPSTREAM_RETRY_AFTER_SECONDS = 30
+
+export class UpstreamUnavailableError extends Error {
+  readonly code = 'upstream_unavailable' as const
+  constructor(message = 'Upstream unavailable') {
+    super(message)
+    this.name = 'UpstreamUnavailableError'
+  }
+}
+
+export function isUpstreamUnavailable(err: unknown): boolean {
+  return (
+    err instanceof UpstreamUnavailableError ||
+    (typeof err === 'object' &&
+      err !== null &&
+      'code' in err &&
+      (err as { code?: unknown }).code === 'upstream_unavailable')
+  )
+}
+
+export function upstreamUnavailableResponse(): NextResponse {
+  return NextResponse.json(
+    { error: 'Upstream unavailable', code: 'upstream_unavailable' },
+    {
+      status: 503,
+      headers: {
+        'Retry-After': String(UPSTREAM_RETRY_AFTER_SECONDS),
+      },
+    },
+  )
+}
+
+/**
+ * CHAT-05 per-tenant encrypted secrets require ENCRYPTION_KEY to decrypt.
+ * When unset, auth uses only the global WACRM_ADAPTER_SECRET (no secret DB).
+ */
+export function perTenantSecretsEnabled(): boolean {
+  return Boolean(process.env.ENCRYPTION_KEY?.trim())
+}
+
+function globalAdapterSecret(): string | null {
+  const global = process.env.WACRM_ADAPTER_SECRET?.trim()
+  if (global && global.length >= 16) return global
+  return null
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _admin: any = null
+
+export function __resetConnectReadAdminForTests() {
+  _admin = null
+}
+
 export function connectReadAdmin() {
-  if (!_admin) {
-    _admin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
+  if (!url || !key) {
+    throw new UpstreamUnavailableError(
+      'Supabase admin credentials not configured',
     )
+  }
+  if (!_admin) {
+    _admin = createClient(url, key)
   }
   return _admin
 }
@@ -125,9 +189,22 @@ export function verifyConnectRequest(args: {
   return false
 }
 
+function verifyHmacWithSecrets(
+  signature: string,
+  payload: string,
+  timestamp: number,
+  secrets: string[],
+): boolean {
+  for (const secret of secrets) {
+    if (verifyAstraHmac(signature, payload, secret, timestamp)) return true
+  }
+  return false
+}
+
 /**
  * Resolve tenant → account from whatsapp_config.astra_connect_tenant_id.
  * Returns null when unknown (callers map to 404).
+ * Throws UpstreamUnavailableError on DB/config failures.
  */
 export async function loadTenantByConnectId(
   tenantId: string,
@@ -143,7 +220,12 @@ export async function loadTenantByConnectId(
     .eq('astra_connect_tenant_id', trimmed)
     .maybeSingle()
 
-  if (error || !data?.account_id) return null
+  if (error) {
+    throw new UpstreamUnavailableError(
+      error.message ?? 'Failed to load Connect tenant',
+    )
+  }
+  if (!data?.account_id) return null
 
   return {
     accountId: data.account_id as string,
@@ -171,6 +253,25 @@ export function tenantSecretsFromRow(row: {
   return resolveAdapterSecrets(stored).accepted
 }
 
+async function loadTenantSecretList(
+  ctx: ConnectTenantContext,
+): Promise<string[]> {
+  const { data, error } = await ctx.db
+    .from('whatsapp_config')
+    .select(
+      'astra_connect_secret_encrypted, astra_connect_secret_previous_encrypted, astra_connect_secret_previous_expires_at',
+    )
+    .eq('account_id', ctx.accountId)
+    .maybeSingle()
+
+  if (error) {
+    throw new UpstreamUnavailableError(
+      error.message ?? 'Failed to load Connect tenant secrets',
+    )
+  }
+  return tenantSecretsFromRow(data ?? {})
+}
+
 export function consumeConnectRateLimit(args: {
   tenantId: string
   bucket: Exclude<ConnectRateBucket, 'none'>
@@ -187,6 +288,9 @@ export function consumeConnectRateLimit(args: {
 
 /**
  * Authenticate a Connect v1 request.
+ *
+ * Callers must validate query/body with zod **before** this (step 1 of the
+ * public contract). This function then: timestamp → HMAC → DB.
  *
  * @param rateLimit When `'none'`, skip rate limiting (caller charges after
  *   knowing whether the response is 200 vs 304). Default `'read'`.
@@ -223,6 +327,7 @@ export async function authenticateConnectRequest(args: {
   }
 
   // Cross-tenant probe: header disagrees with query/body → 404 (never 403).
+  // No DB — does not reveal whether either tenant exists.
   if (headerTenant !== queryOrBodyTenant) {
     return {
       ok: false,
@@ -241,28 +346,15 @@ export async function authenticateConnectRequest(args: {
     }
   }
 
-  const ctx = await loadTenantByConnectId(queryOrBodyTenant)
-  if (!ctx) {
-    // Do not reveal whether the tenant exists vs bad auth — 404.
+  // 2. Timestamp window — before HMAC and before any DB work.
+  const now = Math.floor(Date.now() / 1000)
+  if (!isAstraTimestampInWindow(headers.timestamp, now)) {
     return {
       ok: false,
-      response: NextResponse.json({ error: 'Not found' }, { status: 404 }),
-    }
-  }
-
-  const { data: secretRow } = await ctx.db
-    .from('whatsapp_config')
-    .select(
-      'astra_connect_secret_encrypted, astra_connect_secret_previous_encrypted, astra_connect_secret_previous_expires_at',
-    )
-    .eq('account_id', ctx.accountId)
-    .maybeSingle()
-
-  const secrets = tenantSecretsFromRow(secretRow ?? {})
-  if (secrets.length === 0) {
-    return {
-      ok: false,
-      response: NextResponse.json({ error: 'Not found' }, { status: 404 }),
+      response: NextResponse.json(
+        { error: 'Invalid or expired timestamp' },
+        { status: 401 },
+      ),
     }
   }
 
@@ -271,19 +363,81 @@ export async function authenticateConnectRequest(args: {
     args.rawBody ?? '',
     headerTenant,
   )
-  const valid = verifyConnectRequest({
-    signature: headers.signature,
-    payload,
-    timestamp: headers.timestamp,
-    secrets,
-  })
-  if (!valid) {
+
+  // 3. Global HMAC (no DB). Per-tenant secrets only if global fails/missing
+  //    and CHAT-05 decryption is configured.
+  const global = globalAdapterSecret()
+  let signatureOk = false
+  if (global) {
+    signatureOk = verifyAstraHmac(
+      headers.signature,
+      payload,
+      global,
+      headers.timestamp,
+    )
+  }
+
+  let ctx: ConnectTenantContext | null = null
+
+  if (!signatureOk && perTenantSecretsEnabled()) {
+    try {
+      ctx = await loadTenantByConnectId(queryOrBodyTenant)
+      if (ctx) {
+        const secrets = await loadTenantSecretList(ctx)
+        // accepted includes global — but global already failed; still fine.
+        signatureOk = verifyHmacWithSecrets(
+          headers.signature,
+          payload,
+          headers.timestamp,
+          secrets,
+        )
+      }
+    } catch (err) {
+      if (isUpstreamUnavailable(err)) {
+        // Global was set and failed: treat as bad signature (do not leak
+        // upstream status on an auth failure path). No global → 503.
+        if (global) {
+          return {
+            ok: false,
+            response: NextResponse.json(
+              { error: 'Invalid signature' },
+              { status: 401 },
+            ),
+          }
+        }
+        return { ok: false, response: upstreamUnavailableResponse() }
+      }
+      throw err
+    }
+  }
+
+  if (!signatureOk) {
     return {
       ok: false,
       response: NextResponse.json(
         { error: 'Invalid signature' },
         { status: 401 },
       ),
+    }
+  }
+
+  // 4. Signature ok — resolve tenant in DB (if not already loaded).
+  if (!ctx) {
+    try {
+      ctx = await loadTenantByConnectId(queryOrBodyTenant)
+    } catch (err) {
+      if (isUpstreamUnavailable(err)) {
+        return { ok: false, response: upstreamUnavailableResponse() }
+      }
+      throw err
+    }
+  }
+
+  if (!ctx) {
+    // Valid HMAC but unknown tenant — 404, never 403.
+    return {
+      ok: false,
+      response: NextResponse.json({ error: 'Not found' }, { status: 404 }),
     }
   }
 

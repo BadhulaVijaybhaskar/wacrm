@@ -16,7 +16,10 @@ export {
 } from './secrets'
 export { postSignedJson, ADAPTER_TIMEOUT_MS } from './client'
 export {
+  ASTRA_TIMESTAMP_TOLERANCE_SECONDS,
   buildAstraSignature,
+  isAstraTimestampInWindow,
+  verifyAstraHmac,
   verifyAstraSignature,
   astraAuthHeaders,
 } from './sign'

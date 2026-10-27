@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server'
-import { authenticateConnectRequest } from '@/lib/astra-connect/read-auth'
 import {
-  clampTakeoverReason,
-  setConversationHandoff,
-} from '@/lib/astra-connect/read-api'
+  authenticateConnectRequest,
+  isUpstreamUnavailable,
+  upstreamUnavailableResponse,
+} from '@/lib/astra-connect/read-auth'
+import { setConversationHandoff } from '@/lib/astra-connect/read-api'
+import {
+  takeoverBodySchema,
+  zodErrorMessage,
+} from '@/lib/astra-connect/read-schemas'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -11,51 +16,45 @@ type Params = { params: Promise<{ id: string }> }
  * POST /api/astra-connect/v1/conversations/:id/takeover
  * Body: { tenant_id, by?, reason? }
  * Sets handoff=human (AI replies stop). Idempotent.
- * Optional `reason` (max 500 chars) is stored on the handoff audit row.
+ * Auth order: zod 400 → timestamp 401 → HMAC → DB.
  */
 export async function POST(request: Request, { params }: Params) {
   try {
     const { id: conversationId } = await params
     const rawBody = await request.text()
-    const body = rawBody ? JSON.parse(rawBody) : null
-    if (!body || typeof body !== 'object') {
+    let json: unknown
+    try {
+      json = rawBody ? JSON.parse(rawBody) : null
+    } catch {
       return NextResponse.json({ error: 'JSON body required' }, { status: 400 })
     }
-    const tenantId =
-      typeof body.tenant_id === 'string' ? body.tenant_id.trim() : ''
-    if (!tenantId) {
-      return NextResponse.json(
-        { error: 'tenant_id is required' },
-        { status: 400 },
-      )
+    if (!json || typeof json !== 'object') {
+      return NextResponse.json({ error: 'JSON body required' }, { status: 400 })
     }
 
-    const reason = clampTakeoverReason(
-      (body as { reason?: unknown }).reason,
-    )
-    if (reason && typeof reason === 'object' && 'error' in reason) {
+    const parsed = takeoverBodySchema.safeParse(json)
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: 'reason must be at most 500 characters' },
+        { error: zodErrorMessage(parsed.error) },
         { status: 400 },
       )
     }
 
     const auth = await authenticateConnectRequest({
       request,
-      tenantId,
+      tenantId: parsed.data.tenant_id,
       rawBody,
       rateLimit: 'handoff',
     })
     if (!auth.ok) return auth.response
 
-    const by = typeof body.by === 'string' ? body.by : null
     const result = await setConversationHandoff({
       ctx: auth.ctx,
       conversationId,
       handoff: 'human',
-      by,
+      by: parsed.data.by,
       source: 'api',
-      reason: typeof reason === 'string' ? reason : null,
+      reason: parsed.data.reason,
     })
 
     if (!result) {
@@ -69,6 +68,7 @@ export async function POST(request: Request, { params }: Params) {
     })
   } catch (err) {
     console.error('[astra-connect v1 takeover]', err)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    if (isUpstreamUnavailable(err)) return upstreamUnavailableResponse()
+    return upstreamUnavailableResponse()
   }
 }

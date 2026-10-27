@@ -15,6 +15,7 @@ vi.mock('@supabase/supabase-js', () => ({
 }))
 
 import {
+  __resetConnectReadAdminForTests,
   authenticateConnectRequest,
   consumeConnectRateLimit,
   CONNECT_READ_NOT_MODIFIED_COST,
@@ -65,11 +66,17 @@ function signedGet(pathAndQuery: string, tenant = TENANT) {
 describe('authenticateConnectRequest — X-Astra-Tenant', () => {
   beforeEach(() => {
     __resetRateLimitForTests()
+    __resetConnectReadAdminForTests()
     process.env.WACRM_ADAPTER_SECRET = SECRET
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'http://supabase.test'
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-test-key'
     mockTenantRow()
   })
   afterEach(() => {
     delete process.env.WACRM_ADAPTER_SECRET
+    delete process.env.NEXT_PUBLIC_SUPABASE_URL
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY
+    __resetConnectReadAdminForTests()
     __resetRateLimitForTests()
   })
 

@@ -3,13 +3,18 @@ import {
   authenticateConnectRequest,
   CONNECT_READ_NOT_MODIFIED_COST,
   consumeConnectRateLimit,
+  isUpstreamUnavailable,
+  upstreamUnavailableResponse,
 } from '@/lib/astra-connect/read-auth'
 import {
-  clampLimit,
   etagMatches,
   listConnectMessages,
   messageListEtag,
 } from '@/lib/astra-connect/read-api'
+import {
+  messagesQuerySchema,
+  zodErrorMessage,
+} from '@/lib/astra-connect/read-schemas'
 import { rateLimitResponse } from '@/lib/rate-limit'
 
 type Params = { params: Promise<{ id: string }> }
@@ -18,31 +23,37 @@ type Params = { params: Promise<{ id: string }> }
  * GET /api/astra-connect/v1/conversations/:id/messages
  *
  * Query: tenant_id (required), cursor, limit, before, after.
- * `before` is the preferred older-page cursor (opaque keyset or ISO bound).
- * Cross-tenant conversation ids → 404.
+ * Auth order: zod 400 → timestamp 401 → HMAC → DB.
+ * Cross-tenant / unknown conversation ids → 404.
  * Supports ETag / If-None-Match (304).
  */
 export async function GET(request: Request, { params }: Params) {
   try {
     const { id: conversationId } = await params
     const url = new URL(request.url)
-    const tenantId = url.searchParams.get('tenant_id')?.trim() ?? ''
-    if (!tenantId) {
+    const parsed = messagesQuerySchema.safeParse({
+      tenant_id: url.searchParams.get('tenant_id') ?? undefined,
+      before: url.searchParams.get('before') ?? undefined,
+      after: url.searchParams.get('after') ?? undefined,
+      cursor: url.searchParams.get('cursor') ?? undefined,
+      limit: url.searchParams.get('limit') ?? undefined,
+    })
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: 'tenant_id is required' },
+        { error: zodErrorMessage(parsed.error) },
         { status: 400 },
       )
     }
 
     const auth = await authenticateConnectRequest({
       request,
-      tenantId,
+      tenantId: parsed.data.tenant_id,
       rateLimit: 'none',
     })
     if (!auth.ok) return auth.response
 
-    const before = url.searchParams.get('before')
-    const after = url.searchParams.get('after')
+    const before = parsed.data.before
+    const after = parsed.data.after
 
     const etag = await messageListEtag({
       ctx: auth.ctx,
@@ -76,8 +87,8 @@ export async function GET(request: Request, { params }: Params) {
     const result = await listConnectMessages({
       ctx: auth.ctx,
       conversationId,
-      cursor: url.searchParams.get('cursor'),
-      limit: clampLimit(url.searchParams.get('limit')),
+      cursor: parsed.data.cursor,
+      limit: parsed.data.limit,
       before,
       after,
     })
@@ -104,6 +115,7 @@ export async function GET(request: Request, { params }: Params) {
     )
   } catch (err) {
     console.error('[astra-connect v1 messages]', err)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    if (isUpstreamUnavailable(err)) return upstreamUnavailableResponse()
+    return upstreamUnavailableResponse()
   }
 }

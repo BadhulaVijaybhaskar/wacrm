@@ -137,21 +137,21 @@ describe('GET /api/astra-connect/v1/conversations', () => {
     )
   })
 
-  it('rejects invalid handoff filter', async () => {
-    h.authenticateConnectRequest.mockResolvedValue({
-      ok: true,
-      ctx: {
-        accountId: 'acct-a',
-        tenantId: TENANT,
-        phoneNumberId: '1',
-        employeeId: null,
-        db: {},
-      },
-    })
+  it('rejects invalid handoff filter before auth/DB', async () => {
     const path = `/api/astra-connect/v1/conversations?tenant_id=${TENANT}&handoff=bot`
     const res = await GET(signedGet(path))
     expect(res.status).toBe(400)
+    expect(h.authenticateConnectRequest).not.toHaveBeenCalled()
     expect(h.listConnectConversations).not.toHaveBeenCalled()
+  })
+
+  it('rejects non-integer limit before auth/DB', async () => {
+    const path = `/api/astra-connect/v1/conversations?tenant_id=${TENANT}&limit=abc`
+    const res = await GET(signedGet(path))
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error).toMatch(/limit/i)
+    expect(h.authenticateConnectRequest).not.toHaveBeenCalled()
   })
 
   it('(c) returns 304 when If-None-Match matches ETag', async () => {

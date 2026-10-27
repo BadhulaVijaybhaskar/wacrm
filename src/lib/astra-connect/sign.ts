@@ -14,6 +14,9 @@
 
 import { createHmac, timingSafeEqual } from 'node:crypto'
 
+/** Connect / adapter HMAC timestamp skew tolerance (seconds). */
+export const ASTRA_TIMESTAMP_TOLERANCE_SECONDS = 300
+
 /** Build the `X-Astra-Signature` header value (`sha256=<hex>`). */
 export function buildAstraSignature(
   rawBody: string,
@@ -28,19 +31,32 @@ export function buildAstraSignature(
 }
 
 /**
- * Verify an Astra Connect signature header. Used by tests and any
- * future wacrm endpoint that must accept Connect callbacks.
+ * True when `timestampSeconds` is within ±tolerance of `nowSeconds`.
+ * Call this before HMAC so stale timestamps fail closed as 401 without
+ * touching secrets or the DB.
  */
-export function verifyAstraSignature(
+export function isAstraTimestampInWindow(
+  timestampSeconds: number,
+  nowSeconds: number,
+  toleranceSeconds = ASTRA_TIMESTAMP_TOLERANCE_SECONDS,
+): boolean {
+  if (!Number.isFinite(timestampSeconds) || !Number.isFinite(nowSeconds)) {
+    return false
+  }
+  return Math.abs(nowSeconds - timestampSeconds) <= toleranceSeconds
+}
+
+/**
+ * Verify HMAC only (no timestamp window). Prefer checking
+ * {@link isAstraTimestampInWindow} first at the auth boundary.
+ */
+export function verifyAstraHmac(
   signatureHeader: string,
   rawBody: string,
   secret: string,
   timestampSeconds: number,
-  nowSeconds: number,
-  toleranceSeconds = 300
 ): boolean {
   if (!Number.isFinite(timestampSeconds)) return false
-  if (Math.abs(nowSeconds - timestampSeconds) > toleranceSeconds) return false
 
   const presented = signatureHeader.trim().toLowerCase()
   if (!presented.startsWith('sha256=')) return false
@@ -51,6 +67,24 @@ export function verifyAstraSignature(
   const expectedHex = expected.slice('sha256='.length)
   if (expectedHex.length !== hex.length) return false
   return timingSafeEqual(Buffer.from(expectedHex), Buffer.from(hex))
+}
+
+/**
+ * Verify an Astra Connect signature header. Used by tests and any
+ * future wacrm endpoint that must accept Connect callbacks.
+ */
+export function verifyAstraSignature(
+  signatureHeader: string,
+  rawBody: string,
+  secret: string,
+  timestampSeconds: number,
+  nowSeconds: number,
+  toleranceSeconds = ASTRA_TIMESTAMP_TOLERANCE_SECONDS
+): boolean {
+  if (!isAstraTimestampInWindow(timestampSeconds, nowSeconds, toleranceSeconds)) {
+    return false
+  }
+  return verifyAstraHmac(signatureHeader, rawBody, secret, timestampSeconds)
 }
 
 /** Headers to attach to an outbound Connect adapter call. */
