@@ -14,7 +14,7 @@ Real DB is **wacrm-staging** (owner applies migrations). New migrations must con
 | CHAT-12 security hardening | **done** | `92bd6fd` | `vitest` 1132 passed; `tsc --noEmit` clean | `docs/chat-12-security.md`; `artifacts/chat-12/chat-12-security.png`; admin gates + engine RL + middleware API tests |
 | CHAT-04b Connect read/takeover API | **done** | `9222bbe` | covered in suite at land | Migration: `046_astra_connect_read_api.sql` |
 | CHAT-05 per-tenant secrets | **done** | `e242732` | suite | Migration: `044_astra_connect_tenant_secret.sql` |
-| Staging smoke + seed + CHAT-14 screenshots | **done** | `b2556ca` | seed + stub `node:test`; `chat-14-verify.sh` green | `deploy/staging/scripts/{seed-demo-data,chat-14-verify,staging-smoke}*`; `artifacts/chat-14/` |
+| Staging smoke + seed + CHAT-14 screenshots | **done** | `837583f` | seed + stub `node:test`; `chat-14-verify.sh` green | `deploy/staging/scripts/{seed-demo-data,chat-14-verify,staging-smoke}*`; `artifacts/chat-14/` |
 | CHAT-03 Settings UI | **done** | `8062658` | suite | — |
 | CHAT-09 | not started | — | — | Spec TBD / deferred |
 | CHAT-11 | not started | — | — | Spec TBD / deferred |
