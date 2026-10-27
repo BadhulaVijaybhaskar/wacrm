@@ -141,7 +141,7 @@
       "whatsappNotConnected": "WhatsApp® no está conectado. Ve a Configuración para conectar tu cuenta."
     },
     "conversationList": {
-      "searchPlaceholder": "Buscar conversaciones...",
+      "searchPlaceholder": "Buscar contactos y mensajes…",
       "filterAll": "Todas",
       "filterUnread": "Sin leer",
       "filterOpen": "Abiertas",
@@ -153,7 +153,9 @@
       "clearAll": "Limpiar todo",
       "noConversations": "No se encontraron conversaciones",
       "noMessagesYet": "Aún no hay mensajes",
-      "unknown": "Desconocido"
+      "unknown": "Desconocido",
+      "filterMine": "Mías",
+      "filterUnassigned": "Sin asignar"
     },
     "messageThread": {
       "backToConversations": "Volver a las conversaciones",
@@ -184,7 +186,8 @@
       "sendTemplateFailed": "Error al enviar la plantilla: {reason}",
       "waitForSending": "Espera a que el mensaje termine de enviarse",
       "reactionFailed": "Error en la reacción: {reason}",
-      "assignmentUpdateFailed": "Error al actualizar la asignación"
+      "assignmentUpdateFailed": "Error al actualizar la asignación",
+      "markUnread": "Marcar como no leída"
     },
     "sessionTimer": {
       "expired": "Expirada",
@@ -305,7 +308,9 @@
       "deals": "Negocios",
       "noTags": "Sin etiquetas",
       "noDeals": "Sin negocios",
-      "addNotePlaceholder": "Agregar una nota..."
+      "addNotePlaceholder": "Agregar una nota...",
+      "editTags": "Editar",
+      "tagUpdateFailed": "No se pudieron actualizar las etiquetas"
     },
     "aiBanner": {
       "pausedTitle": "El asistente de IA está en pausa aquí",

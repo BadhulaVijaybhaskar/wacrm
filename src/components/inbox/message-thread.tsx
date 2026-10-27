@@ -27,6 +27,7 @@ import {
   RefreshCw,
   PanelRightOpen,
   PanelRightClose,
+  MailOpen,
 } from "lucide-react";
 import { format, isToday, isYesterday, differenceInHours } from "date-fns";
 import { useTranslations } from "next-intl";
@@ -74,6 +75,8 @@ interface MessageThreadProps {
     conversationId: string,
     assignedAgentId: string | null,
   ) => void;
+  /** Parent updates list badges when unread is cleared or forced back on. */
+  onUnreadChange?: (conversationId: string, unreadCount: number) => void;
   /**
    * On mobile, the thread is shown full-screen with the conversation list
    * hidden. This callback lets the page deselect the active conversation
@@ -159,6 +162,7 @@ export function MessageThread({
   onUpdateMessage,
   onStatusChange,
   onAssignChange,
+  onUnreadChange,
   onBack,
   resyncToken = 0,
   onRefresh,
@@ -167,6 +171,7 @@ export function MessageThread({
 }: MessageThreadProps) {
   const t = useTranslations("Inbox.messageThread");
   const tTimer = useTranslations("Inbox.sessionTimer");
+  const suppressAutoClearRef = useRef(false);
   const tQuote = useTranslations("Inbox.replyQuote");
 
   const { user } = useAuth();
@@ -444,8 +449,10 @@ export function MessageThread({
   //
   // Guarding on hasUnread prevents the eq-update loop: once unread_count
   // is 0 the condition is false, so no further UPDATE is issued.
+  // suppressAutoClearRef blocks the wipe after "Mark unread" so the
+  // intentional unread badge survives until the agent leaves the thread.
   useEffect(() => {
-    if (!conversationId || !hasUnread) return;
+    if (!conversationId || !hasUnread || suppressAutoClearRef.current) return;
     const supabase = createClient();
     supabase
       .from("conversations")
@@ -455,6 +462,27 @@ export function MessageThread({
         if (error) console.error("Failed to reset unread_count:", error);
       });
   }, [conversationId, hasUnread]);
+
+  useEffect(() => {
+    suppressAutoClearRef.current = false;
+  }, [conversationId]);
+
+  const handleMarkUnread = useCallback(async () => {
+    if (!conversationId) return;
+    suppressAutoClearRef.current = true;
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("conversations")
+      .update({ unread_count: 1 })
+      .eq("id", conversationId);
+    if (error) {
+      console.error("Failed to mark unread:", error);
+      suppressAutoClearRef.current = false;
+      return;
+    }
+    onUnreadChange?.(conversationId, 1);
+    onBack?.();
+  }, [conversationId, onUnreadChange, onBack]);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -963,6 +991,15 @@ export function MessageThread({
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleMarkUnread}
+            aria-label={t("markUnread")}
+            title={t("markUnread")}
+            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <MailOpen className="h-4 w-4" />
+          </button>
           {/* Contact-panel toggle — desktop only. The contact sidebar
               eats a chunk of horizontal width that crowds the thread on
               smaller laptops; this lets agents reclaim it when they just

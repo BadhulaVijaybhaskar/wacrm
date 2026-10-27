@@ -4,14 +4,18 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
   CONVERSATION_SELECT,
+  matchesAssignmentFilter,
   matchesContactFilters,
+  matchesConversationSearch,
   normalizeConversations,
+  type AssignmentFilterMode,
 } from "@/lib/inbox/conversations";
 import { cn } from "@/lib/utils";
 import type { Conversation, ConversationStatus, Tag } from "@/types";
 import { Search, ChevronDown, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useTranslations } from "next-intl";
+import { useAuth } from "@/hooks/use-auth";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
@@ -44,7 +48,11 @@ const STATUS_COLORS: Record<ConversationStatus, string> = {
 
 
 
-type InboxFilter = ConversationStatus | "all" | "unread";
+type InboxFilter =
+  | ConversationStatus
+  | "all"
+  | "unread"
+  | AssignmentFilterMode;
 
 export function ConversationList({
   activeConversationId,
@@ -54,10 +62,13 @@ export function ConversationList({
   resyncToken = 0,
 }: ConversationListProps) {
   const t = useTranslations("Inbox.conversationList");
-  
+  const { user } = useAuth();
+
   const FILTER_OPTIONS: { label: string; value: InboxFilter }[] = useMemo(() => [
     { label: t("filterAll"), value: "all" },
     { label: t("filterUnread"), value: "unread" },
+    { label: t("filterMine"), value: "mine" },
+    { label: t("filterUnassigned"), value: "unassigned" },
     { label: t("filterOpen"), value: "open" },
     { label: t("filterPending"), value: "pending" },
     { label: t("filterClosed"), value: "closed" },
@@ -66,6 +77,7 @@ export function ConversationList({
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<InboxFilter>("all");
   const [loading, setLoading] = useState(true);
+  const [messageHitIds, setMessageHitIds] = useState<Set<string> | null>(null);
   // Contact-based filters (issue #272). Tags use OR logic (a conversation
   // matches if its contact carries any selected tag), consistent with
   // Broadcast audience filtering. Company is an exact match on the field.
@@ -158,11 +170,52 @@ export function ConversationList({
     return m;
   }, [tags]);
 
+  // Full-text-ish message body search (CHAT-09): when the query is long
+  // enough, look up matching message rows and OR those conversation ids
+  // into the client filter alongside name/phone/last-message matches.
+  useEffect(() => {
+    const q = search.trim();
+    if (q.length < 2) {
+      setMessageHitIds(null);
+      return;
+    }
+    let cancelled = false;
+    const handle = window.setTimeout(async () => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("messages")
+        .select("conversation_id")
+        .ilike("content_text", `%${q}%`)
+        .limit(200);
+      if (cancelled) return;
+      if (error) {
+        console.error("Inbox message search failed:", error.message);
+        setMessageHitIds(new Set());
+        return;
+      }
+      setMessageHitIds(
+        new Set(
+          (data ?? [])
+            .map((row) => row.conversation_id as string | null)
+            .filter((id): id is string => Boolean(id)),
+        ),
+      );
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
+  }, [search]);
+
   const filtered = useMemo(() => {
     let result = conversations;
 
     if (filter === "unread") {
       result = result.filter((c) => c.unread_count > 0);
+    } else if (filter === "mine" || filter === "unassigned") {
+      result = result.filter((c) =>
+        matchesAssignmentFilter(c, filter, user?.id),
+      );
     } else if (filter !== "all") {
       result = result.filter((c) => c.status === filter);
     }
@@ -178,17 +231,23 @@ export function ConversationList({
     }
 
     if (search.trim()) {
-      const q = search.toLowerCase();
-      result = result.filter((c) => {
-        const name = c.contact?.name?.toLowerCase() ?? "";
-        const phone = c.contact?.phone?.toLowerCase() ?? "";
-        const lastMsg = c.last_message_text?.toLowerCase() ?? "";
-        return name.includes(q) || phone.includes(q) || lastMsg.includes(q);
-      });
+      result = result.filter(
+        (c) =>
+          matchesConversationSearch(c, search) ||
+          (messageHitIds?.has(c.id) ?? false),
+      );
     }
 
     return result;
-  }, [conversations, filter, search, selectedTagIds, selectedCompany]);
+  }, [
+    conversations,
+    filter,
+    search,
+    selectedTagIds,
+    selectedCompany,
+    user?.id,
+    messageHitIds,
+  ]);
 
   const toggleTag = useCallback((id: string) => {
     setSelectedTagIds((prev) =>

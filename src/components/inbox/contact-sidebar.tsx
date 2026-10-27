@@ -21,6 +21,14 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { useTranslations } from "next-intl";
 import { contactHandle } from "@/lib/whatsapp/wa-identity";
+import { addContactTag, deleteContactTag } from "@/lib/contacts/tag-api";
+import { toast } from "sonner";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface ContactSidebarProps {
   contact: Contact | null;
@@ -35,6 +43,8 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
   const [deals, setDeals] = useState<Deal[]>([]);
   const [notes, setNotes] = useState<ContactNote[]>([]);
   const [tags, setTags] = useState<(Tag & { contact_tag_id: string })[]>([]);
+  const [allTags, setAllTags] = useState<Tag[]>([]);
+  const [tagBusy, setTagBusy] = useState(false);
   const [newNote, setNewNote] = useState("");
   const [addingNote, setAddingNote] = useState(false);
 
@@ -80,6 +90,45 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchContactData();
   }, [fetchContactData]);
+
+  useEffect(() => {
+    if (!accountId) return;
+    let cancelled = false;
+    (async () => {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("tags")
+        .select("*")
+        .eq("account_id", accountId)
+        .order("name");
+      if (!cancelled) setAllTags(data ?? []);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [accountId]);
+
+  const handleToggleTag = useCallback(
+    async (tag: Tag, currentlyOn: boolean) => {
+      if (!contact || tagBusy) return;
+      setTagBusy(true);
+      try {
+        if (currentlyOn) {
+          await deleteContactTag(contact.id, tag.id);
+        } else {
+          await addContactTag(contact.id, tag.id);
+        }
+        await fetchContactData();
+      } catch (err) {
+        toast.error(
+          err instanceof Error ? err.message : tSidebar("tagUpdateFailed"),
+        );
+      } finally {
+        setTagBusy(false);
+      }
+    },
+    [contact, tagBusy, fetchContactData, tSidebar],
+  );
 
   const handleCopyPhone = useCallback(async () => {
     // Copies whatever the row displays — a BSUID-only contact has no
@@ -187,11 +236,41 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
           {/* Divider */}
           <div className="my-4 border-t border-border" />
 
-          {/* Tags */}
+          {/* Tags — editable (CHAT-09); labels live on the contact. */}
           <div>
-            <div className="flex items-center gap-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              <TagIcon className="h-3 w-3" />
-              {tSidebar("tags")}
+            <div className="flex items-center justify-between gap-2 px-1">
+              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                <TagIcon className="h-3 w-3" />
+                {tSidebar("tags")}
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  disabled={tagBusy || allTags.length === 0}
+                  className="inline-flex h-7 items-center rounded-md px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+                >
+                  <Plus className="mr-1 h-3 w-3" />
+                  {tSidebar("editTags")}
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="max-h-64 overflow-y-auto">
+                  {allTags.map((tag) => {
+                    const on = tags.some((t) => t.id === tag.id);
+                    return (
+                      <DropdownMenuCheckboxItem
+                        key={tag.id}
+                        checked={on}
+                        disabled={tagBusy}
+                        onCheckedChange={() => handleToggleTag(tag, on)}
+                      >
+                        <span
+                          className="mr-2 inline-block size-2 rounded-full"
+                          style={{ backgroundColor: tag.color }}
+                        />
+                        {tag.name}
+                      </DropdownMenuCheckboxItem>
+                    );
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
             <div className="mt-2 flex flex-wrap gap-1">
               {tags.length === 0 ? (

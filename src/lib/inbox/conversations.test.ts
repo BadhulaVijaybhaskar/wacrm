@@ -1,12 +1,15 @@
 import { describe, it, expect } from "vitest";
 import {
+  matchesAssignmentFilter,
   matchesContactFilters,
+  matchesConversationSearch,
   normalizeConversation,
 } from "./conversations";
 import type { Conversation } from "@/types";
 
 function makeConversation(
   contact: Partial<Conversation["contact"]> | null,
+  extra: Partial<Conversation> = {},
 ): Conversation {
   return {
     id: "c1",
@@ -16,6 +19,7 @@ function makeConversation(
     unread_count: 0,
     created_at: "",
     updated_at: "",
+    ...extra,
     contact: contact
       ? {
           id: "ct1",
@@ -141,5 +145,31 @@ describe("normalizeConversation", () => {
     };
     // A contactless row passes through untouched (consumers use `?.`).
     expect(normalizeConversation(raw).contact).toBeNull();
+  });
+});
+
+describe("matchesAssignmentFilter", () => {
+  it("matches mine / unassigned / all", () => {
+    const mine = makeConversation(null, { assigned_agent_id: "agent-1" });
+    const open = makeConversation(null, { assigned_agent_id: undefined });
+    expect(matchesAssignmentFilter(mine, "all", "agent-1")).toBe(true);
+    expect(matchesAssignmentFilter(mine, "mine", "agent-1")).toBe(true);
+    expect(matchesAssignmentFilter(mine, "mine", "agent-2")).toBe(false);
+    expect(matchesAssignmentFilter(open, "unassigned", "agent-1")).toBe(true);
+    expect(matchesAssignmentFilter(mine, "unassigned", "agent-1")).toBe(false);
+  });
+});
+
+describe("matchesConversationSearch", () => {
+  it("matches name, phone, and last message", () => {
+    const conv = makeConversation(
+      { name: "Priya Sharma", phone: "+15550100001" },
+      { last_message_text: "Order confirmed" },
+    );
+    expect(matchesConversationSearch(conv, "priya")).toBe(true);
+    expect(matchesConversationSearch(conv, "1555")).toBe(true);
+    expect(matchesConversationSearch(conv, "confirmed")).toBe(true);
+    expect(matchesConversationSearch(conv, "zzzz")).toBe(false);
+    expect(matchesConversationSearch(conv, "  ")).toBe(true);
   });
 });

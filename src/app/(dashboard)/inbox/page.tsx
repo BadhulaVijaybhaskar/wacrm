@@ -534,6 +534,22 @@ function InboxPageInner() {
     [activeConversation]
   );
 
+  const handleUnreadChange = useCallback(
+    (conversationId: string, unreadCount: number) => {
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === conversationId ? { ...c, unread_count: unreadCount } : c,
+        ),
+      );
+      if (activeConversation?.id === conversationId) {
+        setActiveConversation((prev) =>
+          prev ? { ...prev, unread_count: unreadCount } : prev,
+        );
+      }
+    },
+    [activeConversation],
+  );
+
   const handleAssignChange = useCallback(
     (conversationId: string, assignedAgentId: string | null) => {
       setConversations((prev) =>
@@ -618,6 +634,7 @@ function InboxPageInner() {
             onUpdateMessage={handleUpdateMessage}
             onStatusChange={handleStatusChange}
             onAssignChange={handleAssignChange}
+            onUnreadChange={handleUnreadChange}
             onBack={handleCloseConversation}
             resyncToken={resyncToken}
             onRefresh={handleManualRefresh}

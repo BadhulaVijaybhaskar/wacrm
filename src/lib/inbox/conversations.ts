@@ -69,3 +69,34 @@ export function matchesContactFilters(
 
   return true;
 }
+
+export type AssignmentFilterMode = 'all' | 'mine' | 'unassigned';
+
+/**
+ * Assignment filter for the Inbox list (CHAT-09).
+ * `all` is a no-op; `mine` requires the current user id.
+ */
+export function matchesAssignmentFilter(
+  conversation: Conversation,
+  mode: AssignmentFilterMode,
+  userId: string | null | undefined,
+): boolean {
+  if (mode === 'all') return true;
+  const assignee = conversation.assigned_agent_id ?? null;
+  if (mode === 'unassigned') return assignee === null;
+  if (mode === 'mine') return Boolean(userId) && assignee === userId;
+  return true;
+}
+
+/** Client-side name/phone/last-message match used before message-body search. */
+export function matchesConversationSearch(
+  conversation: Conversation,
+  query: string,
+): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const name = conversation.contact?.name?.toLowerCase() ?? '';
+  const phone = conversation.contact?.phone?.toLowerCase() ?? '';
+  const lastMsg = conversation.last_message_text?.toLowerCase() ?? '';
+  return name.includes(q) || phone.includes(q) || lastMsg.includes(q);
+}

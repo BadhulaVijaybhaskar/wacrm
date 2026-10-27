@@ -141,7 +141,7 @@
       "whatsappNotConnected": "WhatsApp® is not connected. Go to Settings to connect your account."
     },
     "conversationList": {
-      "searchPlaceholder": "Search conversations...",
+      "searchPlaceholder": "Search contacts and messages…",
       "filterAll": "All",
       "filterUnread": "Unread",
       "filterOpen": "Open",
@@ -153,7 +153,9 @@
       "clearAll": "Clear all",
       "noConversations": "No conversations found",
       "noMessagesYet": "No messages yet",
-      "unknown": "Unknown"
+      "unknown": "Unknown",
+      "filterMine": "Mine",
+      "filterUnassigned": "Unassigned"
     },
     "messageThread": {
       "backToConversations": "Back to conversations",
@@ -184,7 +186,8 @@
       "sendTemplateFailed": "Failed to send template: {reason}",
       "waitForSending": "Wait for the message to finish sending",
       "reactionFailed": "Reaction failed: {reason}",
-      "assignmentUpdateFailed": "Failed to update assignment"
+      "assignmentUpdateFailed": "Failed to update assignment",
+      "markUnread": "Mark as unread"
     },
     "sessionTimer": {
       "expired": "Expired",
@@ -305,7 +308,9 @@
       "deals": "Deals",
       "noTags": "No tags",
       "noDeals": "No deals",
-      "addNotePlaceholder": "Add a note..."
+      "addNotePlaceholder": "Add a note...",
+      "editTags": "Edit",
+      "tagUpdateFailed": "Could not update tags"
     },
     "aiBanner": {
       "pausedTitle": "AI assistant is paused here",
