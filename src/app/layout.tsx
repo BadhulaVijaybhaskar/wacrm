@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { headers } from 'next/headers';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
 import { Plus_Jakarta_Sans } from 'next/font/google';
@@ -6,6 +7,7 @@ import Script from 'next/script';
 import './globals.css';
 import { ThemeProvider } from '@/hooks/use-theme';
 import { ThemedToaster } from '@/components/themed-toaster';
+import { OG_IMAGE_PATH, resolveMetadataBase } from '@/lib/metadata-base';
 import {
   DEFAULT_MODE,
   DEFAULT_THEME,
@@ -24,7 +26,7 @@ const plusJakartaSans = Plus_Jakarta_Sans({
   display: 'swap',
 });
 
-export const metadata: Metadata = {
+const APP_METADATA = {
   title: {
     default: 'Astra Chat',
     template: '%s — Astra Chat',
@@ -54,21 +56,37 @@ export const metadata: Metadata = {
     title: 'Astra Chat',
     description: 'Astra Chat — messaging workspace for Astra Connect.',
     siteName: 'Astra Chat',
-    type: 'website',
-    images: [{ url: '/brand/og.png', alt: 'Astra Chat' }],
+    type: 'website' as const,
+    images: [{ url: OG_IMAGE_PATH, alt: 'Astra Chat' }],
   },
   twitter: {
-    card: 'summary_large_image',
+    card: 'summary_large_image' as const,
     title: 'Astra Chat',
     description: 'Astra Chat — messaging workspace for Astra Connect.',
-    images: ['/brand/og.png'],
+    images: [OG_IMAGE_PATH],
   },
   formatDetection: {
     email: false,
     address: false,
     telephone: false,
   },
-};
+} satisfies Metadata;
+
+/**
+ * metadataBase comes from NEXT_PUBLIC_SITE_URL. In development only we
+ * fall back to the request host so local `next dev` OG previews stay
+ * absolute without inventing a production origin from Host headers.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  const headerStore =
+    process.env.NODE_ENV === 'development' ? await headers() : null;
+  return {
+    ...APP_METADATA,
+    metadataBase: resolveMetadataBase({
+      headers: headerStore,
+    }),
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: '#F3F6FA',
