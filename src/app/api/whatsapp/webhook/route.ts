@@ -1044,12 +1044,21 @@ async function processMessage(
 
   // Intent hints (CHAT-25): local training-phrase match. Always computed
   // for text inbound so Connect can receive soft hints; when the adapter
-  // is off we may also fire a linked flow/automation.
+  // is off we may also fire a linked flow/automation. Never throws —
+  // missing tables / stub mocks must not abort the webhook fan-out.
   const intentText = (inboundText || contentText || '').trim()
-  const intentHints =
-    intentText && !interactiveReplyId
-      ? await detectIntentHints(supabaseAdmin(), accountId, intentText)
-      : []
+  let intentHints: Awaited<ReturnType<typeof detectIntentHints>> = []
+  if (intentText && !interactiveReplyId) {
+    try {
+      intentHints = await detectIntentHints(
+        supabaseAdmin(),
+        accountId,
+        intentText,
+      )
+    } catch (err) {
+      console.error('[intents] detect failed:', err)
+    }
+  }
 
   // Astra Connect adapter (opt-in per account). When enabled, Connect's
   // AI Employee owns the reply — wacrm's built-in AI must not also

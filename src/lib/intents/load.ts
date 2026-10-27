@@ -6,16 +6,22 @@ export async function loadAccountIntentPhrases(
   db: SupabaseClient,
   accountId: string,
 ): Promise<IntentPhrase[]> {
-  const { data: intents, error } = await db
-    .from('intents')
-    .select(
-      'id, name, display_name, trigger_flow_id, trigger_automation_id, intent_training_phrases(phrase)',
-    )
-    .eq('account_id', accountId)
-    .eq('enabled', true);
-
-  if (error) {
-    console.error('[intents] load failed:', error.message);
+  let intents: Array<Record<string, unknown>> | null = null;
+  try {
+    const result = await db
+      .from('intents')
+      .select(
+        'id, name, display_name, trigger_flow_id, trigger_automation_id, intent_training_phrases(phrase)',
+      )
+      .eq('account_id', accountId)
+      .eq('enabled', true);
+    if (result.error) {
+      console.error('[intents] load failed:', result.error.message);
+      return [];
+    }
+    intents = (result.data as Array<Record<string, unknown>> | null) ?? [];
+  } catch (err) {
+    console.error('[intents] load threw:', err);
     return [];
   }
 

@@ -11,12 +11,21 @@ import {
   rateLimitResponse,
   RATE_LIMITS,
 } from '@/lib/rate-limit';
+import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature';
 
 /**
  * Meta webhook for Messenger (`object=page`) and Instagram DM
- * (`object=instagram`). Signature verification reuses the connected
- * page token secret when present; stub mode may pass account_id.
+ * (`object=instagram`). Signature verification reuses the app secret
+ * when present; stub mode may pass account_id.
  */
+function verifyMetaMessagingRequest(
+  rawBody: string,
+  signatureHeader: string | null,
+): boolean {
+  if (isIntegrationsStubMode()) return true;
+  return verifyMetaWebhookSignature(rawBody, signatureHeader);
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const mode = url.searchParams.get('hub.mode');
@@ -38,7 +47,18 @@ export async function POST(request: Request) {
   );
   if (!limit.success) return rateLimitResponse(limit);
 
-  const body = await request.json().catch(() => null);
+  const rawBody = await request.text();
+  const signatureHeader = request.headers.get('x-hub-signature-256');
+  if (!verifyMetaMessagingRequest(rawBody, signatureHeader)) {
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+  }
+
+  let body: unknown = null;
+  try {
+    body = JSON.parse(rawBody);
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
   const events = parseMetaMessagingPayload(body);
   if (!events.length) {
     return NextResponse.json({ ok: true, ignored: true });
