@@ -493,8 +493,29 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
       for (let i = 0; i < recipients.length; i += SEND_BATCH_SIZE) {
         const batch = recipients.slice(i, i + SEND_BATCH_SIZE);
 
+        // Mark opted-out recipients failed locally before hitting Meta
+        // (CHAT-11). The broadcast API also re-checks as a backstop.
+        for (const recipient of batch) {
+          if (!recipient.contact?.opted_out) continue;
+          failedCount++;
+          await supabase
+            .from('broadcast_recipients')
+            .update({
+              status: 'failed',
+              error_message: 'Skipped: contact opted out',
+            })
+            .eq('id', recipient.id);
+          await supabase.from('consent_events').insert({
+            account_id: accountId,
+            contact_id: recipient.contact_id,
+            event_type: 'send_skipped',
+            source: 'broadcast',
+            metadata: { broadcast_id: broadcast.id },
+          });
+        }
+
         const apiRecipients = batch
-          .filter((r) => r.contact?.phone)
+          .filter((r) => r.contact?.phone && !r.contact?.opted_out)
           .map((r) => ({
             phone: r.contact!.phone as string,
             // Read back off the row rather than re-resolved, so this

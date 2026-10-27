@@ -7,6 +7,7 @@ import {
 import { decrypt } from '@/lib/whatsapp/encryption'
 import { notifyConnectOutbound } from '@/lib/astra-connect'
 import { recordWhatsappUsage } from '@/lib/astra-billing'
+import { isOptedOut, skipIfOptedOut } from '@/lib/consent/ledger'
 import {
   phoneVariants,
   isRecipientNotAllowedError,
@@ -123,12 +124,24 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
   // new tenancy column.
   const { data: contact, error: contactErr } = await db
     .from('contacts')
-    .select('id, phone, wa_user_id')
+    .select('id, phone, wa_user_id, opted_out')
     .eq('id', input.contactId)
     .eq('account_id', input.accountId)
     .maybeSingle()
   if (contactErr || !contact) {
     throw new Error('contact not found for this account')
+  }
+
+  if (
+    await skipIfOptedOut(db, {
+      accountId: input.accountId,
+      contactId: contact.id,
+      optedOut: isOptedOut(contact),
+      source: 'automation',
+      metadata: { kind: input.kind },
+    })
+  ) {
+    throw new Error('contact opted out — automation send skipped')
   }
 
   // Phone number, or the business-scoped user ID when Meta has never

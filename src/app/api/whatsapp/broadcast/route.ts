@@ -4,6 +4,7 @@ import { sendTemplateMessage } from '@/lib/whatsapp/meta-api'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import { notifyConnectOutbound } from '@/lib/astra-connect'
 import { recordWhatsappUsage } from '@/lib/astra-billing'
+import { skipIfOptedOut } from '@/lib/consent/ledger'
 import type { SendTimeParams } from '@/lib/whatsapp/template-send-builder'
 import { resolveTemplateRow } from '@/lib/whatsapp/template-body'
 import {
@@ -174,6 +175,32 @@ export async function POST(request: Request) {
           phone: recipient.phone,
           status: 'failed',
           error: 'Invalid phone number format',
+        })
+        failedCount++
+        continue
+      }
+
+      // Skip opted-out contacts (CHAT-11). Match on phone_normalized.
+      const { data: optedContact } = await supabase
+        .from('contacts')
+        .select('id, opted_out')
+        .eq('account_id', accountId)
+        .eq('phone_normalized', sanitized)
+        .eq('opted_out', true)
+        .maybeSingle()
+
+      if (optedContact) {
+        await skipIfOptedOut(supabase, {
+          accountId,
+          contactId: optedContact.id,
+          optedOut: true,
+          source: 'broadcast',
+          metadata: { phone: recipient.phone },
+        })
+        results.push({
+          phone: recipient.phone,
+          status: 'failed',
+          error: 'Skipped: contact opted out',
         })
         failedCount++
         continue

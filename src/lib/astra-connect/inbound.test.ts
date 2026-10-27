@@ -18,27 +18,41 @@ vi.mock('./config', () => ({
 
 import { dispatchInboundToAstraConnect } from './inbound'
 
-function makeDb() {
+function makeDb(opts?: { optedOut?: boolean }) {
+  const conversationRow = {
+    assigned_agent_id: null,
+    ai_autoreply_disabled: false,
+    astra_conversation_id: null,
+  }
+  const contactRow = {
+    id: 'contact-1',
+    opted_out: opts?.optedOut ?? false,
+  }
+
   return {
-    from: () => ({
-      select: () => ({
-        eq: () => ({
-          maybeSingle: async () => ({
-            data: {
-              assigned_agent_id: null,
-              ai_autoreply_disabled: false,
-              astra_conversation_id: null,
-            },
-            error: null,
-          }),
-        }),
-      }),
+    from: (table: string) => ({
+      select: () => {
+        const result = async () => ({
+          data: table === 'contacts' ? contactRow : conversationRow,
+          error: null,
+        })
+        // Chainable .eq().eq().maybeSingle() for account-scoped lookups.
+        const chain: {
+          eq: () => typeof chain
+          maybeSingle: () => ReturnType<typeof result>
+        } = {
+          eq: () => chain,
+          maybeSingle: result,
+        }
+        return chain
+      },
       update: (payload: Record<string, unknown>) => {
         h.updates.push(payload)
         return {
           eq: async () => ({ error: null }),
         }
       },
+      insert: async () => ({ error: null }),
     }),
   }
 }
@@ -113,6 +127,29 @@ describe('dispatchInboundToAstraConnect', () => {
     expect(h.updates.some((u) => u.astra_conversation_id === 'conv_abc')).toBe(
       true
     )
+  })
+
+  it('skips adapter reply when the contact is opted out', async () => {
+    h.postFn.mockResolvedValue({
+      ok: true,
+      status: 200,
+      data: {
+        reply_text: 'Should not send',
+        handoff: false,
+        conversation_id: 'conv_abc',
+      },
+    })
+
+    await dispatchInboundToAstraConnect({
+      ...BASE_ARGS,
+      db: makeDb({ optedOut: true }) as never,
+      postFn: h.postFn,
+      sendTextFn: h.sendTextFn,
+      buildMediaFn: h.buildMediaFn,
+    })
+
+    expect(h.postFn).toHaveBeenCalledTimes(1)
+    expect(h.sendTextFn).not.toHaveBeenCalled()
   })
 
   it('honours handoff:true — pauses automation and does not send', async () => {

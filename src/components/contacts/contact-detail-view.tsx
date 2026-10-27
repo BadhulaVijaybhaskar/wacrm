@@ -39,8 +39,10 @@ import {
   X,
   DollarSign,
   LayoutTemplate,
+  Ban,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { format } from 'date-fns';
 import { contactHandle } from '@/lib/whatsapp/wa-identity';
 import { parseInternationalPhone } from '@/lib/whatsapp/phone-utils';
 
@@ -442,13 +444,31 @@ export function ContactDetailView({
                       </span>
                     )}
                   </div>
+                  {contact.opted_out && (
+                    <div
+                      className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] font-medium text-amber-600 dark:text-amber-400"
+                      title={
+                        contact.opted_out_at
+                          ? t('optedOutSince', {
+                              date: format(
+                                new Date(contact.opted_out_at),
+                                'PP',
+                              ),
+                            })
+                          : undefined
+                      }
+                    >
+                      <Ban className="size-3 shrink-0" />
+                      {t('optedOut')}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="mt-3">
                 <Button
                   size="sm"
                   onClick={() => setTemplatePickerOpen(true)}
-                  disabled={sendingTemplate}
+                  disabled={sendingTemplate || Boolean(contact.opted_out)}
                   className="bg-primary text-primary-foreground hover:bg-primary/90"
                 >
                   {sendingTemplate ? (

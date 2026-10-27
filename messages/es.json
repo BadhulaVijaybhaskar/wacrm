@@ -310,7 +310,9 @@
       "noDeals": "Sin negocios",
       "addNotePlaceholder": "Agregar una nota...",
       "editTags": "Editar",
-      "tagUpdateFailed": "No se pudieron actualizar las etiquetas"
+      "tagUpdateFailed": "No se pudieron actualizar las etiquetas",
+      "optedOut": "Opted out of WhatsApp messaging",
+      "optedOutSince": "Opted out since {date}"
     },
     "aiBanner": {
       "pausedTitle": "El asistente de IA está en pausa aquí",
@@ -463,7 +465,9 @@
       "toastCustomFieldsSaved": "Campos personalizados guardados",
       "toastCustomFieldsFailed": "Error al guardar los campos personalizados",
       "toastTemplateSent": "Plantilla \"{name}\" enviada",
-      "toastTemplateFailed": "Error al enviar la plantilla: {reason}"
+      "toastTemplateFailed": "Error al enviar la plantilla: {reason}",
+      "optedOut": "Opted out of WhatsApp messaging",
+      "optedOutSince": "Opted out since {date}"
     },
     "importModal": {
       "title": "Importar contactos",

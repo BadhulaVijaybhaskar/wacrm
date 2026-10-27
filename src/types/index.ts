@@ -119,6 +119,11 @@ export interface Contact {
   email?: string;
   company?: string;
   avatar_url?: string;
+  /** True when the contact opted out of proactive WhatsApp sends
+   *  (migration 047 / CHAT-11). */
+  opted_out?: boolean;
+  /** When `opted_out` last became true; null after opt-in. */
+  opted_out_at?: string | null;
   created_at: string;
   updated_at: string;
   /** Hydrated by queries that embed `contact_tags(tags(*))` (e.g. the

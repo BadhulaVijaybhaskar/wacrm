@@ -23,6 +23,7 @@ import {
   loadAstraConnectAccountConfig,
 } from '@/lib/astra-connect'
 import { recordWhatsappUsage } from '@/lib/astra-billing'
+import { processInboundConsentKeyword } from '@/lib/consent/ledger'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import {
   handleTemplateWebhookChange,
@@ -874,6 +875,16 @@ async function processMessage(
   // so the broadcast's `replied_count` advances (via the aggregate
   // trigger installed in migration 003).
   await flagBroadcastReplyIfAny(accountId, contactRecord.id)
+
+  // Consent keywords (STOP / START / …) — update contacts.opted_out and
+  // append to the consent_events ledger before proactive senders run.
+  await processInboundConsentKeyword(supabaseAdmin(), {
+    accountId,
+    contactId: contactRecord.id,
+    text: contentText ?? message.text?.body ?? '',
+  }).catch((err) =>
+    console.error('[consent] inbound keyword processing failed:', err),
+  )
 
   // ============================================================
   // Flow runner dispatch.

@@ -15,6 +15,7 @@ import {
   DollarSign,
   StickyNote,
   Plus,
+  Ban,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -205,6 +206,21 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
             </h3>
             {contact.company && (
               <p className="text-xs text-muted-foreground">{contact.company}</p>
+            )}
+            {contact.opted_out && (
+              <div
+                className="mt-3 flex items-center justify-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-600 dark:text-amber-400"
+                title={
+                  contact.opted_out_at
+                    ? tSidebar('optedOutSince', {
+                        date: format(new Date(contact.opted_out_at), 'PP'),
+                      })
+                    : undefined
+                }
+              >
+                <Ban className="size-3.5 shrink-0" />
+                {tSidebar('optedOut')}
+              </div>
             )}
           </div>
 

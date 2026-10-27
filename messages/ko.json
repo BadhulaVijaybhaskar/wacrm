@@ -310,7 +310,9 @@
       "noDeals": "딜 없음",
       "addNotePlaceholder": "메모 추가...",
       "editTags": "편집",
-      "tagUpdateFailed": "태그를 업데이트할 수 없습니다"
+      "tagUpdateFailed": "태그를 업데이트할 수 없습니다",
+      "optedOut": "Opted out of WhatsApp messaging",
+      "optedOutSince": "Opted out since {date}"
     },
     "aiBanner": {
       "pausedTitle": "이 대화에서 AI 어시스턴트가 일시 중지됨",
@@ -463,7 +465,9 @@
       "toastCustomFieldsSaved": "커스텀 필드가 저장되었습니다",
       "toastCustomFieldsFailed": "커스텀 필드를 저장하지 못했습니다",
       "toastTemplateSent": "\"{name}\" 템플릿을 보냈습니다",
-      "toastTemplateFailed": "템플릿을 보내지 못했습니다: {reason}"
+      "toastTemplateFailed": "템플릿을 보내지 못했습니다: {reason}",
+      "optedOut": "Opted out of WhatsApp messaging",
+      "optedOutSince": "Opted out since {date}"
     },
     "importModal": {
       "title": "연락처 가져오기",

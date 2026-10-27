@@ -107,6 +107,7 @@ export async function listConnectConversations(args: {
         id,
         phone,
         name,
+        opted_out,
         contact_tags(tags(name))
       )
     `,
@@ -203,9 +204,7 @@ function mapConversationRow(
         typeof contact?.phone === 'string' ? contact.phone : null,
       ),
       name: typeof contact?.name === 'string' ? contact.name : null,
-      // No first-class opt-out column yet — always false until consent
-      // metering lands. Keep the field stable for Connect.
-      opted_out: false,
+      opted_out: Boolean(contact?.opted_out),
     },
   }
 }

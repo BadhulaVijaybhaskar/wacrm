@@ -310,7 +310,9 @@
       "noDeals": "No deals",
       "addNotePlaceholder": "Add a note...",
       "editTags": "Edit",
-      "tagUpdateFailed": "Could not update tags"
+      "tagUpdateFailed": "Could not update tags",
+      "optedOut": "Opted out of WhatsApp messaging",
+      "optedOutSince": "Opted out since {date}"
     },
     "aiBanner": {
       "pausedTitle": "AI assistant is paused here",
@@ -422,6 +424,8 @@
       "contactInfo": "Contact Information",
       "unnamed": "Unknown",
       "contactDetailsDesc": "Contact details",
+      "optedOut": "Opted out of WhatsApp messaging",
+      "optedOutSince": "Opted out since {date}",
       "name": "Name",
       "phone": "Phone",
       "email": "Email",

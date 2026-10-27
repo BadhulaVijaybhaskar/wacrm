@@ -22,6 +22,7 @@ import { sendTemplateMessage } from '@/lib/whatsapp/meta-api';
 import { decrypt } from '@/lib/whatsapp/encryption';
 import { notifyConnectOutbound } from '@/lib/astra-connect';
 import { recordWhatsappUsage } from '@/lib/astra-billing';
+import { isOptedOut, skipIfOptedOut } from '@/lib/consent/ledger';
 import {
   parseInternationalPhone,
   phoneVariants,
@@ -59,6 +60,7 @@ export interface CreateBroadcastParams {
 
 interface PlannedRecipient {
   recipientRowId: string;
+  contactId: string;
   phone: string;
   params: string[];
 }
@@ -232,7 +234,12 @@ export async function createBroadcast(
   const planned: PlannedRecipient[] = createdRows.map(
     (row: { recipient_id: string; contact_id: string }) => {
       const r = byContact.get(row.contact_id)!;
-      return { recipientRowId: row.recipient_id, phone: r.phone, params: r.params };
+      return {
+        recipientRowId: row.recipient_id,
+        contactId: row.contact_id,
+        phone: r.phone,
+        params: r.params,
+      };
     }
   );
 
@@ -267,6 +274,34 @@ export async function deliverBroadcast(
   plan: BroadcastPlan
 ): Promise<void> {
   for (const recipient of plan.planned) {
+    // Skip opted-out contacts — log to consent_events and mark failed
+    // with a clear reason (recipient status CHECK has no 'skipped').
+    const { data: contactRow } = await db
+      .from('contacts')
+      .select('id, opted_out')
+      .eq('id', recipient.contactId)
+      .eq('account_id', plan.accountId)
+      .maybeSingle();
+
+    if (
+      await skipIfOptedOut(db, {
+        accountId: plan.accountId,
+        contactId: recipient.contactId,
+        optedOut: isOptedOut(contactRow),
+        source: 'broadcast',
+        metadata: { broadcast_id: plan.broadcastId },
+      })
+    ) {
+      await db
+        .from('broadcast_recipients')
+        .update({
+          status: 'failed',
+          error_message: 'Skipped: contact opted out',
+        })
+        .eq('id', recipient.recipientRowId);
+      continue;
+    }
+
     const variants = phoneVariants(recipient.phone);
     let sentMessageId: string | null = null;
     let lastError: string | null = null;

@@ -8,6 +8,7 @@
  */
 
 import { engineSendText } from '@/lib/flows/meta-send'
+import { isOptedOut, skipIfOptedOut } from '@/lib/consent/ledger'
 import { postSignedJson } from './client'
 import {
   isAstraConnectActive,
@@ -228,6 +229,28 @@ export async function dispatchInboundToAstraConnect(
         data.conversation_id,
         'Astra Connect reply skipped: WhatsApp 24-hour window closed. Send an approved template or reply manually.'
       )
+      return
+    }
+
+    // Opted-out contacts: never send an adapter reply. The inbound was
+    // still forwarded so Connect's thread stays complete; the skip is
+    // logged on the consent ledger.
+    const { data: contactRow } = await args.db
+      .from('contacts')
+      .select('id, opted_out')
+      .eq('id', args.contactId)
+      .eq('account_id', args.accountId)
+      .maybeSingle()
+
+    if (
+      await skipIfOptedOut(args.db as never, {
+        accountId: args.accountId,
+        contactId: args.contactId,
+        optedOut: isOptedOut(contactRow as { id: string; opted_out?: boolean }),
+        source: 'adapter',
+        metadata: { astra_conversation_id: data.conversation_id ?? null },
+      })
+    ) {
       return
     }
 
