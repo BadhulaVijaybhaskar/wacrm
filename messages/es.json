@@ -2075,5 +2075,22 @@
   },
   "DashboardShell": {
     "loading": "Cargando..."
+  },
+  "ResetPasswordPage": {
+    "checkingSession": "Comprobando tu enlace…",
+    "linkExpiredTitle": "Enlace caducado",
+    "linkExpiredDesc": "Este enlace de restablecimiento no es válido o ya se usó. Solicita uno nuevo para continuar.",
+    "requestNewLink": "Solicitar un enlace nuevo",
+    "backToSignIn": "Volver a iniciar sesión",
+    "successTitle": "Contraseña actualizada",
+    "successDesc": "Tu contraseña se cambió. Ya puedes iniciar sesión con ella.",
+    "title": "Elige una contraseña nueva",
+    "desc": "Usa al menos {min} caracteres. La usarás la próxima vez que inicies sesión.",
+    "passwordLabel": "Contraseña nueva",
+    "confirmLabel": "Confirmar contraseña",
+    "passwordTooShort": "La contraseña debe tener al menos {min} caracteres.",
+    "passwordMismatch": "Las contraseñas no coinciden.",
+    "saving": "Guardando…",
+    "submit": "Actualizar contraseña"
   }
 }

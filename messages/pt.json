@@ -2075,5 +2075,22 @@
   },
   "DashboardShell": {
     "loading": "Carregando..."
+  },
+  "ResetPasswordPage": {
+    "checkingSession": "Verificando seu link…",
+    "linkExpiredTitle": "Link expirado",
+    "linkExpiredDesc": "Este link de redefinição é inválido ou já foi usado. Solicite um novo para continuar.",
+    "requestNewLink": "Solicitar um novo link",
+    "backToSignIn": "Voltar ao login",
+    "successTitle": "Senha atualizada",
+    "successDesc": "Sua senha foi alterada. Você já pode entrar com ela.",
+    "title": "Escolha uma nova senha",
+    "desc": "Use pelo menos {min} caracteres. Você usará esta senha no próximo login.",
+    "passwordLabel": "Nova senha",
+    "confirmLabel": "Confirmar senha",
+    "passwordTooShort": "A senha deve ter pelo menos {min} caracteres.",
+    "passwordMismatch": "As senhas não coincidem.",
+    "saving": "Salvando…",
+    "submit": "Atualizar senha"
   }
 }

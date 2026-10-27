@@ -2075,5 +2075,22 @@
   },
   "DashboardShell": {
     "loading": "Loading..."
+  },
+  "ResetPasswordPage": {
+    "checkingSession": "Checking your reset link…",
+    "linkExpiredTitle": "Reset link expired",
+    "linkExpiredDesc": "This password reset link is invalid or has already been used. Request a new one to continue.",
+    "requestNewLink": "Request a new link",
+    "backToSignIn": "Back to sign in",
+    "successTitle": "Password updated",
+    "successDesc": "Your password has been changed. You can sign in with it now.",
+    "title": "Choose a new password",
+    "desc": "Use at least {min} characters. You'll use this the next time you sign in.",
+    "passwordLabel": "New password",
+    "confirmLabel": "Confirm password",
+    "passwordTooShort": "Password must be at least {min} characters.",
+    "passwordMismatch": "Passwords do not match.",
+    "saving": "Saving…",
+    "submit": "Update password"
   }
 }

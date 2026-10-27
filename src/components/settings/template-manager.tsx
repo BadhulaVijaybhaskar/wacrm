@@ -58,7 +58,12 @@ import {
   TEMPLATE_LIMITS,
 } from '@/lib/whatsapp/template-validators';
 
-const CATEGORIES = ['Marketing', 'Utility', 'Authentication'] as const;
+/** Categories the UI can create/edit. Auth templates come from Meta sync only. */
+export const CREATEABLE_TEMPLATE_CATEGORIES = [
+  'Marketing',
+  'Utility',
+] as const satisfies ReadonlyArray<MessageTemplate['category']>;
+
 type HeaderFormat = 'none' | 'text' | 'image' | 'video' | 'document';
 const HEADER_FORMATS: HeaderFormat[] = ['none', 'text', 'image', 'video', 'document'];
 
@@ -607,7 +612,8 @@ export function TemplateManager() {
                     )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0 ml-2">
-                    {statusKey === 'APPROVED' && (
+                    {template.category !== 'Authentication' &&
+                      statusKey === 'APPROVED' && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -620,7 +626,8 @@ export function TemplateManager() {
                         {t('edit')}
                       </Button>
                     )}
-                    {(statusKey === 'REJECTED' || statusKey === 'PAUSED') && (
+                    {template.category !== 'Authentication' &&
+                      (statusKey === 'REJECTED' || statusKey === 'PAUSED') && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -686,13 +693,6 @@ export function TemplateManager() {
             </DialogDescription>
           </DialogHeader>
 
-          {form.category === 'Authentication' && (
-            <div className="flex items-start gap-2 rounded border border-amber-700/40 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
-              <AlertCircle className="size-4 mt-0.5 shrink-0" />
-              <p>{t.rich('authWarning', { bold: (chunks) => <strong>{chunks}</strong> })}</p>
-            </div>
-          )}
-
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label className="text-muted-foreground">{t('templateName')}</Label>
@@ -726,7 +726,7 @@ export function TemplateManager() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-popover border-border">
-                    {CATEGORIES.map((cat) => (
+                    {CREATEABLE_TEMPLATE_CATEGORIES.map((cat) => (
                       <SelectItem
                         key={cat}
                         value={cat}
@@ -1099,7 +1099,7 @@ export function TemplateManager() {
             </Button>
             <Button
               onClick={handleSubmit}
-              disabled={submitting || form.category === 'Authentication'}
+              disabled={submitting}
               className="bg-primary hover:bg-primary/90 text-primary-foreground"
             >
               {submitting ? (
