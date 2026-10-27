@@ -57,3 +57,4 @@ next-env.d.ts
 /artifacts/screenshots/
 /artifacts/chat02b-login-*.png
 supabase/.temp/
+supabase/.branches/
