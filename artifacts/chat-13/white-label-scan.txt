@@ -1,0 +1,39 @@
+=== CHAT-13 white-label scan 2026-10-27T18:31:25Z ===
+
+## Source maps (productionBrowserSourceMaps=false expected; .map under .next/static)
+count=0
+
+## Manifest / favicons / OG
+-rw-r--r-- 1 ubuntu ubuntu 4233 Oct 27 17:54 public/favicon.ico
+-rw-r--r-- 1 ubuntu ubuntu 1344 Oct 27 17:54 public/favicon.png
+-rw-r--r-- 1 ubuntu ubuntu 6025 Oct 27 15:49 public/inbox-doodle.svg
+
+public/icons:
+total 128
+drwxr-xr-x 2 ubuntu ubuntu  4096 Oct 27 17:54 .
+drwxr-xr-x 6 ubuntu ubuntu  4096 Oct 27 17:54 ..
+-rw-r--r-- 1 ubuntu ubuntu 12318 Oct 27 17:54 apple-touch-icon.png
+-rw-r--r-- 1 ubuntu ubuntu   594 Oct 27 17:54 favicon-16.png
+-rw-r--r-- 1 ubuntu ubuntu  1344 Oct 27 17:54 favicon-32.png
+-rw-r--r-- 1 ubuntu ubuntu  2241 Oct 27 17:54 favicon-48.png
+-rw-r--r-- 1 ubuntu ubuntu 13697 Oct 27 17:54 icon-192.png
+-rw-r--r-- 1 ubuntu ubuntu 74371 Oct 27 17:54 icon-512.png
+-rw-r--r-- 1 ubuntu ubuntu 600 Oct 27 18:00 src/app/manifest.ts
+
+## Grep build output / server HTML+RSC / public / emails / headers for upstream names
+### Patterns: github|gitlab|arnasdon|wacrm\.tech|crm template|chatwoot|evolution
+
+### Response headers sample (from next.config SECURITY_HEADERS — no X-Powered-By)
+next.config.ts:75:  poweredByHeader: false,
+
+### Emails
+./.git/hooks/sendemail-validate.sample
+./public/brand/email-header.png
+
+### package.json name (internal — expected wacrm)
+wacrm
+
+### Scrub script last run
+3:> next build && node scripts/scrub-client-bundles.mjs
+126:[scrub-client-bundles] rewritten files=6 github/gitlab urls removed=8
+127:[scrub-client-bundles] brand grep: zero hits
