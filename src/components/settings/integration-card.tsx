@@ -53,7 +53,7 @@ export function IntegrationCard({
   const [connectOpen, setConnectOpen] = useState(false);
   const [fields, setFields] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<
-    'connect' | 'disconnect' | 'test' | 'catalog' | 'sheets' | null
+    'connect' | 'disconnect' | 'test' | 'catalog' | 'sheets' | 'crm' | null
   >(null);
 
   const statusLabel = useMemo(() => {
@@ -175,6 +175,39 @@ export function IntegrationCard({
       if (typeof payload.url === 'string') {
         window.location.href = payload.url;
       }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const crmPushSample = async () => {
+    setBusy('crm');
+    try {
+      const res = await fetch(
+        `/api/account/integrations/${meta.id}/crm-push`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            phone: '+919876543210',
+            name: 'Priya Sharma',
+            email: 'priya@example.com',
+            summary: 'Stub conversation summary from Integrations hub',
+          }),
+        },
+      );
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(
+          typeof payload.error === 'string' ? payload.error : 'CRM push failed',
+        );
+        return;
+      }
+      toast.success(
+        `CRM ${payload.status}${payload.externalId ? ` · ${payload.externalId}` : ''}`,
+      );
     } catch {
       toast.error('Network error');
     } finally {
@@ -342,6 +375,24 @@ export function IntegrationCard({
                 <Loader2 className="size-3.5 animate-spin" />
               ) : null}
               Sync catalog
+            </Button>
+          ) : null}
+          {(meta.id === 'hubspot' ||
+            meta.id === 'zoho' ||
+            meta.id === 'astra_crm') &&
+          canEdit &&
+          connection.status === 'connected' ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={busy !== null}
+              onClick={() => void crmPushSample()}
+            >
+              {busy === 'crm' ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : null}
+              Push sample
             </Button>
           ) : null}
           {meta.id === 'google_sheets' &&
