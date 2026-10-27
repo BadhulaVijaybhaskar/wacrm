@@ -4,6 +4,8 @@ Running checklist of credentials, OAuth apps, paid plans and env vars that need 
 
 Real DB is **wacrm-staging** (owner applies migrations). Latest on branch starts at `048_`.
 
+**Branch:** [`cursor/astra-connect-adapter-f6ad`](https://github.com/BadhulaVijaybhaskar/wacrm/compare/main...cursor/astra-connect-adapter-f6ad) (single carrier for brand + CHAT-04b + smoke seed).
+
 ## Brand assets
 
 - `public/brand/astra-chat-lockup-dark.png` (and `-275`) is a **derived** dark-mode variant: AC mark colours kept, wordmark pixels recoloured near-white for contrast on dark surfaces. Pending an official dark lockup from Vijay — swap the derived files when that lands.
@@ -47,7 +49,8 @@ Real DB is **wacrm-staging** (owner applies migrations). Latest on branch starts
 | CHAT-24 CTWA ads | **done** | `fc07e35` | `056_ctwa_ads_attribution.sql` | Referral capture + `/ads` report; `artifacts/chat-24/` |
 | CHAT-25 Intents | **done** | `55f887d` | `057_intents.sql` | Intent manager + intent_hints; `artifacts/chat-25/` |
 | CHAT-26 Re-verify (13/14/15) | **done** | `9625885` | — | White-label + 1293 tests + UI audit; `artifacts/chat-26/` |
-| CHAT-04b read-API additions | **done** | `097bf0f` | `058_astra_connect_read_api_additions.sql` | conversation on messages; handoff filter; media object; employee COALESCE; takeover reason |
+| CHAT-04b read-API additions | **done** | `fea18a1` | `058_astra_connect_read_api_additions.sql` | conversation on messages; handoff filter; media object; employee COALESCE; takeover reason |
+| CHAT-14 staging smoke seed | **done** | _(tip)_ | — | `deploy/staging/scripts/seed-demo-data.mjs` (+ test + `chat-14-verify.sh`); test data only |
 
 ## Migrations owner must apply on wacrm-staging
 
