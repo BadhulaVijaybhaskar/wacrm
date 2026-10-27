@@ -83,6 +83,10 @@ export async function middleware(request: NextRequest) {
     '/settings',
     '/legal',
   ]
+  // CHAT-14 stub preview is public (mock data only).
+  if (request.nextUrl.pathname.startsWith('/ui-preview/')) {
+    return supabaseResponse
+  }
   if (!user && protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
