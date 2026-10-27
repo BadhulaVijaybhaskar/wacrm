@@ -273,15 +273,13 @@ export function IntegrationCard({
       <Card className="flex h-full min-w-0 flex-col">
         <CardHeader className="space-y-3">
           <div className="min-w-0 space-y-2">
-            <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-2">
-              <CardTitle className="min-w-0 max-w-full flex-1 basis-[8rem] text-base leading-snug text-balance break-words pr-1">
-                {meta.name}
-              </CardTitle>
-              <SettingsChip className="mt-0.5 shrink-0">
-                <StatusDot tone={statusTone(connection.status)} />
-                {statusLabel}
-              </SettingsChip>
-            </div>
+            <CardTitle className="min-w-0 text-base leading-snug text-balance break-words">
+              {meta.name}
+            </CardTitle>
+            <SettingsChip className="w-fit">
+              <StatusDot tone={statusTone(connection.status)} />
+              {statusLabel}
+            </SettingsChip>
             <CardDescription className="text-pretty break-words whitespace-normal">
               {meta.description}
             </CardDescription>

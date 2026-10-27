@@ -353,14 +353,16 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
 
           <div className="shrink-0 pt-3">
             {!collapsed && showAccountStrip && account?.name ? (
-              <div className="mb-2 flex items-start gap-1.5 px-2 text-xs text-white/50">
-                <UsersRound className="mt-0.5 size-3.5 shrink-0" />
-                <span
-                  className="min-w-0 flex-1 leading-snug line-clamp-2 break-words"
-                  title={account.name}
-                >
-                  {account.name}
-                </span>
+              <div className="mb-2 space-y-1 px-2 text-xs text-white/50">
+                <div className="flex items-start gap-1.5">
+                  <UsersRound className="mt-0.5 size-3.5 shrink-0" />
+                  <span
+                    className="min-w-0 flex-1 whitespace-normal break-words leading-snug"
+                    title={account.name}
+                  >
+                    {account.name}
+                  </span>
+                </div>
                 {accountRole
                   ? (() => {
                       const meta = ROLE_CHIP[accountRole];
@@ -368,7 +370,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                       return (
                         <span
                           className={cn(
-                            'mt-0.5 inline-flex shrink-0 items-center gap-0.5 rounded-md border px-1 py-px text-[9px] font-medium tracking-wide uppercase leading-none',
+                            'ml-5 inline-flex w-fit items-center gap-0.5 rounded-md border px-1 py-px text-[9px] font-medium tracking-wide uppercase leading-none',
                             meta.className
                           )}
                           title={t(meta.labelKey as string)}
