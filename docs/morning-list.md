@@ -10,7 +10,7 @@ Real DB is **wacrm-staging** (owner applies migrations). Latest on branch starts
 | --- | --- | --- | --- |
 | Shared crypto | 32-byte AES key (64 hex chars) | Generate offline; store in host secrets | `ENCRYPTION_KEY` |
 | Meta / WhatsApp | App + WABA + phone | Meta Developer Console | WhatsApp Settings (encrypted tokens); `META_STUB` for fake |
-| Astra Connect | Adapter URL + HMAC secret | Astra Connect tenant | `CONNECT_ADAPTER_URL`, `WACRM_ADAPTER_SECRET`; per-account secret in Settings → Astra Connect |
+| Astra Connect | Adapter URL + HMAC secret | Astra Connect tenant | `CONNECT_ADAPTER_URL`, `WACRM_ADAPTER_SECRET`; per-account secret in Settings → Astra Connect; Connect must send `X-Astra-Tenant` on all `/api/astra-connect/v1/*` reads (CHAT-04b) |
 | Outbound webhooks | HTTPS receiver that verifies HMAC | Your automation host | Settings → Integrations → Outbound webhooks / `webhook_endpoints` |
 | Zapier | Zapier account + REST Hook app | zapier.com | Settings → Integrations → Zapier (`hook_url`) |
 | Make | Make.com scenario webhook | make.com | Settings → Integrations → Make (`hook_url`) |

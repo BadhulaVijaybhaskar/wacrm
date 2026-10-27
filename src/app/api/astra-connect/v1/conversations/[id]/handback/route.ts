@@ -30,6 +30,7 @@ export async function POST(request: Request, { params }: Params) {
       request,
       tenantId,
       rawBody,
+      rateLimit: 'handoff',
     })
     if (!auth.ok) return auth.response
 

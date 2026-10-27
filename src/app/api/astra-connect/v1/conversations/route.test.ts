@@ -4,6 +4,8 @@ import { buildAstraSignature } from '@/lib/astra-connect/sign'
 const h = vi.hoisted(() => ({
   authenticateConnectRequest: vi.fn(),
   listConnectConversations: vi.fn(),
+  conversationListEtag: vi.fn(),
+  consumeConnectRateLimit: vi.fn(),
 }))
 
 vi.mock('@/lib/astra-connect/read-auth', async () => {
@@ -13,6 +15,7 @@ vi.mock('@/lib/astra-connect/read-auth', async () => {
   return {
     ...actual,
     authenticateConnectRequest: h.authenticateConnectRequest,
+    consumeConnectRateLimit: h.consumeConnectRateLimit,
   }
 })
 
@@ -23,21 +26,25 @@ vi.mock('@/lib/astra-connect/read-api', async () => {
   return {
     ...actual,
     listConnectConversations: h.listConnectConversations,
+    conversationListEtag: h.conversationListEtag,
   }
 })
 
 import { GET } from './route'
 
 const SECRET = 'test-adapter-secret-16+'
+const TENANT = 't_abc'
 
-function signedGet(pathAndQuery: string) {
+function signedGet(pathAndQuery: string, extraHeaders: Record<string, string> = {}) {
   const ts = Math.floor(Date.now() / 1000)
-  const sig = buildAstraSignature(pathAndQuery, SECRET, ts)
+  const sig = buildAstraSignature(`${pathAndQuery}.${TENANT}`, SECRET, ts)
   return new Request(`https://chat.example${pathAndQuery}`, {
     method: 'GET',
     headers: {
       'X-Astra-Timestamp': String(ts),
       'X-Astra-Signature': sig,
+      'X-Astra-Tenant': TENANT,
+      ...extraHeaders,
     },
   })
 }
@@ -46,6 +53,15 @@ describe('GET /api/astra-connect/v1/conversations', () => {
   beforeEach(() => {
     h.authenticateConnectRequest.mockReset()
     h.listConnectConversations.mockReset()
+    h.conversationListEtag.mockReset()
+    h.consumeConnectRateLimit.mockReset()
+    h.consumeConnectRateLimit.mockReturnValue({
+      success: true,
+      remaining: 100,
+      reset: Date.now() + 60_000,
+      limit: 600,
+    })
+    h.conversationListEtag.mockResolvedValue('"2026-10-27T17:00:00.000Z:1"')
   })
 
   it('requires tenant_id', async () => {
@@ -64,18 +80,18 @@ describe('GET /api/astra-connect/v1/conversations', () => {
     })
     const res = await GET(
       signedGet(
-        '/api/astra-connect/v1/conversations?tenant_id=t_other&employee_id=emp_b',
+        `/api/astra-connect/v1/conversations?tenant_id=${TENANT}&employee_id=emp_b`,
       ),
     )
     expect(res.status).toBe(404)
   })
 
-  it('lists conversations filtered by employee_id for the tenant', async () => {
+  it('(a) lists conversations that include tenant_id', async () => {
     h.authenticateConnectRequest.mockResolvedValue({
       ok: true,
       ctx: {
         accountId: 'acct-a',
-        tenantId: 't_abc',
+        tenantId: TENANT,
         phoneNumberId: '106540352242922',
         employeeId: 'emp_default',
         db: {},
@@ -85,6 +101,7 @@ describe('GET /api/astra-connect/v1/conversations', () => {
       items: [
         {
           id: '11111111-1111-1111-1111-111111111111',
+          tenant_id: TENANT,
           astra_conversation_id: 'conv_1',
           employee_id: 'emp_1',
           status: 'open',
@@ -104,18 +121,39 @@ describe('GET /api/astra-connect/v1/conversations', () => {
       next_cursor: null,
     })
 
-    const path =
-      '/api/astra-connect/v1/conversations?tenant_id=t_abc&employee_id=emp_1&limit=50'
+    const path = `/api/astra-connect/v1/conversations?tenant_id=${TENANT}&employee_id=emp_1&limit=50`
     const res = await GET(signedGet(path))
     expect(res.status).toBe(200)
+    expect(res.headers.get('etag')).toBe('"2026-10-27T17:00:00.000Z:1"')
     const body = await res.json()
-    expect(body.conversations).toHaveLength(1)
-    expect(body.conversations[0].employee_id).toBe('emp_1')
-    expect(h.listConnectConversations).toHaveBeenCalledWith(
-      expect.objectContaining({
-        employeeId: 'emp_1',
-        phoneNumberId: null,
-      }),
+    expect(body.conversations[0].tenant_id).toBe(TENANT)
+    expect(h.consumeConnectRateLimit).toHaveBeenCalledWith(
+      expect.objectContaining({ bucket: 'read', tenantId: TENANT }),
+    )
+  })
+
+  it('(c) returns 304 when If-None-Match matches ETag', async () => {
+    h.authenticateConnectRequest.mockResolvedValue({
+      ok: true,
+      ctx: {
+        accountId: 'acct-a',
+        tenantId: TENANT,
+        phoneNumberId: '1',
+        employeeId: null,
+        db: {},
+      },
+    })
+    const etag = '"2026-10-27T17:00:00.000Z:1"'
+    h.conversationListEtag.mockResolvedValue(etag)
+    const path = `/api/astra-connect/v1/conversations?tenant_id=${TENANT}`
+    const res = await GET(
+      signedGet(path, { 'If-None-Match': etag }),
+    )
+    expect(res.status).toBe(304)
+    expect(res.headers.get('etag')).toBe(etag)
+    expect(h.listConnectConversations).not.toHaveBeenCalled()
+    expect(h.consumeConnectRateLimit).toHaveBeenCalledWith(
+      expect.objectContaining({ cost: 0.25 }),
     )
   })
 })

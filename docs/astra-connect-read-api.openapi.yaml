@@ -1,16 +1,27 @@
 openapi: 3.0.3
 info:
   title: Astra Connect read & handoff API
-  version: "1.0.0"
+  version: "1.1.0"
   description: |
     Server-to-server endpoints for Astra Connect to read WhatsApp threads
-    owned by Astra Chat and to take over / hand back AI. Authenticated with
-    X-Astra-Timestamp + X-Astra-Signature (HMAC-SHA256). GET requests sign
-    timestamp + path-and-query; POST requests sign timestamp + raw body.
+    owned by Astra Chat and to take over / hand back AI.
+
+    Auth headers on every call:
+      - X-Astra-Timestamp
+      - X-Astra-Signature (sha256=<hex>)
+      - X-Astra-Tenant (must match tenant_id query/body)
+
+    HMAC signed string:
+      - GET/HEAD: `${timestamp}.${pathname}${search}.${tenant}`
+      - POST: `${timestamp}.${rawBody}` (tenant header still required)
+
+    Reads: 600/min/tenant. Takeover/handback: 120/min/tenant.
+    304 responses cost 0.25 of a read unit.
 servers:
   - url: https://chat.example.com
 security:
   - AstraHmac: []
+  - AstraTenant: []
 paths:
   /api/astra-connect/v1/conversations:
     get:
@@ -18,6 +29,8 @@ paths:
       summary: List conversations for a tenant
       parameters:
         - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/AstraTenantHeader"
+        - $ref: "#/components/parameters/IfNoneMatch"
         - name: employee_id
           in: query
           schema: { type: string }
@@ -39,6 +52,10 @@ paths:
       responses:
         "200":
           description: Conversation page
+          headers:
+            ETag:
+              schema: { type: string }
+              description: max(updated_at) + count for the filtered set
           content:
             application/json:
               schema:
@@ -51,34 +68,50 @@ paths:
                   next_cursor:
                     type: string
                     nullable: true
+        "304":
+          description: Not modified (If-None-Match matched)
+          headers:
+            ETag:
+              schema: { type: string }
+        "400": { description: Missing X-Astra-Tenant or tenant_id }
         "401": { description: Invalid or missing signature }
-        "404": { description: Unknown tenant }
-        "429": { description: Rate limited }
+        "404": { description: Unknown tenant or tenant header mismatch }
+        "429": { description: Rate limited (600/min reads) }
   /api/astra-connect/v1/conversations/{id}/messages:
     get:
       operationId: listMessages
-      summary: List messages in a conversation
+      summary: List messages in a conversation (newest first)
       parameters:
         - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/AstraTenantHeader"
+        - $ref: "#/components/parameters/IfNoneMatch"
         - name: id
           in: path
           required: true
           schema: { type: string, format: uuid }
+        - name: before
+          in: query
+          description: >
+            Older-page cursor. Opaque keyset from next_cursor, or ISO-8601
+            upper bound on created_at. Stable order is created_at,id descending.
+          schema: { type: string }
         - name: cursor
           in: query
+          description: Alias for an opaque keyset cursor
           schema: { type: string }
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
-        - name: before
-          in: query
-          schema: { type: string, format: date-time }
         - name: after
           in: query
           schema: { type: string, format: date-time }
       responses:
         "200":
           description: Message page
+          headers:
+            ETag:
+              schema: { type: string }
+              description: max(created_at) + count
           content:
             application/json:
               schema:
@@ -91,12 +124,20 @@ paths:
                   next_cursor:
                     type: string
                     nullable: true
+        "304":
+          description: Not modified
+          headers:
+            ETag:
+              schema: { type: string }
+        "400": { description: Missing tenant header or invalid before cursor }
         "404": { description: Conversation not in this tenant }
+        "429": { description: Rate limited }
   /api/astra-connect/v1/conversations/{id}/takeover:
     post:
       operationId: takeoverConversation
       summary: Hand thread to human (stop AI)
       parameters:
+        - $ref: "#/components/parameters/AstraTenantHeader"
         - name: id
           in: path
           required: true
@@ -117,12 +158,15 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/HandoffResult" }
-        "404": { description: Not found }
+        "400": { description: Missing X-Astra-Tenant }
+        "404": { description: Not found or tenant mismatch }
+        "429": { description: Rate limited (120/min handoff) }
   /api/astra-connect/v1/conversations/{id}/handback:
     post:
       operationId: handbackConversation
       summary: Resume AI on a thread
       parameters:
+        - $ref: "#/components/parameters/AstraTenantHeader"
         - name: id
           in: path
           required: true
@@ -143,7 +187,9 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/HandoffResult" }
-        "404": { description: Not found }
+        "400": { description: Missing X-Astra-Tenant }
+        "404": { description: Not found or tenant mismatch }
+        "429": { description: Rate limited (120/min handoff) }
 components:
   securitySchemes:
     AstraHmac:
@@ -152,19 +198,36 @@ components:
       name: X-Astra-Signature
       description: |
         Pair with X-Astra-Timestamp. Signature is sha256=<hex> over
-        `${timestamp}.${payload}` where payload is path+query for GET
-        and the raw JSON body for POST.
+        `${timestamp}.${pathname}${search}.${tenant}` for GET and
+        `${timestamp}.${rawBody}` for POST.
+    AstraTenant:
+      type: apiKey
+      in: header
+      name: X-Astra-Tenant
+      description: Must match tenant_id in the query (GET) or JSON body (POST).
   parameters:
     TenantId:
       name: tenant_id
       in: query
       required: true
       schema: { type: string }
+    AstraTenantHeader:
+      name: X-Astra-Tenant
+      in: header
+      required: true
+      schema: { type: string }
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      schema: { type: string }
+      description: Return 304 when equal to the current collection ETag
   schemas:
     Conversation:
       type: object
       required:
         - id
+        - tenant_id
         - astra_conversation_id
         - employee_id
         - status
@@ -177,6 +240,7 @@ components:
         - contact
       properties:
         id: { type: string, format: uuid }
+        tenant_id: { type: string }
         astra_conversation_id: { type: string, nullable: true }
         employee_id: { type: string, nullable: true }
         status: { type: string, enum: [open, pending, closed] }
@@ -203,6 +267,7 @@ components:
       type: object
       required:
         - id
+        - tenant_id
         - direction
         - type
         - text
@@ -215,6 +280,7 @@ components:
         - whatsapp_message_id
       properties:
         id: { type: string, format: uuid }
+        tenant_id: { type: string }
         direction: { type: string, enum: [inbound, outbound] }
         type: { type: string }
         text: { type: string, nullable: true }

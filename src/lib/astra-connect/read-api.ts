@@ -61,6 +61,8 @@ export function handoffStateFromRow(row: {
 
 export interface ConnectConversationItem {
   id: string
+  /** Connect tenant that owns this conversation (CHAT-04b). */
+  tenant_id: string
   astra_conversation_id: string | null
   employee_id: string | null
   status: string
@@ -145,7 +147,9 @@ export async function listConnectConversations(args: {
 
   const rows = (data ?? []) as Record<string, unknown>[]
   const page = rows.slice(0, limit)
-  const items = page.map((row) => mapConversationRow(row, args.ctx.employeeId))
+  const items = page.map((row) =>
+    mapConversationRow(row, args.ctx.employeeId, args.ctx.tenantId),
+  )
   const next =
     rows.length > limit
       ? encodeCursor({
@@ -157,9 +161,77 @@ export async function listConnectConversations(args: {
   return { items, next_cursor: next }
 }
 
+/**
+ * ETag for a conversation list under the same filters: max(updated_at) + count.
+ * Returns a quoted strong ETag, e.g. `"2026-10-27T17:00:00.000Z:12"`.
+ */
+export async function conversationListEtag(args: {
+  ctx: ConnectTenantContext
+  phoneNumberId?: string | null
+  employeeId?: string | null
+  status?: string | null
+  updatedSince?: string | null
+}): Promise<string> {
+  if (
+    args.phoneNumberId &&
+    args.ctx.phoneNumberId &&
+    args.phoneNumberId !== args.ctx.phoneNumberId
+  ) {
+    return buildCollectionEtag(null, 0)
+  }
+
+  let q = args.ctx.db
+    .from('conversations')
+    .select('updated_at', { count: 'exact' })
+    .eq('account_id', args.ctx.accountId)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+
+  if (args.status) q = q.eq('status', args.status)
+  if (args.updatedSince) q = q.gte('updated_at', args.updatedSince)
+  if (args.employeeId) q = q.eq('astra_employee_id', args.employeeId)
+
+  const { data, count, error } = await q
+  if (error) {
+    console.error('[astra-connect read] conversation etag:', error)
+    return buildCollectionEtag(null, 0)
+  }
+  const maxUpdated =
+    Array.isArray(data) && data[0] && typeof data[0].updated_at === 'string'
+      ? data[0].updated_at
+      : null
+  return buildCollectionEtag(maxUpdated, count ?? 0)
+}
+
+export function buildCollectionEtag(
+  maxTimestamp: string | null,
+  count: number,
+): string {
+  return `"${maxTimestamp ?? '0'}:${count}"`
+}
+
+/** Compare If-None-Match to an ETag (strips W/ prefix and quotes). */
+export function etagMatches(
+  ifNoneMatch: string | null,
+  etag: string,
+): boolean {
+  if (!ifNoneMatch) return false
+  const normalize = (v: string) =>
+    v
+      .trim()
+      .replace(/^W\//i, '')
+      .replace(/^"|"$/g, '')
+  const want = normalize(etag)
+  return ifNoneMatch
+    .split(',')
+    .map((p) => normalize(p))
+    .some((p) => p === '*' || p === want)
+}
+
 function mapConversationRow(
   row: Record<string, unknown>,
   fallbackEmployeeId: string | null,
+  tenantId: string,
 ): ConnectConversationItem {
   const contactRaw = row.contact as
     | Record<string, unknown>
@@ -179,6 +251,7 @@ function mapConversationRow(
 
   return {
     id: String(row.id),
+    tenant_id: tenantId,
     astra_conversation_id:
       typeof row.astra_conversation_id === 'string'
         ? row.astra_conversation_id
@@ -228,6 +301,8 @@ export async function getTenantConversation(
 
 export interface ConnectMessageItem {
   id: string
+  /** Connect tenant that owns this message's conversation (CHAT-04b). */
+  tenant_id: string
   direction: 'inbound' | 'outbound'
   type: string
   text: string | null
@@ -243,6 +318,29 @@ export interface ConnectMessageItem {
   whatsapp_message_id: string | null
 }
 
+/**
+ * Resolve the messages `before` param:
+ * - opaque keyset cursor (preferred for older pages)
+ * - or ISO-8601 upper bound on created_at
+ */
+export function resolveMessagesBefore(
+  before: string | null | undefined,
+):
+  | { kind: 'cursor'; updatedAt: string; id: string }
+  | { kind: 'iso'; value: string }
+  | { kind: 'none' }
+  | { kind: 'invalid' } {
+  if (!before || !before.trim()) return { kind: 'none' }
+  const trimmed = before.trim()
+  const asCursor = decodeCursor(trimmed)
+  if (asCursor) return { kind: 'cursor', ...asCursor }
+  // Loose ISO check — require a parseable date with a year prefix.
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed) && !Number.isNaN(Date.parse(trimmed))) {
+    return { kind: 'iso', value: trimmed }
+  }
+  return { kind: 'invalid' }
+}
+
 export async function listConnectMessages(args: {
   ctx: ConnectTenantContext
   conversationId: string
@@ -250,12 +348,25 @@ export async function listConnectMessages(args: {
   limit?: number
   before?: string | null
   after?: string | null
-}): Promise<{ items: ConnectMessageItem[]; next_cursor: string | null } | null> {
+}): Promise<
+  | { items: ConnectMessageItem[]; next_cursor: string | null }
+  | null
+  | { error: 'invalid_before' }
+> {
   const conv = await getTenantConversation(args.ctx, args.conversationId)
   if (!conv) return null
 
   const limit = Math.min(MAX_LIMIT, args.limit ?? 50)
-  const cursor = decodeCursor(args.cursor ?? null)
+  // Prefer explicit `before` cursor for older pages; `cursor` is an alias.
+  const beforeResolved = resolveMessagesBefore(args.before)
+  if (beforeResolved.kind === 'invalid') return { error: 'invalid_before' }
+  const legacyCursor = decodeCursor(args.cursor ?? null)
+  const keyset =
+    beforeResolved.kind === 'cursor'
+      ? beforeResolved
+      : legacyCursor
+        ? { updatedAt: legacyCursor.updatedAt, id: legacyCursor.id }
+        : null
 
   let q = args.ctx.db
     .from('messages')
@@ -267,11 +378,12 @@ export async function listConnectMessages(args: {
     .order('id', { ascending: false })
     .limit(limit + 1)
 
-  if (args.before) q = q.lt('created_at', args.before)
+  if (beforeResolved.kind === 'iso') q = q.lt('created_at', beforeResolved.value)
   if (args.after) q = q.gt('created_at', args.after)
-  if (cursor) {
+  if (keyset) {
+    // Stable older-page keyset: (created_at, id) < cursor, newest first.
     q = q.or(
-      `created_at.lt.${cursor.updatedAt},and(created_at.eq.${cursor.updatedAt},id.lt.${cursor.id})`,
+      `created_at.lt.${keyset.updatedAt},and(created_at.eq.${keyset.updatedAt},id.lt.${keyset.id})`,
     )
   }
 
@@ -283,7 +395,9 @@ export async function listConnectMessages(args: {
 
   const rows = (data ?? []) as Record<string, unknown>[]
   const page = rows.slice(0, limit)
-  const items = page.map((row) => mapMessageRow(row, args.ctx.accountId))
+  const items = page.map((row) =>
+    mapMessageRow(row, args.ctx.accountId, args.ctx.tenantId),
+  )
   const next =
     rows.length > limit
       ? encodeCursor({
@@ -295,9 +409,50 @@ export async function listConnectMessages(args: {
   return { items, next_cursor: next }
 }
 
+/**
+ * ETag for a message list: max(created_at) + count for the conversation.
+ */
+export async function messageListEtag(args: {
+  ctx: ConnectTenantContext
+  conversationId: string
+  before?: string | null
+  after?: string | null
+}): Promise<string | null> {
+  const conv = await getTenantConversation(args.ctx, args.conversationId)
+  if (!conv) return null
+
+  let q = args.ctx.db
+    .from('messages')
+    .select('created_at', { count: 'exact' })
+    .eq('conversation_id', args.conversationId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+
+  const beforeResolved = resolveMessagesBefore(args.before)
+  if (beforeResolved.kind === 'iso') q = q.lt('created_at', beforeResolved.value)
+  if (beforeResolved.kind === 'cursor') {
+    q = q.or(
+      `created_at.lt.${beforeResolved.updatedAt},and(created_at.eq.${beforeResolved.updatedAt},id.lt.${beforeResolved.id})`,
+    )
+  }
+  if (args.after) q = q.gt('created_at', args.after)
+
+  const { data, count, error } = await q
+  if (error) {
+    console.error('[astra-connect read] message etag:', error)
+    return buildCollectionEtag(null, 0)
+  }
+  const maxCreated =
+    Array.isArray(data) && data[0] && typeof data[0].created_at === 'string'
+      ? data[0].created_at
+      : null
+  return buildCollectionEtag(maxCreated, count ?? 0)
+}
+
 function mapMessageRow(
   row: Record<string, unknown>,
   accountId: string,
+  tenantId: string,
 ): ConnectMessageItem {
   const senderType = String(row.sender_type ?? 'customer')
   const direction: 'inbound' | 'outbound' =
@@ -345,6 +500,7 @@ function mapMessageRow(
 
   return {
     id: String(row.id),
+    tenant_id: tenantId,
     direction,
     type: String(row.content_type ?? 'text'),
     text: typeof row.content_text === 'string' ? row.content_text : null,

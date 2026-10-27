@@ -12,22 +12,33 @@ Every request must carry:
 ```
 X-Astra-Timestamp: <unix seconds>
 X-Astra-Signature: sha256=<hex>
+X-Astra-Tenant: <tenant_id>
 ```
 
 Hex may be lowercase or uppercase. Timestamps older/newer than **300
 seconds** are rejected.
 
+`X-Astra-Tenant` is **required** on every `/api/astra-connect/v1/*` call.
+It must equal the `tenant_id` query parameter (GET) or JSON body field
+(POST). A missing header → **400**. A mismatch (cross-tenant probe) →
+**404**.
+
 ### Signed message
 
-| Method | Signed payload |
+| Method | Signed payload (after `${timestamp}.`) |
 |---|---|
-| `GET` / `HEAD` | `${timestamp}.${pathname}${search}` |
-| `POST` (and other bodies) | `${timestamp}.${rawBody}` |
+| `GET` / `HEAD` | `${pathname}${search}.${tenant}` |
+| `POST` (and other bodies) | `${rawBody}` |
+
+The tenant value in the GET signed string is the `X-Astra-Tenant`
+header (which must already match `tenant_id` in the query). POST bodies
+are signed as-is; the tenant header is still required and must match
+`tenant_id` in the JSON.
 
 Example GET signing string:
 
 ```
-1710000000./api/astra-connect/v1/conversations?tenant_id=t_abc&employee_id=emp_1&limit=50
+1710000000./api/astra-connect/v1/conversations?tenant_id=t_abc&employee_id=emp_1&limit=50.t_abc
 ```
 
 Secret resolution (first match wins for outbound; all accepted for verify):
@@ -41,7 +52,26 @@ probe each other.
 
 ## Rate limit
 
-**120 requests / minute / tenant**. Over limit → `429` with `Retry-After`.
+| Surface | Budget |
+|---|---|
+| Reads (`GET` conversations / messages) | **600 / minute / tenant** |
+| Takeover / handback (`POST`) | **120 / minute / tenant** |
+
+`304 Not Modified` responses consume **0.25** of a read unit. Over limit
+→ `429` with `Retry-After`.
+
+## Conditional requests (ETag)
+
+`GET` conversations and `GET` messages support:
+
+```
+If-None-Match: <ETag from a prior response>
+```
+
+The `ETag` is derived from **max timestamp + count** for the filtered
+collection (`max(updated_at)` for conversations, `max(created_at)` for
+messages). When nothing changed the API returns **304** with the same
+`ETag` and an empty body.
 
 ---
 
@@ -66,6 +96,7 @@ probe each other.
   "conversations": [
     {
       "id": "11111111-1111-1111-1111-111111111111",
+      "tenant_id": "t_abc",
       "astra_conversation_id": "conv_abc",
       "employee_id": "emp_1",
       "status": "open",
@@ -86,9 +117,10 @@ probe each other.
 }
 ```
 
-`handoff` is `"ai"` or `"human"`. `employee_id` comes from the
-conversation row, falling back to the number's
-`whatsapp_config.astra_employee_id`.
+Headers include `ETag`. `handoff` is `"ai"` or `"human"`. `employee_id`
+comes from the conversation row, falling back to the number's
+`whatsapp_config.astra_employee_id`. Every conversation object includes
+`tenant_id`.
 
 ---
 
@@ -99,12 +131,14 @@ conversation row, falling back to the number's
 | Param | Required | Notes |
 |---|---|---|
 | `tenant_id` | yes | |
-| `cursor` | no | |
+| `before` | no | Preferred **older-page cursor**: opaque keyset from `next_cursor`, or an ISO-8601 upper bound on `created_at` |
+| `cursor` | no | Alias for an opaque keyset cursor (same encoding as `next_cursor`) |
 | `limit` | no | Default 50, max 100 |
-| `before` | no | ISO upper bound on `created_at` |
 | `after` | no | ISO lower bound on `created_at` |
 
-Cross-tenant `:id` → **404**.
+Ordering is **newest first**, stable by `(created_at DESC, id DESC)`.
+Pass the previous page's `next_cursor` as `before` to load older
+messages. Cross-tenant `:id` → **404**.
 
 ### Response `200`
 
@@ -113,6 +147,7 @@ Cross-tenant `:id` → **404**.
   "messages": [
     {
       "id": "22222222-2222-2222-2222-222222222222",
+      "tenant_id": "t_abc",
       "direction": "inbound",
       "type": "text",
       "text": "Hello",
@@ -126,6 +161,7 @@ Cross-tenant `:id` → **404**.
     },
     {
       "id": "33333333-3333-3333-3333-333333333333",
+      "tenant_id": "t_abc",
       "direction": "outbound",
       "type": "text",
       "text": "Hi Priya — how can I help?",
@@ -142,8 +178,8 @@ Cross-tenant `:id` → **404**.
 }
 ```
 
-Media, when present, uses short-lived signed URLs from
-`GET /api/astra-connect/media/[token]` (existing route).
+Every message object includes `tenant_id`. Media, when present, uses
+short-lived signed URLs from `GET /api/astra-connect/media/[token]`.
 
 `sender.kind` is `contact` | `human` | `ai`. Human senders may include
 `member_id`.

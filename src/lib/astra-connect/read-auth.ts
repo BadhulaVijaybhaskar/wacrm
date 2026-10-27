@@ -4,12 +4,12 @@
  * Headers:
  *   X-Astra-Timestamp: <unix seconds>
  *   X-Astra-Signature: sha256=<hex>   (lowercase or uppercase hex)
+ *   X-Astra-Tenant: <tenant_id>       (required on every v1 call)
  *
  * Signed message:
- *   POST/PUT/PATCH/DELETE: `${timestamp}.${rawBody}`
- *   GET/HEAD:              `${timestamp}.${pathAndQuery}`
- *     where pathAndQuery is pathname + search (e.g.
- *     `/api/astra-connect/v1/conversations?tenant_id=t1&limit=50`)
+ *   GET/HEAD: `${timestamp}.${pathname}${search}.${tenant}`
+ *   POST/…:   `${timestamp}.${rawBody}`
+ *     (X-Astra-Tenant is still required on POST and must match body.tenant_id)
  *
  * Secret resolution: per-tenant current (+ previous within 24h rotation
  * window), then global WACRM_ADAPTER_SECRET.
@@ -24,7 +24,12 @@ import {
 } from './secrets'
 import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit'
 
-export const CONNECT_READ_RATE = { limit: 120, windowMs: 60_000 } as const
+/** Read endpoints (conversations / messages): 600/min per tenant. */
+export const CONNECT_READ_RATE = { limit: 600, windowMs: 60_000 } as const
+/** Takeover / handback: 120/min per tenant. */
+export const CONNECT_HANDOFF_RATE = { limit: 120, windowMs: 60_000 } as const
+/** 304 Not Modified responses consume a quarter of a read unit. */
+export const CONNECT_READ_NOT_MODIFIED_COST = 0.25
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _admin: any = null
@@ -47,14 +52,26 @@ export type ConnectTenantContext = {
   db: any
 }
 
+export type ConnectRateBucket = 'read' | 'handoff' | 'none'
+
+/**
+ * Build the payload portion of the HMAC signed string (everything after
+ * `${timestamp}.`).
+ *
+ * GET/HEAD: path + query + `.` + tenant header value.
+ * POST: raw body only (tenant is NOT appended, but the header is still required).
+ */
 export function connectSignedPayload(
   request: Request,
   rawBody: string,
+  tenantId?: string,
 ): string {
   const method = request.method.toUpperCase()
   if (method === 'GET' || method === 'HEAD') {
     const url = new URL(request.url)
-    return `${url.pathname}${url.search}`
+    const pathAndQuery = `${url.pathname}${url.search}`
+    const tenant = (tenantId ?? '').trim()
+    return tenant ? `${pathAndQuery}.${tenant}` : pathAndQuery
   }
   return rawBody
 }
@@ -69,6 +86,13 @@ export function readAstraHeaders(request: Request): {
   const timestamp = Number(tsRaw)
   if (!Number.isFinite(timestamp)) return null
   return { timestamp, signature }
+}
+
+export function readAstraTenantHeader(request: Request): string | null {
+  const raw = request.headers.get('x-astra-tenant')
+  if (raw == null) return null
+  const trimmed = raw.trim()
+  return trimmed.length > 0 ? trimmed : null
 }
 
 export function verifyConnectRequest(args: {
@@ -141,14 +165,65 @@ export function tenantSecretsFromRow(row: {
   return resolveAdapterSecrets(stored).accepted
 }
 
+export function consumeConnectRateLimit(args: {
+  tenantId: string
+  bucket: Exclude<ConnectRateBucket, 'none'>
+  cost?: number
+}): ReturnType<typeof checkRateLimit> {
+  const rate =
+    args.bucket === 'handoff' ? CONNECT_HANDOFF_RATE : CONNECT_READ_RATE
+  return checkRateLimit(
+    `astra-connect-${args.bucket}:${args.tenantId}`,
+    rate,
+    args.cost ?? 1,
+  )
+}
+
+/**
+ * Authenticate a Connect v1 request.
+ *
+ * @param rateLimit When `'none'`, skip rate limiting (caller charges after
+ *   knowing whether the response is 200 vs 304). Default `'read'`.
+ */
 export async function authenticateConnectRequest(args: {
   request: Request
   tenantId: string
   rawBody?: string
+  rateLimit?: ConnectRateBucket
 }): Promise<
   | { ok: true; ctx: ConnectTenantContext }
   | { ok: false; response: NextResponse }
 > {
+  const headerTenant = readAstraTenantHeader(args.request)
+  if (!headerTenant) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: 'Missing X-Astra-Tenant' },
+        { status: 400 },
+      ),
+    }
+  }
+
+  const queryOrBodyTenant = args.tenantId.trim()
+  if (!queryOrBodyTenant) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: 'tenant_id is required' },
+        { status: 400 },
+      ),
+    }
+  }
+
+  // Cross-tenant probe: header disagrees with query/body → 404 (never 403).
+  if (headerTenant !== queryOrBodyTenant) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: 'Not found' }, { status: 404 }),
+    }
+  }
+
   const headers = readAstraHeaders(args.request)
   if (!headers) {
     return {
@@ -160,7 +235,7 @@ export async function authenticateConnectRequest(args: {
     }
   }
 
-  const ctx = await loadTenantByConnectId(args.tenantId)
+  const ctx = await loadTenantByConnectId(queryOrBodyTenant)
   if (!ctx) {
     // Do not reveal whether the tenant exists vs bad auth — 404.
     return {
@@ -185,7 +260,11 @@ export async function authenticateConnectRequest(args: {
     }
   }
 
-  const payload = connectSignedPayload(args.request, args.rawBody ?? '')
+  const payload = connectSignedPayload(
+    args.request,
+    args.rawBody ?? '',
+    headerTenant,
+  )
   const valid = verifyConnectRequest({
     signature: headers.signature,
     payload,
@@ -202,12 +281,15 @@ export async function authenticateConnectRequest(args: {
     }
   }
 
-  const limit = checkRateLimit(
-    `astra-connect-read:${ctx.tenantId}`,
-    CONNECT_READ_RATE,
-  )
-  if (!limit.success) {
-    return { ok: false, response: rateLimitResponse(limit) }
+  const bucket = args.rateLimit ?? 'read'
+  if (bucket !== 'none') {
+    const limit = consumeConnectRateLimit({
+      tenantId: ctx.tenantId,
+      bucket,
+    })
+    if (!limit.success) {
+      return { ok: false, response: rateLimitResponse(limit) }
+    }
   }
 
   return { ok: true, ctx }

@@ -57,11 +57,17 @@ function sweepExpired(now: number) {
   }
 }
 
+/**
+ * @param cost How much of the budget this call consumes (default 1).
+ *   Fractional costs are allowed (e.g. 0.25 for cheap 304 responses).
+ */
 export function checkRateLimit(
   key: string,
   { limit, windowMs }: RateLimitOptions,
+  cost = 1,
 ): RateLimitResult {
   const now = Date.now();
+  const spend = Number.isFinite(cost) && cost > 0 ? cost : 1;
 
   callsSinceSweep += 1;
   if (callsSinceSweep >= LIGHT_SWEEP_EVERY) {
@@ -72,18 +78,23 @@ export function checkRateLimit(
   const entry = buckets.get(key);
 
   if (!entry || entry.resetAt <= now) {
-    buckets.set(key, { count: 1, resetAt: now + windowMs });
-    return { success: true, remaining: limit - 1, reset: now + windowMs, limit };
+    buckets.set(key, { count: spend, resetAt: now + windowMs });
+    return {
+      success: true,
+      remaining: Math.max(0, limit - spend),
+      reset: now + windowMs,
+      limit,
+    };
   }
 
-  if (entry.count >= limit) {
+  if (entry.count + spend > limit) {
     return { success: false, remaining: 0, reset: entry.resetAt, limit };
   }
 
-  entry.count += 1;
+  entry.count += spend;
   return {
     success: true,
-    remaining: limit - entry.count,
+    remaining: Math.max(0, limit - entry.count),
     reset: entry.resetAt,
     limit,
   };
