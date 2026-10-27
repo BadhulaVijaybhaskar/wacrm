@@ -155,7 +155,10 @@
       "noMessagesYet": "Nenhuma mensagem ainda",
       "unknown": "Desconhecido",
       "filterMine": "Minhas",
-      "filterUnassigned": "Não atribuídas"
+      "filterUnassigned": "Não atribuídas",
+      "filterWhatsapp": "WhatsApp",
+      "filterInstagram": "Instagram",
+      "filterMessenger": "Messenger"
     },
     "messageThread": {
       "backToConversations": "Voltar às conversas",

@@ -111,6 +111,7 @@ export async function middleware(request: NextRequest) {
       '/api/integrations/razorpay/webhook',
       '/api/integrations/stripe/webhook',
       '/api/integrations/google_sheets/cron',
+      '/api/integrations/meta-messaging/webhook',
     ]
     const isPublic = publicApiPrefixes.some(
       (prefix) => path === prefix || path.startsWith(prefix),

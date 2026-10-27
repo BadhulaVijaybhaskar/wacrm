@@ -11,8 +11,13 @@ import {
   type AssignmentFilterMode,
 } from "@/lib/inbox/conversations";
 import { cn } from "@/lib/utils";
-import type { Conversation, ConversationStatus, Tag } from "@/types";
-import { Search, ChevronDown, X } from "lucide-react";
+import type {
+  Conversation,
+  ConversationStatus,
+  MessagingChannel,
+  Tag,
+} from "@/types";
+import { Search, ChevronDown, X, Instagram, MessageCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useTranslations } from "next-intl";
 import { useAuth } from "@/hooks/use-auth";
@@ -52,7 +57,18 @@ type InboxFilter =
   | ConversationStatus
   | "all"
   | "unread"
-  | AssignmentFilterMode;
+  | AssignmentFilterMode
+  | `channel:${MessagingChannel}`;
+
+function ChannelIcon({ channel }: { channel?: MessagingChannel }) {
+  if (channel === "instagram") {
+    return <Instagram className="size-3.5 shrink-0 text-pink-600" aria-label="Instagram" />;
+  }
+  if (channel === "messenger") {
+    return <MessageCircle className="size-3.5 shrink-0 text-blue-600" aria-label="Messenger" />;
+  }
+  return null;
+}
 
 export function ConversationList({
   activeConversationId,
@@ -72,6 +88,9 @@ export function ConversationList({
     { label: t("filterOpen"), value: "open" },
     { label: t("filterPending"), value: "pending" },
     { label: t("filterClosed"), value: "closed" },
+    { label: t("filterWhatsapp"), value: "channel:whatsapp" },
+    { label: t("filterInstagram"), value: "channel:instagram" },
+    { label: t("filterMessenger"), value: "channel:messenger" },
   ], [t]);
 
   const [search, setSearch] = useState("");
@@ -215,6 +234,11 @@ export function ConversationList({
     } else if (filter === "mine" || filter === "unassigned") {
       result = result.filter((c) =>
         matchesAssignmentFilter(c, filter, user?.id),
+      );
+    } else if (filter.startsWith("channel:")) {
+      const channel = filter.slice("channel:".length) as MessagingChannel;
+      result = result.filter(
+        (c) => (c.channel ?? "whatsapp") === channel,
       );
     } else if (filter !== "all") {
       result = result.filter((c) => c.status === filter);
@@ -533,8 +557,9 @@ function ConversationItem({
       {/* Content */}
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <span className="truncate text-sm font-medium text-foreground">
-            {displayName}
+          <span className="flex min-w-0 items-center gap-1.5 truncate text-sm font-medium text-foreground">
+            <ChannelIcon channel={conversation.channel} />
+            <span className="truncate">{displayName}</span>
           </span>
           <span className="shrink-0 text-[10px] text-muted-foreground">{timeAgo}</span>
         </div>
