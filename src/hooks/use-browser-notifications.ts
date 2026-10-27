@@ -105,7 +105,7 @@ export function useBrowserNotifications(): void {
           // One alert per conversation: a second message from the same
           // customer replaces the first instead of stacking.
           tag: msg.conversation_id,
-          icon: "/icon",
+          icon: "/icons/icon-192.png",
         });
         notification.onclick = () => {
           window.focus();

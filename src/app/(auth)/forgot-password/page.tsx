@@ -1,24 +1,24 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import Link from "next/link";
-import { useTranslations } from "next-intl";
-import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { useState } from 'react';
+import Link from 'next/link';
+import { useTranslations } from 'next-intl';
+import { createClient } from '@/lib/supabase/client';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { CheckCircle, ArrowLeft } from "lucide-react";
+} from '@/components/ui/card';
+import { CheckCircle, ArrowLeft } from 'lucide-react';
 
 export default function ForgotPasswordPage() {
-  const t = useTranslations("ForgotPasswordPage");
-  const [email, setEmail] = useState("");
+  const t = useTranslations('ForgotPasswordPage');
+  const [email, setEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -45,17 +45,15 @@ export default function ForgotPasswordPage() {
 
   if (success) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4">
-        <Card className="w-full max-w-md border-border bg-card">
-          <CardHeader className="items-center text-center">
-            <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
-              <CheckCircle className="h-6 w-6 text-primary" />
+      <div className="acl-wrap">
+        <Card className="acl-card !block !gap-0 !py-0">
+          <CardHeader className="items-center px-0 text-center">
+            <div className="bg-primary/10 mb-2 flex h-12 w-12 items-center justify-center rounded-xl">
+              <CheckCircle className="text-primary h-6 w-6" />
             </div>
-            <CardTitle className="text-xl text-foreground">
-              {t("checkEmailTitle")}
-            </CardTitle>
-            <CardDescription className="text-muted-foreground">
-              {t.rich("checkEmailDesc", {
+            <CardTitle className="acl-title">{t('checkEmailTitle')}</CardTitle>
+            <CardDescription className="acl-sub">
+              {t.rich('checkEmailDesc', {
                 email,
                 strong: (chunks) => (
                   <span className="text-foreground">{chunks}</span>
@@ -63,14 +61,9 @@ export default function ForgotPasswordPage() {
               })}
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-0">
             <Link href="/login">
-              <Button
-                variant="outline"
-                className="w-full border-border text-muted-foreground hover:bg-muted hover:text-foreground"
-              >
-                {t("backToSignIn")}
-              </Button>
+              <Button className="acl-btn">{t('backToSignIn')}</Button>
             </Link>
           </CardContent>
         </Card>
@@ -79,63 +72,52 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <Card className="w-full max-w-md border-border bg-card">
-        <CardHeader className="items-center text-center">
+    <div className="acl-wrap">
+      <Card className="acl-card !block !gap-0 !py-0">
+        <CardHeader className="items-center px-0 text-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/brand/astra-chat-mark.svg"
-            alt=""
-            width={48}
-            height={48}
-            className="mb-2 h-12 w-12 rounded-xl"
+            src="/brand/astra-chat-lockup-275.png"
+            alt="Astra Chat"
+            width={275}
+            height={65}
+            className="acl-lockup mb-5"
           />
-          <p className="text-sm font-semibold tracking-wide text-foreground">
-            Astra Chat
-          </p>
-          <CardTitle className="text-xl text-foreground">{t("title")}</CardTitle>
-          <CardDescription className="text-muted-foreground">
-            {t("desc")}
-          </CardDescription>
+          <CardTitle className="acl-title">{t('title')}</CardTitle>
+          <CardDescription className="acl-sub">{t('desc')}</CardDescription>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleReset} className="flex flex-col gap-4">
+        <CardContent className="px-0">
+          <form onSubmit={handleReset} className="acl-form">
             {error && (
               <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
                 {error}
               </div>
             )}
 
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="email" className="text-muted-foreground">
-                {t("emailLabel")}
-              </Label>
+            <div className="acl-field">
+              <Label htmlFor="email">{t('emailLabel')}</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder={t("emailPlaceholder")}
+                placeholder={t('emailPlaceholder')}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="border-border bg-muted text-foreground placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/20"
+                className="acl-input"
               />
             </div>
 
-            <Button
-              type="submit"
-              disabled={loading}
-              className="mt-2 h-10 w-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-            >
-              {loading ? t("sending") : t("sendLink")}
+            <Button type="submit" disabled={loading} className="acl-btn">
+              {loading ? t('sending') : t('sendLink')}
             </Button>
           </form>
 
           <Link
             href="/login"
-            className="mt-6 flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+            className="text-muted-foreground hover:text-foreground mt-6 flex items-center justify-center gap-2 text-sm"
           >
             <ArrowLeft className="h-4 w-4" />
-            {t("backToSignIn")}
+            {t('backToSignIn')}
           </Link>
         </CardContent>
       </Card>

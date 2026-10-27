@@ -1,20 +1,20 @@
-"use client";
+'use client';
 
-import { Suspense, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import Link from "next/link";
-import { useTranslations } from "next-intl";
-import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Suspense, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import { useTranslations } from 'next-intl';
+import { createClient } from '@/lib/supabase/client';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from '@/components/ui/card';
 // `useSearchParams` opts the component out of static prerendering
 // unless it sits under a Suspense boundary. We split the form into
 // a child component so the outer page can prerender the chrome
@@ -33,11 +33,11 @@ function LoginPageInner() {
   // Forwarded from `/join/<token>` when the visitor already has an
   // account. After a successful sign-in we send them to the join
   // page to accept rather than to /dashboard.
-  const inviteToken = searchParams.get("invite");
-  const t = useTranslations("LoginPage");
+  const inviteToken = searchParams.get('invite');
+  const t = useTranslations('LoginPage');
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const supabase = createClient();
@@ -68,46 +68,39 @@ function LoginPageInner() {
     // reload the invite-accept flow already uses in join/[token].
     const destination = inviteToken
       ? `/join/${encodeURIComponent(inviteToken)}`
-      : "/dashboard";
+      : '/dashboard';
     window.location.href = destination;
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <Card className="w-full max-w-md border-border bg-card">
-        <CardHeader className="items-center text-center">
+    <div className="acl-wrap">
+      <Card className="acl-card !block !gap-0 !py-0">
+        <CardHeader className="items-center px-0 text-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/brand/astra-chat-mark.svg"
-            alt=""
-            width={48}
-            height={48}
-            className="mb-2 h-12 w-12 rounded-xl"
+            src="/brand/astra-chat-lockup-275.png"
+            alt="Astra Chat"
+            width={275}
+            height={65}
+            className="acl-lockup mb-5"
           />
-          <p className="text-sm font-semibold tracking-wide text-foreground">
-            Astra Chat
-          </p>
-          <CardTitle className="text-xl text-foreground">
+          <CardTitle className="acl-title">
             {inviteToken ? t('titleAccept') : t('titleWelcome')}
           </CardTitle>
-          <CardDescription className="text-muted-foreground">
-            {inviteToken
-              ? t('descAccept')
-              : t('descWelcome')}
+          <CardDescription className="acl-sub">
+            {inviteToken ? t('descAccept') : t('descWelcome')}
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleLogin} className="flex flex-col gap-4">
+        <CardContent className="px-0">
+          <form onSubmit={handleLogin} className="acl-form">
             {error && (
               <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
                 {error}
               </div>
             )}
 
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="email" className="text-muted-foreground">
-                {t('emailLabel')}
-              </Label>
+            <div className="acl-field">
+              <Label htmlFor="email">{t('emailLabel')}</Label>
               <Input
                 id="email"
                 type="email"
@@ -115,18 +108,16 @@ function LoginPageInner() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="border-border bg-muted text-foreground placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/20"
+                className="acl-input"
               />
             </div>
 
-            <div className="flex flex-col gap-2">
+            <div className="acl-field">
               <div className="flex items-center justify-between">
-                <Label htmlFor="password" className="text-muted-foreground">
-                  {t('passwordLabel')}
-                </Label>
+                <Label htmlFor="password">{t('passwordLabel')}</Label>
                 <Link
                   href="/forgot-password"
-                  className="text-sm text-primary hover:text-primary/80"
+                  className="text-primary hover:text-primary/80 text-sm"
                 >
                   {t('forgotPassword')}
                 </Link>
@@ -138,26 +129,22 @@ function LoginPageInner() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="border-border bg-muted text-foreground placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/20"
+                className="acl-input"
               />
             </div>
 
-            <Button
-              type="submit"
-              disabled={loading}
-              className="mt-2 h-10 w-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-            >
+            <Button type="submit" disabled={loading} className="acl-btn">
               {loading ? t('signingIn') : t('signIn')}
             </Button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-muted-foreground">
-            {t('noAccount')}{" "}
+          <p className="acl-toggle">
+            {t('noAccount')}{' '}
             <Link
               href={
                 inviteToken
                   ? `/signup?invite=${encodeURIComponent(inviteToken)}`
-                  : "/signup"
+                  : '/signup'
               }
               className="text-primary hover:text-primary/80"
             >

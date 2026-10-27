@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import {
   createContext,
@@ -7,35 +7,21 @@ import {
   useEffect,
   useState,
   type ReactNode,
-} from "react";
+} from 'react';
 
 import {
   DEFAULT_MODE,
   DEFAULT_THEME,
+  LEGACY_MODE_STORAGE_KEY,
+  LEGACY_STORAGE_KEY,
   MODE_STORAGE_KEY,
   STORAGE_KEY,
+  getThemeMeta,
   isMode,
   isThemeId,
   type Mode,
   type ThemeId,
-} from "@/lib/themes";
-
-/**
- * ThemeProvider — wraps the whole app, owns the two theming axes:
- *   • `theme` — the accent color (`data-theme` on <html>)
- *   • `mode`  — light / dark (`data-mode` on <html>)
- * The two are independent, so any accent renders in either mode.
- *
- * The boot script in `src/app/layout.tsx` has already applied both
- * `data-theme` and `data-mode` before React hydrates, so by the time
- * this Provider mounts the page is already painted correctly. We just
- * read what's there and keep it in sync going forward.
- *
- * Persistence is localStorage only (device-scoped). A future
- * follow-up could mirror to `profiles.preferences` for cross-device
- * sync, but a per-device choice is also defensible — your phone may
- * deserve a different theme than your laptop.
- */
+} from '@/lib/themes';
 
 interface ThemeContextValue {
   theme: ThemeId;
@@ -46,93 +32,177 @@ interface ThemeContextValue {
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
+const ACCENT_PROPERTIES = [
+  '--ac',
+  '--ac2',
+  '--acm',
+  '--ac-l',
+  '--night',
+] as const;
+
+interface StoredTheme {
+  id?: unknown;
+  dark?: unknown;
+}
+
+function readThemeRecord(): StoredTheme {
+  try {
+    const value = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
+    return value && typeof value === 'object' ? value : {};
+  } catch {
+    return {};
+  }
+}
+
+function readStoredPreferences(): { theme: ThemeId; mode: Mode } {
+  const record = readThemeRecord();
+
+  let theme: ThemeId = DEFAULT_THEME;
+  if (isThemeId(record.id)) {
+    theme = record.id;
+  } else {
+    try {
+      const legacyTheme = localStorage.getItem(LEGACY_STORAGE_KEY);
+      if (isThemeId(legacyTheme)) theme = legacyTheme;
+    } catch {
+      // Storage can be unavailable in sandboxed/private contexts.
+    }
+  }
+
+  let mode: Mode = DEFAULT_MODE;
+  try {
+    const connectMode = localStorage.getItem(MODE_STORAGE_KEY);
+    const legacyMode = localStorage.getItem(LEGACY_MODE_STORAGE_KEY);
+    if (isMode(connectMode)) {
+      mode = connectMode;
+    } else if (typeof record.dark === 'boolean') {
+      mode = record.dark ? 'dark' : 'light';
+    } else if (isMode(legacyMode)) {
+      mode = legacyMode;
+    }
+  } catch {
+    if (typeof record.dark === 'boolean') {
+      mode = record.dark ? 'dark' : 'light';
+    }
+  }
+
+  return { theme, mode };
+}
+
+function applyPreferences(theme: ThemeId, mode: Mode) {
+  const root = document.documentElement;
+  root.classList.toggle('dark', mode === 'dark');
+  root.dataset.mode = mode;
+
+  if (theme === DEFAULT_THEME) {
+    delete root.dataset.accent;
+    for (const property of ACCENT_PROPERTIES) {
+      root.style.removeProperty(property);
+    }
+    return;
+  }
+
+  const accent = getThemeMeta(theme);
+  root.dataset.accent = accent.id;
+  root.style.setProperty('--ac', accent.ac);
+  root.style.setProperty('--ac2', accent.ac2);
+  root.style.setProperty('--acm', accent.acm);
+  root.style.setProperty('--ac-l', accent.l);
+  root.style.setProperty('--night', accent.night);
+}
+
+function persistPreferences(theme: ThemeId, mode: Mode) {
+  try {
+    localStorage.setItem(MODE_STORAGE_KEY, mode);
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ id: theme, dark: mode === 'dark' })
+    );
+    // Keep older Chat builds in sync while their keys are phased out.
+    localStorage.setItem(LEGACY_STORAGE_KEY, theme);
+    localStorage.setItem(LEGACY_MODE_STORAGE_KEY, mode);
+  } catch {
+    // The in-memory choice still works when storage is unavailable.
+  }
+}
 
 function readInitialTheme(): ThemeId {
-  if (typeof window === "undefined") return DEFAULT_THEME;
-  // Whatever the boot script applied is the truth. Fall back to
-  // localStorage / default if for some reason the attribute is missing
-  // (e.g. someone bypassed the boot script in a custom layout).
-  const fromAttr = document.documentElement.dataset.theme;
+  if (typeof window === 'undefined') return DEFAULT_THEME;
+  const fromAttr = document.documentElement.dataset.accent;
   if (isThemeId(fromAttr)) return fromAttr;
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (isThemeId(stored)) return stored;
-  } catch {
-    // localStorage can throw in private-browsing / sandboxed contexts.
-  }
-  return DEFAULT_THEME;
+  return readStoredPreferences().theme;
 }
 
 function readInitialMode(): Mode {
-  if (typeof window === "undefined") return DEFAULT_MODE;
+  if (typeof window === 'undefined') return DEFAULT_MODE;
   const fromAttr = document.documentElement.dataset.mode;
   if (isMode(fromAttr)) return fromAttr;
-  try {
-    const stored = localStorage.getItem(MODE_STORAGE_KEY);
-    if (isMode(stored)) return stored;
-  } catch {
-    // localStorage can throw in private-browsing / sandboxed contexts.
-  }
-  return DEFAULT_MODE;
+  return document.documentElement.classList.contains('dark')
+    ? 'dark'
+    : readStoredPreferences().mode;
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<ThemeId>(readInitialTheme);
   const [mode, setModeState] = useState<Mode>(readInitialMode);
 
-  const setTheme = useCallback((next: ThemeId) => {
-    setThemeState(next);
-    if (typeof document !== "undefined") {
-      document.documentElement.dataset.theme = next;
-    }
-    try {
-      localStorage.setItem(STORAGE_KEY, next);
-    } catch {
-      // Same private-browsing edge case as above; the in-memory state
-      // still updates so the current tab works for the session.
-    }
-  }, []);
+  const setTheme = useCallback(
+    (next: ThemeId) => {
+      setThemeState(next);
+      applyPreferences(next, mode);
+      persistPreferences(next, mode);
+    },
+    [mode]
+  );
 
-  const setMode = useCallback((next: Mode) => {
-    setModeState(next);
-    if (typeof document !== "undefined") {
-      document.documentElement.dataset.mode = next;
-    }
-    try {
-      localStorage.setItem(MODE_STORAGE_KEY, next);
-    } catch {
-      // Same private-browsing edge case as above.
-    }
-  }, []);
+  const setMode = useCallback(
+    (next: Mode) => {
+      setModeState(next);
+      applyPreferences(theme, next);
+      persistPreferences(theme, next);
+    },
+    [theme]
+  );
 
   const toggleMode = useCallback(() => {
-    setMode(mode === "dark" ? "light" : "dark");
+    setMode(mode === 'dark' ? 'light' : 'dark');
   }, [mode, setMode]);
 
-  // Sync from other tabs — change theme or mode in tab A, tab B
-  // catches up without a refresh.
+  useEffect(() => {
+    // Replays and migrates legacy astra-chat.* preferences if the inline
+    // boot script was blocked by a restrictive browser policy.
+    applyPreferences(theme, mode);
+    persistPreferences(theme, mode);
+    // Initial values are intentionally captured once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     function onStorage(e: StorageEvent) {
-      if (e.key === STORAGE_KEY) {
-        if (isThemeId(e.newValue) && e.newValue !== theme) {
-          setThemeState(e.newValue);
-          document.documentElement.dataset.theme = e.newValue;
-        }
+      if (
+        e.key !== null &&
+        ![
+          STORAGE_KEY,
+          MODE_STORAGE_KEY,
+          LEGACY_STORAGE_KEY,
+          LEGACY_MODE_STORAGE_KEY,
+        ].includes(e.key)
+      )
         return;
-      }
-      if (e.key === MODE_STORAGE_KEY) {
-        if (isMode(e.newValue) && e.newValue !== mode) {
-          setModeState(e.newValue);
-          document.documentElement.dataset.mode = e.newValue;
-        }
-      }
+
+      const next = readStoredPreferences();
+      setThemeState(next.theme);
+      setModeState(next.mode);
+      applyPreferences(next.theme, next.mode);
     }
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, [theme, mode]);
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, mode, setMode, toggleMode }}>
+    <ThemeContext.Provider
+      value={{ theme, setTheme, mode, setMode, toggleMode }}
+    >
       {children}
     </ThemeContext.Provider>
   );
@@ -141,9 +211,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 export function useTheme(): ThemeContextValue {
   const ctx = useContext(ThemeContext);
   if (!ctx) {
-    // Fallback for components rendered outside the provider — return
-    // no-op setters so callers don't crash. The boot script still
-    // applied the right CSS attributes, so visually the page is fine.
     return {
       theme: DEFAULT_THEME,
       setTheme: () => {},

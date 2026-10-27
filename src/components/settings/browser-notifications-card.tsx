@@ -88,7 +88,7 @@ export function BrowserNotificationsCard({ className }: { className?: string }) 
     try {
       new Notification(t('testTitle'), {
         body: t('testBody'),
-        icon: '/icon',
+        icon: '/icons/icon-192.png',
         tag: 'astra-chat-test-notification',
       });
     } catch {
