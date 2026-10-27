@@ -1911,7 +1911,13 @@
       "tenantHint": "Required when the adapter is on. Copy it from Astra Connect.",
       "phoneNumberId": "WhatsApp phone number id: {id}",
       "saving": "Saving…",
-      "save": "Save"
+      "save": "Save",
+      "secretLabel": "Adapter secret",
+      "secretPlaceholder": "Optional — leave blank to use the server default",
+      "secretPlaceholderSet": "••••••••  (leave blank to keep current)",
+      "secretHint": "Per-account HMAC secret (≥16 characters). Stored encrypted. When set, it replaces the server-wide default for this workspace. Rotating keeps the previous secret valid for 24 hours.",
+      "secretClear": "Remove per-account secret (fall back to server default)",
+      "secretRotationActive": "Previous secret still accepted until {when}"
     }
   },
   "SignupPage": {

@@ -37,6 +37,9 @@ interface AstraConnectState {
   tenant_id: string | null;
   phone_number_id: string | null;
   has_whatsapp_config: boolean;
+  has_secret?: boolean;
+  rotation_active?: boolean;
+  previous_expires_at?: string | null;
 }
 
 export function AstraConnectSettings() {
@@ -48,6 +51,8 @@ export function AstraConnectSettings() {
   const [state, setState] = useState<AstraConnectState | null>(null);
   const [enabled, setEnabled] = useState(false);
   const [tenantId, setTenantId] = useState('');
+  const [secret, setSecret] = useState('');
+  const [clearSecret, setClearSecret] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -65,6 +70,8 @@ export function AstraConnectSettings() {
       setState(data);
       setEnabled(data.enabled);
       setTenantId(data.tenant_id ?? '');
+      setSecret('');
+      setClearSecret(false);
     } catch (err) {
       console.error('[AstraConnectSettings] load error:', err);
       toast.error(t('networkError'));
@@ -81,13 +88,19 @@ export function AstraConnectSettings() {
     if (!canEditSettings) return;
     setSaving(true);
     try {
+      const body: Record<string, unknown> = {
+        enabled,
+        tenant_id: tenantId.trim() || null,
+      };
+      if (clearSecret) {
+        body.secret = null;
+      } else if (secret.trim()) {
+        body.secret = secret.trim();
+      }
       const res = await fetch('/api/whatsapp/config/astra-connect', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          enabled,
-          tenant_id: tenantId.trim() || null,
-        }),
+        body: JSON.stringify(body),
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -116,6 +129,8 @@ export function AstraConnectSettings() {
       );
       setEnabled(next.enabled);
       setTenantId(next.tenant_id ?? '');
+      setSecret('');
+      setClearSecret(false);
       toast.success(t('saved'));
     } catch (err) {
       console.error('[AstraConnectSettings] save error:', err);
@@ -202,8 +217,50 @@ export function AstraConnectSettings() {
               <p className="text-xs text-muted-foreground">{t('tenantHint')}</p>
             </div>
 
-            {state?.phone_number_id ? (
-              <p className="text-xs text-muted-foreground">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="astra-connect-secret">{t('secretLabel')}</Label>
+              <Input
+                id="astra-connect-secret"
+                type="password"
+                autoComplete="new-password"
+                value={secret}
+                onChange={(e) => {
+                  setSecret(e.target.value);
+                  if (e.target.value) setClearSecret(false);
+                }}
+                placeholder={
+                  state?.has_secret
+                    ? t('secretPlaceholderSet')
+                    : t('secretPlaceholder')
+                }
+                disabled={!canEditSettings || saving || clearSecret}
+                className="border-border bg-muted"
+              />
+              <p className="text-xs text-muted-foreground">{t('secretHint')}</p>
+              {state?.has_secret ? (
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={clearSecret}
+                    onChange={(e) => {
+                      setClearSecret(e.target.checked);
+                      if (e.target.checked) setSecret('');
+                    }}
+                    disabled={!canEditSettings || saving}
+                  />
+                  {t('secretClear')}
+                </label>
+              ) : null}
+              {state?.rotation_active && state.previous_expires_at ? (
+                <p className="text-xs text-muted-foreground">
+                  {t('secretRotationActive', {
+                    when: new Date(state.previous_expires_at).toLocaleString(),
+                  })}
+                </p>
+              ) : null}
+            </div>
+
+            {state?.phone_number_id ? (              <p className="text-xs text-muted-foreground">
                 {t('phoneNumberId', { id: state.phone_number_id })}
               </p>
             ) : null}

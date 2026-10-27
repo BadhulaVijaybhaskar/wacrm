@@ -9,6 +9,10 @@
  */
 
 import type { AstraConnectAccountConfig } from './types'
+import {
+  resolveAdapterSecrets,
+  type StoredAdapterSecrets,
+} from './secrets'
 
 /** Base URL of Astra Connect (no trailing slash). */
 export function connectAdapterBaseUrl(): string | null {
@@ -17,7 +21,10 @@ export function connectAdapterBaseUrl(): string | null {
   return raw.replace(/\/+$/, '')
 }
 
-/** Shared HMAC secret. Designed so a per-account secret can replace it later. */
+/**
+ * Shared HMAC secret. Prefer an explicit per-account plaintext when
+ * provided; otherwise the global `WACRM_ADAPTER_SECRET`.
+ */
 export function adapterSecret(accountSecret?: string | null): string | null {
   const perAccount = accountSecret?.trim()
   if (perAccount && perAccount.length >= 16) return perAccount
@@ -26,8 +33,21 @@ export function adapterSecret(accountSecret?: string | null): string | null {
   return null
 }
 
+/**
+ * Env is "configured" when CONNECT_ADAPTER_URL is set and *some* signing
+ * secret is available globally. Per-account secrets alone are enough at
+ * send time via {@link resolveAccountAdapterSecret}.
+ */
 export function isAdapterEnvConfigured(): boolean {
   return Boolean(connectAdapterBaseUrl() && adapterSecret())
+}
+
+/** Resolve the outbound signing secret for a loaded account config. */
+export function resolveAccountAdapterSecret(
+  account: AstraConnectAccountConfig | null | undefined,
+): string | null {
+  if (!account) return adapterSecret()
+  return resolveAdapterSecrets(account.secrets).primary
 }
 
 /** Public site origin used for signed media URLs Connect will fetch. */
@@ -57,7 +77,9 @@ export async function loadAstraConnectAccountConfig(
 ): Promise<AstraConnectAccountConfig | null> {
   const { data, error } = await db
     .from('whatsapp_config')
-    .select('phone_number_id, astra_connect_enabled, astra_connect_tenant_id')
+    .select(
+      'phone_number_id, astra_connect_enabled, astra_connect_tenant_id, astra_connect_secret_encrypted, astra_connect_secret_previous_encrypted, astra_connect_secret_previous_expires_at',
+    )
     .eq('account_id', accountId)
     .maybeSingle()
 
@@ -72,17 +94,36 @@ export async function loadAstraConnectAccountConfig(
       ? data.astra_connect_tenant_id.trim()
       : ''
 
+  const secrets: StoredAdapterSecrets = {
+    currentEncrypted:
+      typeof data.astra_connect_secret_encrypted === 'string'
+        ? data.astra_connect_secret_encrypted
+        : null,
+    previousEncrypted:
+      typeof data.astra_connect_secret_previous_encrypted === 'string'
+        ? data.astra_connect_secret_previous_encrypted
+        : null,
+    previousExpiresAt:
+      typeof data.astra_connect_secret_previous_expires_at === 'string'
+        ? data.astra_connect_secret_previous_expires_at
+        : null,
+  }
+
   return {
     enabled: data.astra_connect_enabled === true,
     tenantId,
     phoneNumberId: String(data.phone_number_id ?? ''),
     whatsappNumber: null,
+    secrets,
   }
 }
 
 /**
  * True when this account should route inbound through Astra Connect
- * (and skip wacrm's built-in AI auto-reply).
+ * (and skip built-in AI auto-reply).
+ *
+ * Requires CONNECT_ADAPTER_URL plus either a per-account secret or the
+ * global WACRM_ADAPTER_SECRET.
  */
 export function isAstraConnectActive(
   account: AstraConnectAccountConfig | null
@@ -91,5 +132,6 @@ export function isAstraConnectActive(
   if (!account.enabled) return false
   if (!account.tenantId) return false
   if (!account.phoneNumberId) return false
-  return isAdapterEnvConfigured()
+  if (!connectAdapterBaseUrl()) return false
+  return Boolean(resolveAccountAdapterSecret(account))
 }

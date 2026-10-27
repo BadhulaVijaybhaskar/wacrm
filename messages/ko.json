@@ -1911,7 +1911,13 @@
       "tenantHint": "어댑터가 켜져 있을 때 필요합니다. Astra Connect에서 복사하세요.",
       "phoneNumberId": "WhatsApp phone number id: {id}",
       "saving": "저장 중…",
-      "save": "저장"
+      "save": "저장",
+      "secretLabel": "어댑터 시크릿",
+      "secretPlaceholder": "선택 — 비우면 서버 기본값 사용",
+      "secretPlaceholderSet": "••••••••  (비우면 현재 값 유지)",
+      "secretHint": "계정별 HMAC 시크릿(≥16자). 암호화되어 저장됩니다. 설정하면 이 워크스페이스에서 서버 전역 기본값을 대체합니다. 교체 시 이전 시크릿은 24시간 동안 유효합니다.",
+      "secretClear": "계정별 시크릿 제거(서버 기본값 사용)",
+      "secretRotationActive": "이전 시크릿은 {when}까지 유효"
     }
   },
   "SignupPage": {

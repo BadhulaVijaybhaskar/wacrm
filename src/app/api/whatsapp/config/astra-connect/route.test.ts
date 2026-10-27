@@ -62,6 +62,9 @@ describe('GET /api/whatsapp/config/astra-connect', () => {
       tenant_id: 't_abc',
       phone_number_id: '106540352242922',
       has_whatsapp_config: true,
+      has_secret: false,
+      rotation_active: false,
+      previous_expires_at: null,
     })
   })
 

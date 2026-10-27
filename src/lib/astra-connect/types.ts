@@ -109,6 +109,8 @@ export interface AstraAdapterSuccess<T> {
 
 export type AstraAdapterResult<T> = AstraAdapterSuccess<T> | AstraAdapterFailure
 
+import type { StoredAdapterSecrets } from './secrets'
+
 /** Per-account adapter settings loaded from whatsapp_config. */
 export interface AstraConnectAccountConfig {
   enabled: boolean
@@ -116,4 +118,6 @@ export interface AstraConnectAccountConfig {
   phoneNumberId: string
   /** Display / fallback WhatsApp business number when known. */
   whatsappNumber?: string | null
+  /** Encrypted per-account HMAC secret (+ optional previous during rotation). */
+  secrets?: StoredAdapterSecrets | null
 }

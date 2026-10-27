@@ -12,6 +12,7 @@ import { postSignedJson } from './client'
 import {
   isAstraConnectActive,
   loadAstraConnectAccountConfig,
+  resolveAccountAdapterSecret,
   type AdapterConfigDb,
 } from './config'
 import { buildInboundMediaRefs } from './media'
@@ -160,6 +161,7 @@ export async function dispatchInboundToAstraConnect(
     const result = await post<AstraInboundResponse>({
       path: '/api/channels/whatsapp/inbound',
       rawBody,
+      secret: resolveAccountAdapterSecret(account) ?? undefined,
     })
 
     if (!result.ok) {

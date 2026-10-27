@@ -5,7 +5,15 @@ export {
   isAstraConnectActive,
   loadAstraConnectAccountConfig,
   publicSiteOrigin,
+  resolveAccountAdapterSecret,
 } from './config'
+export {
+  buildSecretRotationUpdate,
+  encryptAdapterSecret,
+  resolveAdapterSecrets,
+  verifyWithRotatedSecrets,
+  SECRET_ROTATION_TTL_MS,
+} from './secrets'
 export { postSignedJson, ADAPTER_TIMEOUT_MS } from './client'
 export {
   buildAstraSignature,

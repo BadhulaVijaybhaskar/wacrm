@@ -1911,7 +1911,13 @@
       "tenantHint": "Obrigatório quando o adaptador está ligado. Copie-o da Astra Connect.",
       "phoneNumberId": "WhatsApp phone number id: {id}",
       "saving": "A guardar…",
-      "save": "Guardar"
+      "save": "Guardar",
+      "secretLabel": "Segredo do adaptador",
+      "secretPlaceholder": "Opcional — deixe em branco para usar o valor do servidor",
+      "secretPlaceholderSet": "••••••••  (deixe em branco para manter o atual)",
+      "secretHint": "Segredo HMAC por conta (≥16 caracteres). Guardado encriptado. Quando definido, substitui o valor global do servidor neste espaço. Na rotação, o anterior continua válido 24 horas.",
+      "secretClear": "Remover o segredo por conta (usar o do servidor)",
+      "secretRotationActive": "Segredo anterior ainda aceite até {when}"
     }
   },
   "SignupPage": {

@@ -3,12 +3,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const h = vi.hoisted(() => ({
   loadAstraConnectAccountConfig: vi.fn(),
   isAstraConnectActive: vi.fn(),
+  resolveAccountAdapterSecret: vi.fn(() => 'test-adapter-secret-16+'),
   postSignedJson: vi.fn(),
 }))
 
 vi.mock('./config', () => ({
   loadAstraConnectAccountConfig: h.loadAstraConnectAccountConfig,
   isAstraConnectActive: h.isAstraConnectActive,
+  resolveAccountAdapterSecret: h.resolveAccountAdapterSecret,
 }))
 vi.mock('./client', () => ({
   postSignedJson: h.postSignedJson,

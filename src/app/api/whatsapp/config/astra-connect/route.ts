@@ -1,15 +1,35 @@
 import { NextResponse } from 'next/server'
 import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { isAdapterEnvConfigured } from '@/lib/astra-connect'
+import { buildSecretRotationUpdate } from '@/lib/astra-connect/secrets'
 
 /**
  * GET /api/whatsapp/config/astra-connect  (admin+)
  * PATCH /api/whatsapp/config/astra-connect (admin+)
  *
- * Per-account Astra Connect adapter switch. The global env
- * (CONNECT_ADAPTER_URL + WACRM_ADAPTER_SECRET) must also be set for
- * the adapter to actually fire; this flag alone is not enough.
+ * Per-account Astra Connect adapter switch + optional per-account HMAC
+ * secret (encrypted). Global CONNECT_ADAPTER_URL is still required; the
+ * secret may be per-account or the global WACRM_ADAPTER_SECRET.
  */
+
+function secretStatus(row: {
+  astra_connect_secret_encrypted?: string | null
+  astra_connect_secret_previous_expires_at?: string | null
+} | null) {
+  const hasSecret = Boolean(row?.astra_connect_secret_encrypted)
+  const prevExp = row?.astra_connect_secret_previous_expires_at
+    ? Date.parse(row.astra_connect_secret_previous_expires_at)
+    : NaN
+  const rotationActive =
+    hasSecret && Number.isFinite(prevExp) && prevExp > Date.now()
+  return {
+    has_secret: hasSecret,
+    rotation_active: rotationActive,
+    previous_expires_at: rotationActive
+      ? row?.astra_connect_secret_previous_expires_at ?? null
+      : null,
+  }
+}
 
 export async function GET() {
   try {
@@ -17,7 +37,9 @@ export async function GET() {
 
     const { data, error } = await supabase
       .from('whatsapp_config')
-      .select('astra_connect_enabled, astra_connect_tenant_id, phone_number_id')
+      .select(
+        'astra_connect_enabled, astra_connect_tenant_id, phone_number_id, astra_connect_secret_encrypted, astra_connect_secret_previous_expires_at',
+      )
       .eq('account_id', accountId)
       .maybeSingle()
 
@@ -32,6 +54,7 @@ export async function GET() {
       tenant_id: data?.astra_connect_tenant_id ?? null,
       phone_number_id: data?.phone_number_id ?? null,
       has_whatsapp_config: Boolean(data),
+      ...secretStatus(data),
     })
   } catch (err) {
     return toErrorResponse(err)
@@ -72,9 +95,54 @@ export async function PATCH(request: Request) {
       update.astra_connect_tenant_id = tenant || null
     }
 
+    if ('secret' in body) {
+      if (body.secret !== null && typeof body.secret !== 'string') {
+        return NextResponse.json(
+          { error: 'secret must be a string or null' },
+          { status: 400 },
+        )
+      }
+      if (typeof body.secret === 'string' && body.secret.trim().length < 16) {
+        return NextResponse.json(
+          { error: 'secret must be at least 16 characters' },
+          { status: 400 },
+        )
+      }
+
+      const { data: existingSecretRow, error: existingErr } = await supabase
+        .from('whatsapp_config')
+        .select(
+          'astra_connect_secret_encrypted, astra_connect_secret_previous_encrypted, astra_connect_secret_previous_expires_at',
+        )
+        .eq('account_id', accountId)
+        .maybeSingle()
+      if (existingErr) {
+        console.error('[astra-connect config PATCH secret load]', existingErr)
+        return NextResponse.json(
+          { error: 'Failed to update config' },
+          { status: 500 },
+        )
+      }
+
+      Object.assign(
+        update,
+        buildSecretRotationUpdate(
+          typeof body.secret === 'string' ? body.secret : null,
+          {
+            currentEncrypted:
+              existingSecretRow?.astra_connect_secret_encrypted ?? null,
+            previousEncrypted:
+              existingSecretRow?.astra_connect_secret_previous_encrypted ?? null,
+            previousExpiresAt:
+              existingSecretRow?.astra_connect_secret_previous_expires_at ?? null,
+          },
+        ),
+      )
+    }
+
     if (Object.keys(update).length === 1) {
       return NextResponse.json(
-        { error: 'Provide enabled and/or tenant_id' },
+        { error: 'Provide enabled, tenant_id, and/or secret' },
         { status: 400 }
       )
     }
@@ -104,7 +172,9 @@ export async function PATCH(request: Request) {
       .from('whatsapp_config')
       .update(update)
       .eq('account_id', accountId)
-      .select('astra_connect_enabled, astra_connect_tenant_id, phone_number_id')
+      .select(
+        'astra_connect_enabled, astra_connect_tenant_id, phone_number_id, astra_connect_secret_encrypted, astra_connect_secret_previous_expires_at',
+      )
       .maybeSingle()
 
     if (error) {
@@ -123,6 +193,7 @@ export async function PATCH(request: Request) {
       enabled: data.astra_connect_enabled === true,
       tenant_id: data.astra_connect_tenant_id ?? null,
       phone_number_id: data.phone_number_id ?? null,
+      ...secretStatus(data),
     })
   } catch (err) {
     return toErrorResponse(err)

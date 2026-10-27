@@ -9,6 +9,7 @@ import { postSignedJson } from './client'
 import {
   isAstraConnectActive,
   loadAstraConnectAccountConfig,
+  resolveAccountAdapterSecret,
   type AdapterConfigDb,
 } from './config'
 import { toE164 } from './phone'
@@ -52,6 +53,7 @@ export async function notifyConnectOutbound(
     const result = await postSignedJson<AstraMessageResponse>({
       path: '/api/channels/whatsapp/message',
       rawBody,
+      secret: resolveAccountAdapterSecret(account) ?? undefined,
     })
 
     if (!result.ok) {

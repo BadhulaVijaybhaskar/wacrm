@@ -8,19 +8,24 @@ Contract source of truth: Astra Connect `docs/wacrm-adapter-contract.md` (v2).
 
 ## Enable
 
-1. Set env on the wacrm server:
+1. Set env on the server:
    - `CONNECT_ADAPTER_URL` — Connect base URL (no trailing slash)
    - `WACRM_ADAPTER_SECRET` — shared HMAC secret (≥16 chars), same value
-     as Connect's `WACRM_ADAPTER_SECRET`
+     as Connect's `WACRM_ADAPTER_SECRET` (global fallback)
    - `NEXT_PUBLIC_SITE_URL` — public https origin Connect may fetch
      signed media from (must be allow-listed in Connect's
      `WACRM_MEDIA_HOSTS`)
-2. Apply migration `043_astra_connect_adapter.sql` (do not apply from this
-   PR against a live project until ready).
+2. Apply migrations `043_astra_connect_adapter.sql` and
+   `044_astra_connect_tenant_secret.sql` (staging only when ready).
 3. Per account (admin): open **Settings → Astra Connect** in Astra Chat,
    or call
    `PATCH /api/whatsapp/config/astra-connect`
-   `{ "enabled": true, "tenant_id": "t_…" }`.
+   `{ "enabled": true, "tenant_id": "t_…", "secret": "…" }`.
+
+   `secret` is optional. When set it is stored encrypted with
+   `ENCRYPTION_KEY` and used for outbound HMAC instead of the global
+   env secret. Rotating a secret keeps the previous one accepted for
+   24 hours. Pass `"secret": null` to clear the per-account secret.
 
    `GET /api/whatsapp/config/astra-connect` returns
    `{ env_configured, enabled, tenant_id, phone_number_id, has_whatsapp_config }`
