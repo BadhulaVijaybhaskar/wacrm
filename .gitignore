@@ -43,3 +43,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Read-only Astra Connect UI kit extract (local reference only)
+/astra-connect/

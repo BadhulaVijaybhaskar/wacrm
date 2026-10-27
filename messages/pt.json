@@ -1656,7 +1656,15 @@
       "phoneNumberIdNotNumeric": "O Phone Number ID deve conter apenas dígitos. Copie o id numérico em Meta → WhatsApp → Configuração da API, não o número de telefone em si.",
       "wabaIdNotNumeric": "O ID da conta do WhatsApp Business deve conter apenas dígitos. Copie-o em Meta → WhatsApp → Configuração da API.",
       "wabaSubscribed": "A conta do WhatsApp Business está inscrita neste app — os webhooks de entrada podem ser entregues.",
-      "wabaNotSubscribed": "A conta do WhatsApp Business não está inscrita neste app, então a Meta não entregará webhooks de entrada. Informe novamente o token de acesso e salve de novo para inscrevê-la."
+      "wabaNotSubscribed": "A conta do WhatsApp Business não está inscrita neste app, então a Meta não entregará webhooks de entrada. Informe novamente o token de acesso e salve de novo para inscrevê-la.",
+      "embeddedSignupTitle": "Quick connect",
+      "embeddedSignupDesc": "Connect a WhatsApp Business number with Embedded Signup. You can still enter credentials manually below.",
+      "embeddedSignupStubDesc": "Stub mode is on — this connects with fake WABA and phone IDs for staging, without calling Meta.",
+      "embeddedSignupConnect": "Connect WhatsApp",
+      "embeddedSignupConnecting": "Connecting…",
+      "embeddedSignupDone": "WhatsApp connected via Embedded Signup",
+      "embeddedSignupStubDone": "Stub WhatsApp credentials saved",
+      "embeddedSignupFailed": "Could not complete Embedded Signup"
     },
     "sections": {
       "overview": "Visão geral",
