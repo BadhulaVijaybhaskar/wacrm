@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { sendTemplateMessage } from '@/lib/whatsapp/meta-api'
 import { decrypt } from '@/lib/whatsapp/encryption'
+import { notifyConnectOutbound } from '@/lib/astra-connect'
 import type { SendTimeParams } from '@/lib/whatsapp/template-send-builder'
 import { resolveTemplateRow } from '@/lib/whatsapp/template-body'
 import {
@@ -217,8 +218,20 @@ export async function POST(request: Request) {
           whatsapp_message_id: sentMessageId,
         })
         sentCount++
-      } else {
-        console.error(
+        void notifyConnectOutbound({
+          db: supabase,
+          accountId,
+          customerPhone: recipient.phone,
+          messageId: sentMessageId,
+          author: 'template',
+          templateName: template_name,
+        }).catch((err) =>
+          console.error(
+            '[astra-connect] dashboard broadcast outbound notify failed:',
+            err instanceof Error ? err.message : err,
+          ),
+        )
+      } else {        console.error(
           `Failed to send broadcast to ${recipient.phone}:`,
           lastError
         )

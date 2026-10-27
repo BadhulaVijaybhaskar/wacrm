@@ -34,7 +34,7 @@ also reply for that account.
 | Event | Action |
 |---|---|
 | Inbound customer message | `POST /api/channels/whatsapp/inbound` → send `reply_text`; honour `handoff` |
-| Agent / template outbound | `POST /api/channels/whatsapp/message` |
+| Agent / template / broadcast / automation / flow outbound | `POST /api/channels/whatsapp/message` (best-effort; never blocks the Meta send) |
 | Take over (pause AI) | `POST /handoff` with `handoff:true` |
 | Resume AI / close chat | `POST /handoff` with `handoff:false` |
 | Media | Mirrored (or re-fetched from Meta), exposed as ~15 min signed URL under `/api/astra-connect/media/[token]` |

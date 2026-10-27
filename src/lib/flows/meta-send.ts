@@ -9,6 +9,7 @@ import {
 } from '@/lib/whatsapp/meta-api'
 import type { InteractiveMessagePayload } from '@/lib/whatsapp/interactive'
 import { decrypt } from '@/lib/whatsapp/encryption'
+import { notifyConnectOutbound } from '@/lib/astra-connect'
 import {
   phoneVariants,
   isRecipientNotAllowedError,
@@ -169,6 +170,21 @@ export async function engineSendText(
     })
     .eq('id', args.conversationId)
 
+  // Best-effort Connect thread sync for flow text outbounds.
+  void notifyConnectOutbound({
+    db,
+    accountId: args.accountId,
+    customerPhone: typeof contact.phone === 'string' ? contact.phone : null,
+    messageId: waMessageId,
+    author: 'human',
+    text: args.text,
+  }).catch((err) =>
+    console.error(
+      '[astra-connect] flow outbound notify failed:',
+      err instanceof Error ? err.message : err,
+    ),
+  )
+
   return { whatsapp_message_id: waMessageId }
 }
 
@@ -284,6 +300,20 @@ export async function engineSendMedia(
       updated_at: new Date().toISOString(),
     })
     .eq('id', args.conversationId)
+
+  void notifyConnectOutbound({
+    db,
+    accountId: args.accountId,
+    customerPhone: typeof contact.phone === 'string' ? contact.phone : null,
+    messageId: waMessageId,
+    author: 'human',
+    text: args.caption ?? preview,
+  }).catch((err) =>
+    console.error(
+      '[astra-connect] flow media outbound notify failed:',
+      err instanceof Error ? err.message : err,
+    ),
+  )
 
   return { whatsapp_message_id: waMessageId }
 }
@@ -476,6 +506,20 @@ async function sendInteractiveViaMeta(
       updated_at: new Date().toISOString(),
     })
     .eq('id', input.conversationId)
+
+  void notifyConnectOutbound({
+    db,
+    accountId: input.accountId,
+    customerPhone: typeof contact.phone === 'string' ? contact.phone : null,
+    messageId: waMessageId,
+    author: 'human',
+    text: input.bodyText,
+  }).catch((err) =>
+    console.error(
+      '[astra-connect] flow interactive outbound notify failed:',
+      err instanceof Error ? err.message : err,
+    ),
+  )
 
   return { whatsapp_message_id: waMessageId }
 }

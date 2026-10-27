@@ -5,6 +5,7 @@ import {
   engineSendInteractiveList,
 } from '@/lib/flows/meta-send'
 import { decrypt } from '@/lib/whatsapp/encryption'
+import { notifyConnectOutbound } from '@/lib/astra-connect'
 import {
   phoneVariants,
   isRecipientNotAllowedError,
@@ -251,6 +252,22 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
       updated_at: new Date().toISOString(),
     })
     .eq('id', input.conversationId)
+
+  // Best-effort Connect thread sync for automation outbounds.
+  void notifyConnectOutbound({
+    db,
+    accountId: input.accountId,
+    customerPhone: typeof contact.phone === 'string' ? contact.phone : null,
+    messageId: waMessageId,
+    author: input.kind === 'template' ? 'template' : 'human',
+    text: content_text,
+    templateName: template_name,
+  }).catch((err) =>
+    console.error(
+      '[astra-connect] automation outbound notify failed:',
+      err instanceof Error ? err.message : err,
+    ),
+  )
 
   return { whatsapp_message_id: waMessageId }
 }

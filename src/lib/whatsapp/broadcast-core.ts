@@ -20,6 +20,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { sendTemplateMessage } from '@/lib/whatsapp/meta-api';
 import { decrypt } from '@/lib/whatsapp/encryption';
+import { notifyConnectOutbound } from '@/lib/astra-connect';
 import {
   parseInternationalPhone,
   phoneVariants,
@@ -63,6 +64,7 @@ interface PlannedRecipient {
 
 export interface BroadcastPlan {
   broadcastId: string;
+  accountId: string;
   templateName: string;
   templateLanguage: string;
   phoneNumberId: string;
@@ -235,6 +237,7 @@ export async function createBroadcast(
 
   return {
     broadcastId,
+    accountId,
     templateName,
     templateLanguage: resolvedTemplate.language,
     phoneNumberId: config.phone_number_id,
@@ -299,8 +302,22 @@ export async function deliverBroadcast(
           error_message: null,
         })
         .eq('id', recipient.recipientRowId);
-    } else {
-      await db
+
+      // Best-effort Connect thread sync — never awaits into the send path.
+      void notifyConnectOutbound({
+        db,
+        accountId: plan.accountId,
+        customerPhone: recipient.phone,
+        messageId: sentMessageId,
+        author: 'template',
+        templateName: plan.templateName,
+      }).catch((err) =>
+        console.error(
+          '[astra-connect] broadcast outbound notify failed:',
+          err instanceof Error ? err.message : err,
+        ),
+      );
+    } else {      await db
         .from('broadcast_recipients')
         .update({
           status: 'failed',
