@@ -2,6 +2,10 @@
  * Notify Astra Connect of human / template outbound messages so its
  * thread stays complete (POST /api/channels/whatsapp/message).
  *
+ * Gated by CONNECT_MIRROR_OUTBOUND (default OFF). Chat now owns
+ * WhatsApp storage; Connect reads threads from us instead of receiving
+ * mirrored /message posts. Keep the code path for optional opt-in.
+ *
  * Never throws — best-effort, logged. Does not change handoff state.
  */
 
@@ -14,6 +18,12 @@ import {
 } from './config'
 import { toE164 } from './phone'
 import type { AstraMessageRequest, AstraMessageResponse } from './types'
+
+/** Opt-in mirror of outbound sends to Connect /message. Default off. */
+export function isConnectOutboundMirrorEnabled(): boolean {
+  const raw = process.env.CONNECT_MIRROR_OUTBOUND?.trim().toLowerCase()
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
+}
 
 export interface NotifyOutboundArgs {
   db: AdapterConfigDb
@@ -31,6 +41,9 @@ export async function notifyConnectOutbound(
   args: NotifyOutboundArgs
 ): Promise<void> {
   try {
+    // Chat owns WhatsApp threads; mirroring is opt-in only.
+    if (!isConnectOutboundMirrorEnabled()) return
+
     const account = await loadAstraConnectAccountConfig(args.db, args.accountId)
     if (!isAstraConnectActive(account) || !account) return
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const h = vi.hoisted(() => ({
   loadAstraConnectAccountConfig: vi.fn(),
@@ -21,6 +21,8 @@ import { notifyConnectHandoff } from './handoff'
 
 describe('notifyConnectOutbound (/message)', () => {
   beforeEach(() => {
+    // Opt-in mirror — default OFF after Chat became the WhatsApp store.
+    process.env.CONNECT_MIRROR_OUTBOUND = '1'
     h.loadAstraConnectAccountConfig.mockResolvedValue({
       enabled: true,
       tenantId: 't_abc',
@@ -33,6 +35,23 @@ describe('notifyConnectOutbound (/message)', () => {
       status: 200,
       data: { conversation_id: 'conv_1', stored: true, handoff: false },
     })
+  })
+
+  afterEach(() => {
+    delete process.env.CONNECT_MIRROR_OUTBOUND
+  })
+
+  it('is a no-op when CONNECT_MIRROR_OUTBOUND is unset', async () => {
+    delete process.env.CONNECT_MIRROR_OUTBOUND
+    await notifyConnectOutbound({
+      db: {} as never,
+      accountId: 'acct-1',
+      customerPhone: '+919812345678',
+      messageId: 'wamid.OUT1',
+      author: 'human',
+      text: 'hi',
+    })
+    expect(h.postSignedJson).not.toHaveBeenCalled()
   })
 
   it('POSTs human author payload to /message', async () => {
