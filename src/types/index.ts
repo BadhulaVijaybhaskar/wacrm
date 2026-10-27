@@ -124,6 +124,12 @@ export interface Contact {
   opted_out?: boolean;
   /** When `opted_out` last became true; null after opt-in. */
   opted_out_at?: string | null;
+  /** First-touch Click-to-WhatsApp ad referral (migration 056 / CHAT-24). */
+  ctwa_source_id?: string | null;
+  ctwa_clid?: string | null;
+  ctwa_headline?: string | null;
+  ctwa_ad_id?: string | null;
+  ctwa_captured_at?: string | null;
   created_at: string;
   updated_at: string;
   /** Hydrated by queries that embed `contact_tags(tags(*))` (e.g. the
@@ -203,6 +209,13 @@ export interface Conversation {
   ai_handoff_summary?: string | null;
   /** Astra Connect conversation id (conv_…), migration 043. */
   astra_conversation_id?: string | null;
+  /** Last-touch CTWA referral on this thread (migration 056 / CHAT-24). */
+  ctwa_source_id?: string | null;
+  ctwa_clid?: string | null;
+  ctwa_headline?: string | null;
+  ctwa_ad_id?: string | null;
+  ctwa_captured_at?: string | null;
+  ctwa_converted_at?: string | null;
 }
 
 // ============================================================

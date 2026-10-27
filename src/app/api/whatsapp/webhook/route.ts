@@ -37,6 +37,8 @@ import {
   handleTemplateWebhookChange,
   isTemplateWebhookField,
 } from '@/lib/whatsapp/template-webhook'
+import { parseCtwaReferral } from '@/lib/ads/ctwa'
+import { persistCtwaAttribution } from '@/lib/ads/store'
 
 // The `after()` callback in POST runs within this route's max duration.
 // Inbound processing can fan out to per-media Meta verification calls, so
@@ -103,6 +105,23 @@ interface WhatsAppMessage {
   button?: { text?: string; payload?: string }
   /** Present when the customer swipe-replies to one of our messages. */
   context?: { id: string }
+  /**
+   * Present on the first inbound message from a Click-to-WhatsApp ad
+   * (CHAT-24). Fields vary by ad format; we persist source_id / ctwa_clid /
+   * headline / ad id for attribution reporting.
+   */
+  referral?: {
+    source_url?: string
+    source_type?: string
+    source_id?: string
+    headline?: string
+    body?: string
+    media_type?: string
+    image_url?: string
+    ctwa_clid?: string
+    ad_id?: string
+    ads_context_data?: { ad_id?: string; ad_title?: string }
+  }
 }
 
 /** One entry of a failed status's `errors` array, as Meta sends it. */
@@ -737,6 +756,25 @@ async function processMessage(
       db: supabaseAdmin(),
       accountId,
       kind: 'conversation',
+    })
+  }
+
+  // Click-to-WhatsApp ad referral (CHAT-24). Capture on the first inbound
+  // that carries Meta's referral object — store first-touch on the contact
+  // and last-touch on the conversation, plus an attribution row for reports.
+  const ctwa = parseCtwaReferral(message)
+  if (ctwa) {
+    const contactHasAttribution = Boolean(
+      (contactRecord as { ctwa_source_id?: string | null }).ctwa_source_id ||
+        (contactRecord as { ctwa_clid?: string | null }).ctwa_clid,
+    )
+    await persistCtwaAttribution({
+      db: supabaseAdmin(),
+      accountId,
+      contactId: contactRecord.id,
+      conversationId: conversation.id,
+      referral: ctwa,
+      contactHasAttribution,
     })
   }
 

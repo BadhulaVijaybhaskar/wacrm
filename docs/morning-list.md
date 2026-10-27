@@ -23,6 +23,7 @@ Real DB is **wacrm-staging** (owner applies migrations). Latest on branch starts
 | Zoho CRM | OAuth client + refresh token | Zoho API console | Settings → Integrations → Zoho |
 | Astra CRM | Signed webhook URL | Astra / Frappe CRM | Settings → Integrations → Astra CRM (`webhook_url`, `signing_secret`) |
 | Instagram / Messenger | Meta page + tokens | Meta Developer Console | Settings → Integrations → Instagram / Messenger |
+| Click-to-WhatsApp ads | Meta Ads account + CTWA ads | Meta Ads Manager | Referral captured automatically on inbound; report at `/ads` |
 | Public API | Account API keys | Settings → API keys | Bearer key; scopes in `api_keys` |
 | Automation / flow cron | Shared cron secret | Host env | `AUTOMATION_CRON_SECRET` (and flow cron equivalent) |
 | Billing usage webhook | Optional signed emitter URL | Your billing service | `BILLING_WEBHOOK_URL` |
@@ -38,8 +39,8 @@ Real DB is **wacrm-staging** (owner applies migrations). Latest on branch starts
 | CHAT-20 Google Sheets | **done** | `6518982` | `052_google_sheets_sync.sql` | OAuth scaffold + import/export + cron |
 | CHAT-21 CRM push | **done** | `333bb79` | `053_crm_push.sql` | HubSpot/Zoho/Astra CRM push + retry log |
 | CHAT-22 IG + Messenger inbox | **done** | `69ed709` | `054_messaging_channels.sql` | Channel field + Meta messaging stub |
-| CHAT-23 Flow builder | **done** | _(pending commit)_ | `055_flow_builder_nodes.sql` | Visual nodes + test simulator; `artifacts/chat-23/` |
-| CHAT-24 CTWA ads | not started | — | — | |
+| CHAT-23 Flow builder | **done** | `704b63a` | `055_flow_builder_nodes.sql` | Visual nodes + test simulator; `artifacts/chat-23/` |
+| CHAT-24 CTWA ads | **done** | _(pending commit)_ | `056_ctwa_ads_attribution.sql` | Referral capture + `/ads` report; `artifacts/chat-24/` |
 | CHAT-25 Intents | not started | — | — | |
 | CHAT-26 Re-verify (13/14/15) | not started | — | — | |
 
@@ -58,3 +59,4 @@ Real DB is **wacrm-staging** (owner applies migrations). Latest on branch starts
 - `053_crm_push.sql` ← CHAT-21
 - `054_messaging_channels.sql` ← CHAT-22
 - `055_flow_builder_nodes.sql` ← CHAT-23
+- `056_ctwa_ads_attribution.sql` ← CHAT-24

@@ -42,7 +42,8 @@
     "menuProfile": "프로필",
     "menuSettings": "설정",
     "menuLegal": "법적 고지",
-    "menuSignOut": "로그아웃"
+    "menuSignOut": "로그아웃",
+    "ads": "광고"
   },
   "Header": {
     "dashboard": "대시보드",
@@ -2172,5 +2173,19 @@
   },
   "DashboardShell": {
     "loading": "불러오는 중..."
+  },
+  "Ads": {
+    "title": "광고 어트리뷰션",
+    "subtitle": "Click-to-WhatsApp 광고로 유입된 대화와 전환입니다.",
+    "loading": "어트리뷰션 불러오는 중…",
+    "loadError": "광고 어트리뷰션을 불러오지 못했습니다.",
+    "emptyTitle": "아직 광고 리퍼럴이 없습니다",
+    "emptyHint": "고객이 Click-to-WhatsApp 광고에서 메시지를 보내면 여기에 저장됩니다.",
+    "colHeadline": "광고",
+    "colAdId": "Ad ID",
+    "colSourceId": "Source ID",
+    "colConversations": "대화",
+    "colConversions": "전환",
+    "unknownAd": "제목 없는 광고"
   }
 }

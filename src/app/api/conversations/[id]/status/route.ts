@@ -3,6 +3,7 @@ import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit'
 import { notifyConnectHandoff } from '@/lib/astra-connect'
 import { supabaseAdmin } from '@/lib/ai/admin-client'
+import { markCtwaConversion } from '@/lib/ads/store'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -65,6 +66,16 @@ export async function PATCH(request: Request, { params }: Params) {
     }
 
     if (status === 'closed') {
+      void markCtwaConversion({
+        db: supabaseAdmin(),
+        conversationId,
+      }).catch((err) =>
+        console.error(
+          '[ctwa] conversion mark failed:',
+          err instanceof Error ? err.message : err,
+        ),
+      )
+
       const contact = conv.contact as
         | { phone?: string }
         | { phone?: string }[]

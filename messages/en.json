@@ -42,7 +42,8 @@
     "menuProfile": "Profile",
     "menuSettings": "Settings",
     "menuLegal": "Legal notices",
-    "menuSignOut": "Sign out"
+    "menuSignOut": "Sign out",
+    "ads": "Ads"
   },
   "Header": {
     "dashboard": "Dashboard",
@@ -2172,5 +2173,19 @@
   },
   "DashboardShell": {
     "loading": "Loading..."
+  },
+  "Ads": {
+    "title": "Ads attribution",
+    "subtitle": "Conversations and conversions from Click-to-WhatsApp ads.",
+    "loading": "Loading attribution…",
+    "loadError": "Couldn't load ads attribution.",
+    "emptyTitle": "No ad referrals yet",
+    "emptyHint": "When a customer messages from a Click-to-WhatsApp ad, the referral is stored here.",
+    "colHeadline": "Ad",
+    "colAdId": "Ad ID",
+    "colSourceId": "Source ID",
+    "colConversations": "Conversations",
+    "colConversions": "Conversions",
+    "unknownAd": "Untitled ad"
   }
 }

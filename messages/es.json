@@ -42,7 +42,8 @@
     "menuProfile": "Perfil",
     "menuSettings": "Configuración",
     "menuLegal": "Avisos legales",
-    "menuSignOut": "Cerrar sesión"
+    "menuSignOut": "Cerrar sesión",
+    "ads": "Anuncios"
   },
   "Header": {
     "dashboard": "Panel",
@@ -2172,5 +2173,19 @@
   },
   "DashboardShell": {
     "loading": "Cargando..."
+  },
+  "Ads": {
+    "title": "Atribución de anuncios",
+    "subtitle": "Conversaciones y conversiones de anuncios Click-to-WhatsApp.",
+    "loading": "Cargando atribución…",
+    "loadError": "No se pudo cargar la atribución.",
+    "emptyTitle": "Aún no hay referidos de anuncios",
+    "emptyHint": "Cuando un cliente escribe desde un anuncio Click-to-WhatsApp, el referido aparece aquí.",
+    "colHeadline": "Anuncio",
+    "colAdId": "Ad ID",
+    "colSourceId": "Source ID",
+    "colConversations": "Conversaciones",
+    "colConversions": "Conversiones",
+    "unknownAd": "Anuncio sin título"
   }
 }

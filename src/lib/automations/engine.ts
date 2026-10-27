@@ -611,11 +611,22 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
 
     case 'close_conversation': {
       if (!args.contactId) throw new Error('close_conversation needs a contact')
+      const { data: closing } = await db
+        .from('conversations')
+        .select('id')
+        .eq('account_id', args.automation.account_id)
+        .eq('contact_id', args.contactId)
       await db
         .from('conversations')
         .update({ status: 'closed', updated_at: new Date().toISOString() })
         .eq('account_id', args.automation.account_id)
         .eq('contact_id', args.contactId)
+      const { markCtwaConversion } = await import('@/lib/ads/store')
+      for (const row of closing ?? []) {
+        if (typeof row.id === 'string') {
+          await markCtwaConversion({ db, conversationId: row.id })
+        }
+      }
       return 'conversation closed'
     }
 
