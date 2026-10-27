@@ -15,6 +15,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { CheckCircle, ArrowLeft } from 'lucide-react';
+import { BrandLockup } from '@/components/brand/brand-lockup';
 
 export default function ForgotPasswordPage() {
   const t = useTranslations('ForgotPasswordPage');
@@ -75,14 +76,7 @@ export default function ForgotPasswordPage() {
     <div className="acl-wrap">
       <Card className="acl-card !block !gap-0 !py-0">
         <CardHeader className="items-center px-0 text-center">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/brand/astra-chat-lockup-275.png"
-            alt="Astra Chat"
-            width={275}
-            height={65}
-            className="acl-lockup mb-5"
-          />
+          <BrandLockup size={275} width={275} height={65} className="acl-lockup mb-5" />
           <CardTitle className="acl-title">{t('title')}</CardTitle>
           <CardDescription className="acl-sub">{t('desc')}</CardDescription>
         </CardHeader>

@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * CHAT-16 screenshot surface — catalog layout only, no DB writes.
+ * Screenshot surface for the Integrations hub — catalog layout only, no DB writes.
  */
 
 import {
@@ -15,8 +15,8 @@ export default function IntegrationsPreviewPage() {
     <main className="min-h-screen bg-[radial-gradient(ellipse_at_top,_#e8eef7,_#f7f4ef)] p-6 text-slate-900">
       <h1 className="font-serif text-3xl tracking-tight">Integrations</h1>
       <p className="mt-1 max-w-2xl text-sm text-slate-600">
-        Settings → Integrations hub (CHAT-16). Connect / disconnect / test use
-        encrypted per-account credentials; Test hits META_STUB mocks.
+        Connect commerce, payments, CRM, sheets and automation tools. Credentials
+        are encrypted per account.
       </p>
       <div className="mt-8 space-y-8">
         {INTEGRATION_CATEGORIES.map((category) => {

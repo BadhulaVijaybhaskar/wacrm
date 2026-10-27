@@ -1,5 +1,5 @@
 // ============================================================
-// Tremor BarChart [v1.0.0] — vendored from tremorlabs/tremor.
+// Tremor BarChart [v1.0.0] — vendored from Tremor.
 //
 // Two local adaptations vs the upstream file:
 //   1. `cx` (Tremor's `clsx`+`twMerge` helper) is replaced with
@@ -15,7 +15,6 @@
 // the canonical Tremor Raw source.
 //
 // License: Apache 2.0 (Tremor).
-// Source: https://github.com/tremorlabs/tremor/blob/main/src/components/BarChart/BarChart.tsx
 // ============================================================
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

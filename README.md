@@ -11,13 +11,13 @@
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-violet.svg)](./LICENSE)
-[![CI](https://github.com/ArnasDon/wacrm/actions/workflows/ci.yml/badge.svg)](https://github.com/ArnasDon/wacrm/actions/workflows/ci.yml)
+![CI]([repository])
 [![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs)](https://nextjs.org)
 [![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3ecf8e?logo=supabase)](https://supabase.com)
-[![Stars](https://img.shields.io/github/stars/ArnasDon/wacrm?style=social)](https://github.com/ArnasDon/wacrm/stargazers)
+[![Stars](https://img.shields.io/github/stars/Upstream/wacrm?style=social)]([repository])
 
 The marketing site and self-host docs live in a separate repo:
-[ArnasDon/wacrm-site](https://github.com/ArnasDon/wacrm-site)
+Upstream/wacrm-site
 ([wacrm.tech](https://wacrm.tech)). This repo is the product —
 clone or fork it to run your own CRM.
 
@@ -79,8 +79,8 @@ in an afternoon and make yours.
 ## Quick start
 
 ```bash
-# Fork on GitHub first: https://github.com/ArnasDon/wacrm → Fork
-git clone https://github.com/<your-username>/wacrm.git
+# Fork on GitHub first: [repository] → Fork
+git clone [repository]>/wacrm.git
 cd wacrm
 npm install
 cp .env.local.example .env.local   # fill in Supabase + Meta creds
@@ -148,7 +148,7 @@ Full walkthrough with screenshots:
 Full self-host documentation — Supabase migrations, WhatsApp Business
 API config, and production deploy — lives at
 **[wacrm.tech/docs](https://wacrm.tech/docs)**
-(source: [ArnasDon/wacrm-site](https://github.com/ArnasDon/wacrm-site)).
+(source: Upstream/wacrm-site).
 
 Key pages:
 - [Getting started](https://wacrm.tech/docs/getting-started)

@@ -447,6 +447,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 /**
+ * PreviewAuthProvider — static mock session for `/ui-preview/*` shells.
+ * Never used in the signed-in dashboard; production gates those routes.
+ */
+export function PreviewAuthProvider({ children }: { children: ReactNode }) {
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      user: { id: "preview-user" } as User,
+      profile: {
+        id: "preview-user",
+        full_name: "Agent",
+        email: "agent@astraconnect.io",
+        avatar_url: null,
+        role: null,
+        beta_features: [],
+        account_id: "preview-account",
+        account_role: "admin",
+      },
+      loading: false,
+      profileLoading: false,
+      signOut: async () => {},
+      refreshProfile: async () => {},
+      account: { id: "preview-account", name: "Astra Connect", default_currency: DEFAULT_CURRENCY },
+      defaultCurrency: DEFAULT_CURRENCY,
+      accountStatus: "ready",
+      accountStatusDetail: null,
+      accountId: "preview-account",
+      accountRole: "admin",
+      isOwner: false,
+      isAdmin: true,
+      isAgent: false,
+      isViewer: false,
+      canManageMembers: true,
+      canEditSettings: true,
+      canSendMessages: true,
+    }),
+    [],
+  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+/**
  * useAuth — read the shared auth state from context.
  * Must be used inside an <AuthProvider>.
  */

@@ -16,6 +16,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { CheckCircle } from 'lucide-react';
+import { BrandLockup } from '@/components/brand/brand-lockup';
 
 // `useSearchParams` opts the component out of static prerendering
 // unless wrapped in Suspense — same pattern as /login.
@@ -129,14 +130,7 @@ function SignupPageInner() {
     <div className="acl-wrap">
       <Card className="acl-card !block !gap-0 !py-0">
         <CardHeader className="items-center px-0 text-center">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/brand/astra-chat-lockup-275.png"
-            alt="Astra Chat"
-            width={275}
-            height={65}
-            className="acl-lockup mb-5"
-          />
+          <BrandLockup size={275} width={275} height={65} className="acl-lockup mb-5" />
           <CardTitle className="acl-title">
             {inviteToken ? t('titleJoin') : t('title')}
           </CardTitle>

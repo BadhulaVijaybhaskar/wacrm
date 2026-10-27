@@ -1,6 +1,5 @@
-// Tremor getYAxisDomain — copied from tremorlabs/tremor.
+// Tremor getYAxisDomain — copied from Tremor.
 // License: Apache 2.0 (Tremor).
-// Source: https://github.com/tremorlabs/tremor/blob/main/src/utils/getYAxisDomain.ts
 
 export const getYAxisDomain = (
   autoMinValue: boolean,

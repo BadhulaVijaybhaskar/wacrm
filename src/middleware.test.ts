@@ -163,3 +163,52 @@ describe("middleware — /api auth gate", () => {
     }
   });
 });
+
+describe("middleware — /ui-preview production gate", () => {
+  const prevNodeEnv = process.env.NODE_ENV;
+  const prevUiPreview = process.env.UI_PREVIEW;
+
+  afterEach(() => {
+    if (prevNodeEnv === undefined) delete (process.env as { NODE_ENV?: string }).NODE_ENV;
+    else (process.env as { NODE_ENV?: string }).NODE_ENV = prevNodeEnv;
+    if (prevUiPreview === undefined) delete process.env.UI_PREVIEW;
+    else process.env.UI_PREVIEW = prevUiPreview;
+  });
+
+  it("returns 404 for /ui-preview/* when NODE_ENV=production and UI_PREVIEW is unset", async () => {
+    (process.env as { NODE_ENV?: string }).NODE_ENV = "production";
+    delete process.env.UI_PREVIEW;
+    mockUser = null;
+
+    const res = await middleware(
+      new NextRequest("https://app.test/ui-preview/chat14"),
+    );
+
+    expect(res.status).toBe(404);
+  });
+
+  it("allows /ui-preview/* in production when UI_PREVIEW=1", async () => {
+    (process.env as { NODE_ENV?: string }).NODE_ENV = "production";
+    process.env.UI_PREVIEW = "1";
+    mockUser = null;
+
+    const res = await middleware(
+      new NextRequest("https://app.test/ui-preview/chat14"),
+    );
+
+    expect(res.status).not.toBe(404);
+    expect(res.headers.get("location")).toBeNull();
+  });
+
+  it("allows /ui-preview/* when NODE_ENV is not production", async () => {
+    (process.env as { NODE_ENV?: string }).NODE_ENV = "test";
+    delete process.env.UI_PREVIEW;
+    mockUser = null;
+
+    const res = await middleware(
+      new NextRequest("https://app.test/ui-preview/integrations"),
+    );
+
+    expect(res.status).not.toBe(404);
+  });
+});

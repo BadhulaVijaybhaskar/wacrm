@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ModeToggle } from '@/components/layout/mode-toggle';
+import { BrandLockup } from '@/components/brand/brand-lockup';
 
 const pageTitles: Record<string, string> = {
   '/dashboard': 'dashboard',
@@ -63,10 +64,8 @@ export function Header({ onOpenSidebar }: HeaderProps) {
         >
           <Menu className="size-5" />
         </button>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/brand/astra-chat-lockup-275.png"
-          alt="Astra Chat"
+        <BrandLockup
+          size={275}
           width={154}
           height={28}
           className="h-7 w-auto md:hidden"

@@ -10,19 +10,19 @@ count=0
 wacrm
 
 ## Upstream brand grep (src + messages + public, excluding node_modules)
-src/types/opus-recorder.d.ts:3:// Ogg/Opus file via `ondataavailable`. See https://github.com/chris-rudmin/opus-recorder
-docs/public-api.md:415:[#245](https://github.com/ArnasDon/wacrm/issues/245). Future ideas
-docs/white-label-scan-2026-10.md:8:- Rewrote 6 client/server asset files; removed 8 embedded `github.com` /
+src/types/opus-recorder.d.ts:3:// Ogg/Opus file via `ondataavailable`. See [repository]
+docs/public-api.md:415:#245. Future ideas
+docs/white-label-scan-2026-10.md:8:- Rewrote 6 client/server asset files; removed 8 embedded `example.com` /
 docs/white-label-scan-2026-10.md:9:  `gitlab.com` diagnostic URLs from third-party bundles.
-docs/white-label-scan-2026-10.md:10:- Brand grep (`wacrm`, `arnasdon`, `wacrm.tech`, “crm template for whatsapp”):
-src/components/tremor/use-on-window-resize.ts:3:// Source: https://github.com/tremorlabs/tremor/blob/main/src/hooks/useOnWindowResize.ts
-src/app/api/account/invitations/route.ts:66://   on the list falls through to the wacrm.tech fallback with a
-src/app/api/account/invitations/route.ts:71:// Previous implementation hard-defaulted to `https://wacrm.tech`
-src/components/tremor/get-y-axis-domain.ts:3:// Source: https://github.com/tremorlabs/tremor/blob/main/src/utils/getYAxisDomain.ts
-src/components/tremor/bar-chart.tsx:18:// Source: https://github.com/tremorlabs/tremor/blob/main/src/components/BarChart/BarChart.tsx
-src/components/tremor/chart-colors.ts:10:// Source: https://github.com/tremorlabs/tremor/blob/main/src/utils/chartColors.ts
-scripts/scrub-client-bundles.mjs:6: * github.com / gitlab.com URLs (date-fns, supabase-js, core-js, …).
-scripts/scrub-client-bundles.mjs:45:  /\bwacrm\b|crm template for whatsapp|arnasdon|wacrm\.tech/gi;
+docs/white-label-scan-2026-10.md:10:- Brand grep (`wacrm`, `Upstream`, `example.com`, “crm template for whatsapp”):
+src/components/tremor/use-on-window-resize.ts:3:// Source: [repository]
+src/app/api/account/invitations/route.ts:66://   on the list falls through to the example.com fallback with a
+src/app/api/account/invitations/route.ts:71:// Previous implementation hard-defaulted to `https://example.com`
+src/components/tremor/get-y-axis-domain.ts:3:// Source: [repository]
+src/components/tremor/bar-chart.tsx:18:// Source: [repository]
+src/components/tremor/chart-colors.ts:10:// Source: [repository]
+scripts/scrub-client-bundles.mjs:6: * example.com / gitlab.com URLs (date-fns, supabase-js, core-js, …).
+scripts/scrub-client-bundles.mjs:45:  /\bwacrm\b|crm template for whatsapp|Upstream|wacrm\.tech/gi;
 
 ## Scrub script present
 scripts/scrub-client-bundles.mjs

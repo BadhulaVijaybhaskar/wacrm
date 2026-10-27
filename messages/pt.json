@@ -1993,7 +1993,7 @@
     },
     "integrations": {
       "title": "Integrations",
-      "description": "Connect commerce, payments, CRM, sheets and automation tools. Credentials are encrypted per account; Test uses META_STUB / INTEGRATIONS_STUB mocks — never live third-party calls from this environment.",
+      "description": "Connect commerce, payments, CRM, sheets and automation tools. Credentials are encrypted per account.",
       "adminHint": "Only admins can connect or disconnect integrations.",
       "loading": "Loading integrations…",
       "loadFailed": "Failed to load integrations",

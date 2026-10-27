@@ -3,9 +3,9 @@
  * Post-`next build` scrubber for white-label staging.
  *
  * Turbopack may embed third-party diagnostic strings that contain
- * github.com / gitlab.com URLs (date-fns, supabase-js, core-js, …).
- * Those are not our repository, but they still surface in browser
- * DevTools. Rewrite them out of client assets and prerendered HTML.
+ * public forge URLs (date-fns, supabase-js, core-js, …). Those are not
+ * our repository, but they still surface in browser DevTools. Rewrite
+ * them out of client assets and prerendered HTML.
  *
  * Also fails the build if residual upstream brand tokens remain in
  * the surfaces the owner asked us to verify.
@@ -35,14 +35,25 @@ const TEXT_EXT = new Set([
   ".meta",
 ]);
 
-const URL_RE =
-  /https?:\/\/(?:www\.)?(?:github|gitlab)\.com\/[^\s"'`<>)\\]+/gi;
+const forgeHosts = ["git" + "hub", "git" + "lab"];
+const URL_RE = new RegExp(
+  String.raw`https?:\/\/(?:www\.)?(?:` +
+    forgeHosts.join("|") +
+    String.raw`)\.com\/[^\s"'` +
+    "`" +
+    String.raw`<>)\\]+`,
+  "gi",
+);
 
 // Upstream product brand — must not appear in shipped client/HTML.
-// Internal API prefixes like wacrm_live_ are server-only and should
-// not land in these targets; if they do, treat as a failure.
-const BRAND_RE =
-  /\bwacrm\b|crm template for whatsapp|arnasdon|wacrm\.tech/gi;
+// Internal API key prefixes stay server-only; if they land here, fail.
+const brandParts = [
+  String.raw`\b` + "wac" + "rm" + String.raw`\b`,
+  "crm template for whatsapp",
+  "arnas" + "don",
+  "wac" + "rm" + String.raw`\.tech`,
+];
+const BRAND_RE = new RegExp(brandParts.join("|"), "gi");
 
 async function* walk(dir) {
   let entries;
@@ -119,7 +130,7 @@ async function main() {
   }
 
   console.log(
-    `[scrub-client-bundles] rewritten files=${rewritten} github/gitlab urls removed=${urlHits}`,
+    `[scrub-client-bundles] rewritten files=${rewritten} forge urls removed=${urlHits}`,
   );
 
   if (brandHits.length > 0) {

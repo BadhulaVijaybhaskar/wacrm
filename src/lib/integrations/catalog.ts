@@ -97,7 +97,7 @@ export const INTEGRATION_CATALOG: ReadonlyArray<IntegrationProviderMeta> = [
   {
     id: 'make',
     name: 'Make',
-    description: 'Make.com (Integromat) custom webhook scenarios.',
+    description: 'Make.com custom webhook scenarios.',
     category: 'automation',
     fields: [
       {
@@ -197,7 +197,7 @@ export const INTEGRATION_CATALOG: ReadonlyArray<IntegrationProviderMeta> = [
   {
     id: 'instagram',
     name: 'Instagram DM',
-    description: 'Instagram Direct in the unified inbox (Meta stub in tests).',
+    description: 'Instagram Direct in the unified inbox.',
     category: 'messaging',
     fields: [
       { key: 'page_id', label: 'Page / IG business ID', required: true },

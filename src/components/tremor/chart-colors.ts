@@ -1,5 +1,5 @@
 // ============================================================
-// Tremor chartColors [v0.1.0] — copied from tremorlabs/tremor.
+// Tremor chartColors [v0.1.0] — copied from Tremor.
 //
 // The Tremor charts source uses these helpers to map a category
 // name to a stable Tailwind color class (`bg-violet-500`,
@@ -7,7 +7,6 @@
 // — there is no `@tremor/raw` npm package — so the canonical
 // approach is to vendor the file unchanged and customise locally.
 //
-// Source: https://github.com/tremorlabs/tremor/blob/main/src/utils/chartColors.ts
 // License: Apache 2.0 (Tremor)
 // ============================================================
 

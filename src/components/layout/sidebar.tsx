@@ -45,6 +45,7 @@ import {
   resolveSidebarCollapsed,
   type SidebarPreference,
 } from './sidebar-state';
+import { BrandLockup, BrandMark } from '@/components/brand/brand-lockup';
 
 const SIDEBAR_STORAGE_KEY = 'astra.v2.sidebar';
 
@@ -296,21 +297,16 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 collapsed ? 'justify-center' : 'gap-2'
               )}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/brand/ac-mark.png"
-                alt=""
-                width={collapsed ? 32 : 26}
-                height={collapsed ? 32 : 26}
-                className={cn(
-                  'shrink-0 object-contain',
-                  collapsed ? 'size-8' : 'size-[26px]'
-                )}
-              />
-              {!collapsed && (
-                <span className="truncate text-[1.02rem] font-bold tracking-[-0.02em] text-white">
-                  Astra Chat
-                </span>
+              {collapsed ? (
+                <BrandMark size={32} className="size-8" />
+              ) : (
+                <BrandLockup
+                  size={275}
+                  width={148}
+                  height={28}
+                  forceDark
+                  className="h-7 max-w-[148px] object-contain object-left"
+                />
               )}
             </Link>
             <button

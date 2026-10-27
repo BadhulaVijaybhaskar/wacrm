@@ -15,6 +15,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { BrandLockup } from '@/components/brand/brand-lockup';
 // `useSearchParams` opts the component out of static prerendering
 // unless it sits under a Suspense boundary. We split the form into
 // a child component so the outer page can prerender the chrome
@@ -76,14 +77,7 @@ function LoginPageInner() {
     <div className="acl-wrap">
       <Card className="acl-card !block !gap-0 !py-0">
         <CardHeader className="items-center px-0 text-center">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/brand/astra-chat-lockup-275.png"
-            alt="Astra Chat"
-            width={275}
-            height={65}
-            className="acl-lockup mb-5"
-          />
+          <BrandLockup size={275} width={275} height={65} className="acl-lockup mb-5" />
           <CardTitle className="acl-title">
             {inviteToken ? t('titleAccept') : t('titleWelcome')}
           </CardTitle>

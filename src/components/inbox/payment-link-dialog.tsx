@@ -90,9 +90,9 @@ export function PaymentLinkDialog({
         <DialogHeader>
           <DialogTitle>Create payment link</DialogTitle>
           <DialogDescription>
-            Creates a Razorpay or Stripe link (stub in META_STUB) and sends it
-            in this conversation. Connect the provider under Settings →
-            Integrations first.
+            Creates a Razorpay or Stripe link and sends it in this
+            conversation. Connect the provider under Settings → Integrations
+            first.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 py-1">

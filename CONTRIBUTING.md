@@ -16,9 +16,9 @@ opinions become yours.
 ## Fork and run
 
 ```bash
-# 1. Fork on GitHub: https://github.com/ArnasDon/wacrm → Fork
+# 1. Fork on GitHub: [repository] → Fork
 # 2. Clone your fork
-git clone https://github.com/<your-username>/wacrm.git
+git clone [repository]>/wacrm.git
 cd wacrm
 
 cp .env.local.example .env.local   # fill in Supabase + Meta creds
@@ -34,7 +34,7 @@ Full setup (Supabase migrations, WhatsApp Business API, deploy) lives in
 Pull in upstream bug fixes and security patches periodically:
 
 ```bash
-git remote add upstream https://github.com/ArnasDon/wacrm.git  # once
+git remote add upstream [repository]  # once
 git fetch upstream
 git checkout main
 git merge upstream/main     # or: git rebase upstream/main
@@ -50,7 +50,7 @@ updating on your schedule is a valid alternative.
 
 If you find a bug in the upstream code — not one you introduced in your
 fork — please file it using the
-[bug report](https://github.com/ArnasDon/wacrm/issues/new?template=bug_report.yml)
+bug report
 template. Including the commit SHA, the runtime (Hostinger / Vercel /
 local / other), and logs will get to a fix fastest.
 

@@ -84,8 +84,15 @@ export async function middleware(request: NextRequest) {
     '/legal',
     '/developers',
   ]
-  // CHAT-14 stub preview is public (mock data only).
+  // UI preview surfaces (mock screenshot pages). Allowed in non-production
+  // always; in production only when UI_PREVIEW=1 is set on the host.
   if (request.nextUrl.pathname.startsWith('/ui-preview/')) {
+    const previewAllowed =
+      process.env.NODE_ENV !== 'production' ||
+      process.env.UI_PREVIEW === '1'
+    if (!previewAllowed) {
+      return withRefreshedCookies(new NextResponse(null, { status: 404 }))
+    }
     return supabaseResponse
   }
   if (!user && protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))) {

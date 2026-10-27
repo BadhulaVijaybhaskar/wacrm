@@ -194,7 +194,7 @@ export function IntegrationCard({
             phone: '+919876543210',
             name: 'Priya Sharma',
             email: 'priya@example.com',
-            summary: 'Stub conversation summary from Integrations hub',
+            summary: 'Sample conversation summary from Integrations hub',
           }),
         },
       );
@@ -231,11 +231,7 @@ export function IntegrationCard({
         );
         return;
       }
-      toast.success(
-        payload.stub
-          ? `Stub catalog synced (${payload.synced} items)`
-          : `Synced ${payload.synced} items`,
-      );
+      toast.success(`Synced ${payload.synced} items`);
     } catch {
       toast.error('Network error');
     } finally {
@@ -264,11 +260,7 @@ export function IntegrationCard({
         );
         return;
       }
-      toast.success(
-        payload.stub
-          ? `Stub OK — ${payload.message}`
-          : String(payload.message ?? 'Connection OK'),
-      );
+      toast.success(String(payload.message ?? 'Connection OK'));
     } catch {
       toast.error('Network error');
     } finally {

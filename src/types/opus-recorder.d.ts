@@ -1,6 +1,6 @@
 // `opus-recorder` ships no type declarations. We use a small subset of its
 // API: construct a Recorder, start()/stop(), and receive the encoded
-// Ogg/Opus file via `ondataavailable`. See https://github.com/chris-rudmin/opus-recorder
+// Ogg/Opus file via `ondataavailable`.
 declare module "opus-recorder" {
   interface RecorderConfig {
     /** URL of the encoder worker (served from /public). */

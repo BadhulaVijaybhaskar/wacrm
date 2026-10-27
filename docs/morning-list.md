@@ -4,6 +4,10 @@ Running checklist of credentials, OAuth apps, paid plans and env vars that need 
 
 Real DB is **wacrm-staging** (owner applies migrations). Latest on branch starts at `048_`.
 
+## Brand assets
+
+- `public/brand/astra-chat-lockup-dark.png` (and `-275`) is a **derived** dark-mode variant: AC mark colours kept, wordmark pixels recoloured near-white for contrast on dark surfaces. Pending an official dark lockup from Vijay — swap the derived files when that lands.
+
 ## Live credentials needed
 
 | Integration | What’s needed | Where to get it | Env / setting name |

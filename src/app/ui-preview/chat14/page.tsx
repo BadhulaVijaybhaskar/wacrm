@@ -1,8 +1,7 @@
 'use client';
 
 /**
- * CHAT-14 verification surface — mock data only, no Meta / no DB writes.
- * Public under META_STUB for screenshot capture.
+ * Verification surface — mock data only, no Meta / no DB writes.
  */
 
 import { TemplatePhonePreview } from '@/components/settings/template-phone-preview';
@@ -10,9 +9,9 @@ import { TemplatePhonePreview } from '@/components/settings/template-phone-previ
 export default function Chat14PreviewPage() {
   return (
     <main className="min-h-screen bg-[radial-gradient(ellipse_at_top,_#e8eef7,_#f7f4ef)] p-6 text-slate-900">
-      <h1 className="font-serif text-3xl tracking-tight">CHAT-14 UI preview</h1>
+      <h1 className="font-serif text-3xl tracking-tight">UI preview</h1>
       <p className="mt-1 max-w-xl text-sm text-slate-600">
-        Stubbed surfaces for verification screenshots. Default import country IN.
+        Preview surfaces for verification screenshots. Default import country IN.
         No live Meta calls.
       </p>
 
@@ -139,7 +138,7 @@ export default function Chat14PreviewPage() {
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <h3 className="text-base font-semibold">Connect WhatsApp Business</h3>
           <p className="mt-1 text-sm text-slate-600">
-            Launch Meta Embedded Signup to link a phone number. META_STUB mode
+            Launch Meta Embedded Signup to link a phone number. Preview mode
             simulates approval without calling Graph.
           </p>
           <button
@@ -149,7 +148,7 @@ export default function Chat14PreviewPage() {
             Continue with Facebook
           </button>
           <p className="mt-3 text-xs text-slate-500">
-            Status: pending → approved (stub)
+            Status: pending → approved
           </p>
         </div>
       </section>

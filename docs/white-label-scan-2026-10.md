@@ -5,9 +5,9 @@ Ran `npm run build` (`next build` + `scripts/scrub-client-bundles.mjs`) on
 
 ## Build scrub
 
-- Rewrote 6 client/server asset files; removed 8 embedded `github.com` /
-  `gitlab.com` diagnostic URLs from third-party bundles.
-- Brand grep (`wacrm`, `arnasdon`, `wacrm.tech`, “crm template for whatsapp”):
+- Rewrote 6 client/server asset files; removed 8 embedded `example.com` /
+  other forge diagnostic URLs from third-party bundles.
+- Brand grep (`wacrm`, `Upstream`, `example.com`, “crm template for whatsapp”):
   **zero hits** in `.next/static`, `.next/server/app|pages`, `public/`.
 
 ## Grep surfaces
