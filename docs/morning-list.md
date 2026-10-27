@@ -42,7 +42,7 @@ Real DB is **wacrm-staging** (owner applies migrations). Latest on branch starts
 | CHAT-23 Flow builder | **done** | `704b63a` | `055_flow_builder_nodes.sql` | Visual nodes + test simulator; `artifacts/chat-23/` |
 | CHAT-24 CTWA ads | **done** | `fc07e35` | `056_ctwa_ads_attribution.sql` | Referral capture + `/ads` report; `artifacts/chat-24/` |
 | CHAT-25 Intents | **done** | `55f887d` | `057_intents.sql` | Intent manager + intent_hints; `artifacts/chat-25/` |
-| CHAT-26 Re-verify (13/14/15) | **done** | _(pending commit)_ | — | White-label + 1293 tests + UI audit; `artifacts/chat-26/` |
+| CHAT-26 Re-verify (13/14/15) | **done** | `9625885` | — | White-label + 1293 tests + UI audit; `artifacts/chat-26/` |
 
 ## Migrations owner must apply on wacrm-staging
 
