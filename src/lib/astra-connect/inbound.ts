@@ -50,6 +50,16 @@ export interface DispatchInboundToAstraArgs {
   mediaMimeType?: string | null
   mediaCaption?: string | null
   mediaFilename?: string | null
+  /**
+   * Optional local intent matches (CHAT-25). Forwarded to Connect as
+   * `intent_hints` so the AI Employee can bias classification.
+   */
+  intentHints?: Array<{
+    name: string
+    confidence: number
+    matched_phrase?: string
+    display_name?: string
+  }> | null
   /** Injectables for tests. */
   postFn?: typeof postSignedJson
   sendTextFn?: typeof engineSendText
@@ -160,6 +170,14 @@ export async function dispatchInboundToAstraConnect(
     if (text) payload.text = text
     if (media.length > 0) payload.media = media
     if (args.customerName) payload.customer_name = args.customerName
+    if (args.intentHints && args.intentHints.length > 0) {
+      payload.intent_hints = args.intentHints.map((h) => ({
+        name: h.name,
+        confidence: h.confidence,
+        matched_phrase: h.matched_phrase,
+        display_name: h.display_name,
+      }))
+    }
 
     const rawBody = JSON.stringify(payload)
     const result = await post<AstraInboundResponse>({

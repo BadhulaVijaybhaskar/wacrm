@@ -40,8 +40,8 @@ Real DB is **wacrm-staging** (owner applies migrations). Latest on branch starts
 | CHAT-21 CRM push | **done** | `333bb79` | `053_crm_push.sql` | HubSpot/Zoho/Astra CRM push + retry log |
 | CHAT-22 IG + Messenger inbox | **done** | `69ed709` | `054_messaging_channels.sql` | Channel field + Meta messaging stub |
 | CHAT-23 Flow builder | **done** | `704b63a` | `055_flow_builder_nodes.sql` | Visual nodes + test simulator; `artifacts/chat-23/` |
-| CHAT-24 CTWA ads | **done** | _(pending commit)_ | `056_ctwa_ads_attribution.sql` | Referral capture + `/ads` report; `artifacts/chat-24/` |
-| CHAT-25 Intents | not started | — | — | |
+| CHAT-24 CTWA ads | **done** | `fc07e35` | `056_ctwa_ads_attribution.sql` | Referral capture + `/ads` report; `artifacts/chat-24/` |
+| CHAT-25 Intents | **done** | _(pending commit)_ | `057_intents.sql` | Intent manager + intent_hints; `artifacts/chat-25/` |
 | CHAT-26 Re-verify (13/14/15) | not started | — | — | |
 
 ## Migrations owner must apply on wacrm-staging
@@ -60,3 +60,4 @@ Real DB is **wacrm-staging** (owner applies migrations). Latest on branch starts
 - `054_messaging_channels.sql` ← CHAT-22
 - `055_flow_builder_nodes.sql` ← CHAT-23
 - `056_ctwa_ads_attribution.sql` ← CHAT-24
+- `057_intents.sql` ← CHAT-25

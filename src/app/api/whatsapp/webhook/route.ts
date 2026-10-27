@@ -39,6 +39,8 @@ import {
 } from '@/lib/whatsapp/template-webhook'
 import { parseCtwaReferral } from '@/lib/ads/ctwa'
 import { persistCtwaAttribution } from '@/lib/ads/store'
+import { detectIntentHints } from '@/lib/intents/load'
+import { dispatchLocalIntentTriggers } from '@/lib/intents/dispatch'
 
 // The `after()` callback in POST runs within this route's max duration.
 // Inbound processing can fan out to per-media Meta verification calls, so
@@ -1040,6 +1042,15 @@ async function processMessage(
     }).catch((err) => console.error('[automations] dispatch failed:', err))
   }
 
+  // Intent hints (CHAT-25): local training-phrase match. Always computed
+  // for text inbound so Connect can receive soft hints; when the adapter
+  // is off we may also fire a linked flow/automation.
+  const intentText = (inboundText || contentText || '').trim()
+  const intentHints =
+    intentText && !interactiveReplyId
+      ? await detectIntentHints(supabaseAdmin(), accountId, intentText)
+      : []
+
   // Astra Connect adapter (opt-in per account). When enabled, Connect's
   // AI Employee owns the reply — wacrm's built-in AI must not also
   // answer. Forward text and/or media; Connect handles language.
@@ -1077,23 +1088,37 @@ async function processMessage(
       mediaCaption: message.image?.caption || message.video?.caption ||
         message.document?.caption || null,
       mediaFilename: message.document?.filename || null,
+      intentHints: intentHints.length > 0 ? intentHints : null,
     })
-  } else if (!flowConsumed && !interactiveReplyId && inboundText.trim()) {
-    // Built-in AI auto-reply. Runs only for plain-text inbound the
-    // deterministic flow runner did NOT consume (flows win over the
-    // LLM), and only when the account has enabled it. Awaited inside
-    // `after()` (same reason as the webhook dispatch below);
-    // `dispatchInboundToAiReply` owns its eligibility gates + try/catch
-    // and never throws.
-    await dispatchInboundToAiReply({
-      accountId,
-      conversationId: conversation.id,
-      contactId: contactRecord.id,
-      configOwnerUserId,
-      // Lets the bot show "typing…" (and mark the message read) while
-      // the reply is generated.
-      inboundMessageId: message.id,
-    })
+  } else {
+    if (!flowConsumed && intentHints.length > 0) {
+      await dispatchLocalIntentTriggers({
+        db: supabaseAdmin(),
+        accountId,
+        contactId: contactRecord.id,
+        conversationId: conversation.id,
+        hints: intentHints,
+      }).catch((err) =>
+        console.error('[intents] local dispatch failed:', err),
+      )
+    }
+    if (!flowConsumed && !interactiveReplyId && inboundText.trim()) {
+      // Built-in AI auto-reply. Runs only for plain-text inbound the
+      // deterministic flow runner did NOT consume (flows win over the
+      // LLM), and only when the account has enabled it. Awaited inside
+      // `after()` (same reason as the webhook dispatch below);
+      // `dispatchInboundToAiReply` owns its eligibility gates + try/catch
+      // and never throws.
+      await dispatchInboundToAiReply({
+        accountId,
+        conversationId: conversation.id,
+        contactId: contactRecord.id,
+        configOwnerUserId,
+        // Lets the bot show "typing…" (and mark the message read) while
+        // the reply is generated.
+        inboundMessageId: message.id,
+      })
+    }
   }
 
   // message.received webhook (public API). Awaited — not fire-and-forget

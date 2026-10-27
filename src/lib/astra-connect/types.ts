@@ -31,6 +31,14 @@ export interface AstraIdentityFields {
   customer_phone: string
 }
 
+/** Optional intent hints from wacrm's local phrase matcher (CHAT-25). */
+export interface AstraIntentHint {
+  name: string
+  confidence: number
+  matched_phrase?: string
+  display_name?: string
+}
+
 export interface AstraInboundRequest extends AstraIdentityFields {
   customer_name?: string
   message_id: string
@@ -38,6 +46,12 @@ export interface AstraInboundRequest extends AstraIdentityFields {
   timestamp: string
   text?: string
   media?: AstraMediaRef[]
+  /**
+   * Optional. Detected intent candidates from Astra Chat's training-phrase
+   * matcher. Connect's AI Employee may use these as soft hints; they are
+   * never required. Omitted when no phrases match.
+   */
+  intent_hints?: AstraIntentHint[]
 }
 
 export interface AstraInboundResponse {

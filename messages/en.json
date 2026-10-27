@@ -2145,7 +2145,8 @@
       "byModel": "By model",
       "modelCalls": "{tokens} tok · {count, plural, =1 {# call} other {# calls}}",
       "partialWindow": "Showing a partial window — usage is high enough that only the most recent records are summarized here."
-    }
+    },
+    "tabIntents": "Intents"
   },
   "Interactive": {
     "replyButtons": "Reply buttons",

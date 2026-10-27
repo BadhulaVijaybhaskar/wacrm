@@ -38,7 +38,7 @@ also reply for that account.
 
 | Event | Action |
 |---|---|
-| Inbound customer message | `POST /api/channels/whatsapp/inbound` → send `reply_text`; honour `handoff` |
+| Inbound customer message | `POST /api/channels/whatsapp/inbound` → send `reply_text`; honour `handoff`. Optional `intent_hints` (CHAT-25) may be included — see below. |
 | Agent / template / broadcast / automation / flow outbound | `POST /api/channels/whatsapp/message` (best-effort; never blocks the Meta send) |
 | Take over (pause AI) | `POST /handoff` with `handoff:true` |
 | Resume AI / close chat | `POST /handoff` with `handoff:false` |
@@ -50,3 +50,33 @@ with the same body; otherwise hand the thread to a human.
 
 HMAC signatures use lowercase hex when we sign. Verification accepts
 either lowercase or uppercase hex (Connect accepts both).
+
+## Optional `intent_hints` (CHAT-25)
+
+When Astra Chat has enabled intents with training phrases, the inbound
+adapter POST may include an optional `intent_hints` array. Connect's AI
+Employee may use these as soft classification hints; they are never
+required and may be omitted when nothing matches.
+
+```json
+{
+  "tenant_id": "t_…",
+  "phone_number_id": "…",
+  "customer_phone": "+9198…",
+  "message_id": "wamid.…",
+  "timestamp": "2024-01-01T00:00:00.000Z",
+  "text": "where is my order",
+  "intent_hints": [
+    {
+      "name": "order_status",
+      "display_name": "Order status",
+      "confidence": 1,
+      "matched_phrase": "where is my order"
+    }
+  ]
+}
+```
+
+When the adapter is **off**, the same local matcher can start a linked
+flow (`trigger_flow_id`) or automation (`trigger_automation_id`) on the
+intent. Manage intents under **AI Agents → Intents**.

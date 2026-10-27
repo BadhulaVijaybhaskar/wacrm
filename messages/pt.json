@@ -2145,7 +2145,8 @@
       "byModel": "Por modelo",
       "modelCalls": "{tokens} tok · {count, plural, =1 {# chamada} other {# chamadas}}",
       "partialWindow": "Exibindo uma janela parcial — o uso é alto o suficiente para que apenas os registros mais recentes sejam resumidos aqui."
-    }
+    },
+    "tabIntents": "Intenções"
   },
   "Interactive": {
     "replyButtons": "Botões de resposta",

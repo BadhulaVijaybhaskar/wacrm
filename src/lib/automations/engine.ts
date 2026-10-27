@@ -119,6 +119,39 @@ export async function runAutomationsForTrigger(input: DispatchInput): Promise<vo
 }
 
 /**
+ * Run one automation by id (intent triggers / manual). Returns false if
+ * missing, inactive, or wrong account.
+ */
+export async function executeAutomationById(opts: {
+  automationId: string
+  accountId: string
+  contactId?: string | null
+  context?: AutomationContext
+}): Promise<boolean> {
+  try {
+    const db = supabaseAdmin()
+    const { data: automation, error } = await db
+      .from('automations')
+      .select('*')
+      .eq('id', opts.automationId)
+      .eq('account_id', opts.accountId)
+      .eq('is_active', true)
+      .maybeSingle()
+    if (error || !automation) return false
+    await executeAutomation(automation as Automation, {
+      accountId: opts.accountId,
+      triggerType: (automation as Automation).trigger_type,
+      contactId: opts.contactId ?? null,
+      context: opts.context ?? {},
+    })
+    return true
+  } catch (err) {
+    console.error('[automations] executeAutomationById failed:', err)
+    return false
+  }
+}
+
+/**
  * Resume a run that was parked at a wait step. Called from the cron
  * endpoint after it grabs a due `automation_pending_executions` row.
  */
