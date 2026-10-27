@@ -9,8 +9,8 @@ Real DB is **wacrm-staging** (owner applies migrations). New migrations must con
 
 | Item | Status | SHA | Tests | Screenshot / notes |
 | --- | --- | --- | --- | --- |
-| CHAT-02b brand + Connect UI kit theme | **done** | `0c0b42c` | `vitest` 1114 passed; `tsc --noEmit` clean | `artifacts/chat-02b/chat-02b-login.png`, `chat-02b-signup.png`, `chat-02b-forgot-password.png`, `chat-02b-login-dark.png` |
-| Golden rule + CHAT-15 UI control audit | in progress next | — | — | Target: `docs/ui-control-audit.md` |
+| CHAT-02b brand + Connect UI kit theme | **done** | `fec6672` | `vitest` 1114 passed; `tsc --noEmit` clean | `artifacts/chat-02b/chat-02b-login.png`, `chat-02b-signup.png`, `chat-02b-forgot-password.png`, `chat-02b-login-dark.png` |
+| Golden rule + CHAT-15 UI control audit | **crawl done** (fixes next) | — | — | Report: `docs/ui-control-audit.md`. Top: dead forgot-password E2E (`/auth/callback` + `/reset-password` missing); hide Auth template category; ownership transfer API has no UI. |
 | CHAT-12 security hardening | not started | — | — | Auth on every route, tenant isolation, webhook sigs, rate limits, XSS |
 | CHAT-04b Connect read/takeover API | **done** | `9222bbe` | covered in suite at land | Migrations: `046_astra_connect_read_api.sql`. Docs: `docs/astra-connect-read-api.md` |
 | CHAT-05 per-tenant secrets | **done** (landed; only revisit if 04b needs more) | `e242732` | suite | Migration: `044_astra_connect_tenant_secret.sql` |
