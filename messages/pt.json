@@ -230,7 +230,8 @@
       "send": "Enviar",
       "quickReplyNamePrompt": "Dê um nome a esta resposta rápida:",
       "quickReplySaved": "Salva como resposta rápida.",
-      "quickReplySaveError": "Não foi possível salvar a resposta rápida."
+      "quickReplySaveError": "Não foi possível salvar a resposta rápida.",
+      "paymentLink": "Link de pagamento"
     },
     "bubble": {
       "photo": "Foto",

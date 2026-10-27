@@ -108,6 +108,8 @@ export async function middleware(request: NextRequest) {
       '/api/webhooks/cron',
       '/api/integrations/shopify/webhook',
       '/api/integrations/woocommerce/webhook',
+      '/api/integrations/razorpay/webhook',
+      '/api/integrations/stripe/webhook',
     ]
     const isPublic = publicApiPrefixes.some(
       (prefix) => path === prefix || path.startsWith(prefix),
