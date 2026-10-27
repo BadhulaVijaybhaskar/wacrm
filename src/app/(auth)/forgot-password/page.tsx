@@ -47,7 +47,7 @@ export default function ForgotPasswordPage() {
   if (success) {
     return (
       <div className="acl-wrap">
-        <Card className="acl-card !block !gap-0 !py-0">
+        <Card className="acl-card !block !gap-0">
           <CardHeader className="items-center px-0 text-center">
             <div className="bg-primary/10 mb-2 flex h-12 w-12 items-center justify-center rounded-xl">
               <CheckCircle className="text-primary h-6 w-6" />
@@ -74,7 +74,7 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="acl-wrap">
-      <Card className="acl-card !block !gap-0 !py-0">
+      <Card className="acl-card !block !gap-0">
         <CardHeader className="items-center px-0 text-center">
           <BrandLockup
             size={275}

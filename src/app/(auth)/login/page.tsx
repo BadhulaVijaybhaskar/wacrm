@@ -75,7 +75,7 @@ function LoginPageInner() {
 
   return (
     <div className="acl-wrap">
-      <Card className="acl-card !block !gap-0 !py-0">
+      <Card className="acl-card !block !gap-0">
         <CardHeader className="items-center px-0 text-center">
           <BrandLockup
             size={275}
