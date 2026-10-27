@@ -35,10 +35,13 @@ async function assertProductionPage(page, label) {
       hasBadge: Boolean(badge),
       issuePill,
       // Turbopack / next-dev markers that must never appear in prod shots.
-      turbopack: Boolean(
-        document.querySelector('script[src*="turbopack"]') ||
-          document.documentElement.innerHTML.includes('__next_error__'),
+      // Next 16 production builds may use Turbopack compiler chunk names;
+      // only fail on actual DEV markers (HMR / next-devtools / portal).
+      hasHmr: Boolean(
+        document.querySelector('script[src*="hmr-client"]') ||
+          document.querySelector('script[src*="next-devtools"]'),
       ),
+      hasErrorOverlay: document.documentElement.innerHTML.includes('__next_error__'),
     };
   });
   if (
@@ -46,7 +49,8 @@ async function assertProductionPage(page, label) {
     probe.hasToast ||
     probe.hasBadge ||
     probe.issuePill ||
-    probe.turbopack
+    probe.hasHmr ||
+    probe.hasErrorOverlay
   ) {
     throw new Error(
       `[shot-guard] ${label}: Next.js DEV UI detected (${JSON.stringify(probe)}). ` +
@@ -80,12 +84,13 @@ async function setMode(page, mode) {
     document.documentElement.classList.toggle('dark', m === 'dark');
     document.documentElement.dataset.mode = m;
   }, mode);
-  await page.reload({ waitUntil: 'networkidle' });
+  await page.reload({ waitUntil: 'load' });
   await page.waitForTimeout(400);
 }
 
 async function login(page) {
-  await page.goto(`${BASE}/login`, { waitUntil: 'networkidle' });
+  await page.goto(`${BASE}/login`, { waitUntil: 'load' });
+  await page.waitForSelector('[data-brand-lockup="light"]', { state: 'attached', timeout: 20000 });
   await assertProductionPage(page, 'login');
   await page.fill('input#email, input[type=email]', EMAIL);
   await page.fill('input#password, input[type=password]', PASS);
@@ -103,7 +108,7 @@ async function login(page) {
 
 async function openPriyaThread(page) {
   await page.goto(`${BASE}/inbox?c=${PRIYA_CONV_ID}`, {
-    waitUntil: 'networkidle',
+    waitUntil: 'load',
   });
   await page.waitForTimeout(900);
   // Fallback: click the list row if deep-link didn't select.
@@ -158,7 +163,7 @@ async function main() {
   await collectConsoleErrors(page, hydrationErrors);
 
   // Warm login page first — proves prod (no nextjs-portal).
-  await page.goto(`${BASE}/login`, { waitUntil: 'networkidle' });
+  await page.goto(`${BASE}/login`, { waitUntil: 'load' });
   await assertProductionPage(page, 'preflight');
 
   await login(page);
@@ -186,14 +191,14 @@ async function main() {
         });
         await openPriyaThread(page);
       } else {
-        await page.goto(`${BASE}${path}`, { waitUntil: 'networkidle' });
+        await page.goto(`${BASE}${path}`, { waitUntil: 'load' });
         await page.waitForTimeout(700);
       }
       await shot(page, `${name}-${mode}.png`);
     }
 
     await page.goto(`${BASE}/settings?tab=integrations`, {
-      waitUntil: 'networkidle',
+      waitUntil: 'load',
     });
     await page.waitForTimeout(700);
     await scrollIntegrationsToCrm(page);
@@ -202,7 +207,7 @@ async function main() {
 
   // Login shots (signed out)
   await context.clearCookies();
-  await page.goto(`${BASE}/login`, { waitUntil: 'networkidle' });
+  await page.goto(`${BASE}/login`, { waitUntil: 'load' });
   for (const mode of ['light', 'dark']) {
     await setMode(page, mode);
     // Confirm dark lockup is the visible asset in dark mode.
@@ -251,7 +256,7 @@ async function main() {
   ]) {
     await p2.setViewportSize({ width: w, height: h });
     await p2.goto(`${BASE}/settings?tab=integrations`, {
-      waitUntil: 'networkidle',
+      waitUntil: 'load',
     });
     await p2.waitForTimeout(700);
     if (w === 390) await scrollIntegrationsToCrm(p2);
@@ -259,7 +264,7 @@ async function main() {
   }
 
   await p2.setViewportSize({ width: 390, height: 844 });
-  await p2.goto(`${BASE}/settings?tab=profile`, { waitUntil: 'networkidle' });
+  await p2.goto(`${BASE}/settings?tab=profile`, { waitUntil: 'load' });
   await p2.waitForTimeout(700);
   await shot(p2, 'settings-390.png');
 
