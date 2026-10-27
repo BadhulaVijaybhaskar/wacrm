@@ -13,7 +13,7 @@ import { buildSignatureHeader } from '@/lib/webhooks/sign';
 export const LEGACY_HEADERS_UNTIL = '2026-11-26';
 
 export function legacyWebhookHeadersEnabled(
-  env: NodeJS.ProcessEnv = process.env,
+  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
   now: Date = new Date(),
 ): boolean {
   const raw = env.WEBHOOK_LEGACY_HEADERS;
