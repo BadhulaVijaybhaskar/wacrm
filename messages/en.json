@@ -1544,7 +1544,17 @@
       "toastInvalidDocument": "Header document must be a PDF, Word, PowerPoint, Excel or text file.",
       "toastMediaTooLarge": "File is {size} MB — the upload limit is {max} MB.",
       "toastUploadSuccess": "File uploaded.",
-      "toastUploadFailed": "Upload failed."
+      "toastUploadFailed": "Upload failed.",
+      "previewLabel": "Live preview",
+      "stubApprove": "Approve",
+      "stubReject": "Reject",
+      "stubApproveTitle": "Simulate Meta approval (stub / dry-run)",
+      "stubApproveLabel": "Simulate approve template",
+      "stubRejectTitle": "Simulate Meta rejection (stub / dry-run)",
+      "stubRejectLabel": "Simulate reject template",
+      "stubDecisionFailed": "Stub decision failed (HTTP {status})",
+      "toastStubApproved": "Stub marked template APPROVED",
+      "toastStubRejected": "Stub marked template REJECTED"
     },
     "roles": {
       "admin": "Admin",

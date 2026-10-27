@@ -1544,7 +1544,17 @@
       "toastInvalidDocument": "El documento del encabezado debe ser un archivo PDF, Word, PowerPoint, Excel o de texto.",
       "toastMediaTooLarge": "El archivo pesa {size} MB; el límite de carga es {max} MB.",
       "toastUploadSuccess": "Archivo subido.",
-      "toastUploadFailed": "Error al subir."
+      "toastUploadFailed": "Error al subir.",
+      "previewLabel": "Vista previa",
+      "stubApprove": "Aprobar",
+      "stubReject": "Rechazar",
+      "stubApproveTitle": "Simulate Meta approval (stub / dry-run)",
+      "stubApproveLabel": "Simulate approve template",
+      "stubRejectTitle": "Simulate Meta rejection (stub / dry-run)",
+      "stubRejectLabel": "Simulate reject template",
+      "stubDecisionFailed": "Stub decision failed (HTTP {status})",
+      "toastStubApproved": "Stub marcó la plantilla como APPROVED",
+      "toastStubRejected": "Stub marcó la plantilla como REJECTED"
     },
     "roles": {
       "admin": "Administrador",

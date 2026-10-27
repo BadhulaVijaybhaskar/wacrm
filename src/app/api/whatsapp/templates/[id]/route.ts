@@ -11,6 +11,7 @@ import {
 } from '@/lib/whatsapp/template-validators'
 import { buildMetaTemplatePayload } from '@/lib/whatsapp/template-components'
 import { ensureMediaHeaderHandle } from '@/lib/whatsapp/template-header-handle'
+import { isTemplatesDryRun } from '@/lib/whatsapp/templates-dry-run'
 
 /**
  * Per-template lifecycle endpoint.
@@ -38,10 +39,7 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 function isDryRun(): boolean {
-  return (
-    process.env.WHATSAPP_TEMPLATES_DRY_RUN === 'true' ||
-    process.env.WHATSAPP_TEMPLATES_DRY_RUN === '1'
-  )
+  return isTemplatesDryRun()
 }
 
 export async function PATCH(

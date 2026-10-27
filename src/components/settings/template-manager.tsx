@@ -57,6 +57,8 @@ import {
   extractVariableIndices,
   TEMPLATE_LIMITS,
 } from '@/lib/whatsapp/template-validators';
+import { isDryRunTemplateId } from '@/lib/whatsapp/templates-dry-run';
+import { TemplatePhonePreview } from './template-phone-preview';
 
 const CATEGORIES = ['Marketing', 'Utility', 'Authentication'] as const;
 type HeaderFormat = 'none' | 'text' | 'image' | 'video' | 'document';
@@ -155,6 +157,7 @@ export function TemplateManager() {
   // header_media_url; the submit route turns that into a Meta
   // Resumable-Upload handle.
   const [uploadingHeader, setUploadingHeader] = useState(false);
+  const [stubDecidingId, setStubDecidingId] = useState<string | null>(null);
   const headerFileRef = useRef<HTMLInputElement>(null);
 
   // Body variable indices — `[1, 2, 3]` for "{{1}} {{2}} {{3}}". We
@@ -261,6 +264,43 @@ export function TemplateManager() {
     setEditingId(null);
     setForm(emptyForm);
     setDialogOpen(true);
+  }
+
+  async function handleStubDecision(
+    template: MessageTemplate,
+    decision: 'APPROVED' | 'REJECTED',
+  ) {
+    setStubDecidingId(template.id);
+    try {
+      const res = await fetch(
+        `/api/whatsapp/templates/${template.id}/stub-decision`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            decision,
+            reason:
+              decision === 'REJECTED' ? 'Rejected by Meta stub' : undefined,
+          }),
+        },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          data?.error || t('stubDecisionFailed', { status: res.status }),
+        );
+      }
+      toast.success(
+        decision === 'APPROVED'
+          ? t('toastStubApproved')
+          : t('toastStubRejected'),
+      );
+      if (user?.id) await fetchTemplates(user.id);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('toastSubmitFailed'));
+    } finally {
+      setStubDecidingId(null);
+    }
   }
 
   async function handleSubmit() {
@@ -607,6 +647,40 @@ export function TemplateManager() {
                     )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0 ml-2">
+                    {statusKey === 'PENDING' &&
+                      isDryRunTemplateId(template.meta_template_id) && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={stubDecidingId === template.id}
+                            onClick={() =>
+                              handleStubDecision(template, 'APPROVED')
+                            }
+                            title={t('stubApproveTitle')}
+                            aria-label={t('stubApproveLabel')}
+                            className="text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10 h-8 px-2"
+                          >
+                            {stubDecidingId === template.id ? (
+                              <Loader2 className="size-3.5 animate-spin" />
+                            ) : null}
+                            {t('stubApprove')}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={stubDecidingId === template.id}
+                            onClick={() =>
+                              handleStubDecision(template, 'REJECTED')
+                            }
+                            title={t('stubRejectTitle')}
+                            aria-label={t('stubRejectLabel')}
+                            className="text-muted-foreground hover:text-red-400 hover:bg-red-500/10 h-8 px-2"
+                          >
+                            {t('stubReject')}
+                          </Button>
+                        </>
+                      )}
                     {statusKey === 'APPROVED' && (
                       <Button
                         variant="ghost"
@@ -674,7 +748,7 @@ export function TemplateManager() {
           }
         }}
       >
-        <DialogContent className="bg-popover border-border sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="bg-popover border-border sm:max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-popover-foreground">
               {editingId ? t('dialogEditTitle') : t('dialogNewTitle')}
@@ -693,7 +767,8 @@ export function TemplateManager() {
             </div>
           )}
 
-          <div className="space-y-4 py-2">
+          <div className="grid gap-6 py-2 lg:grid-cols-[minmax(0,1fr)_260px]">
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label className="text-muted-foreground">{t('templateName')}</Label>
               <Input
@@ -1087,6 +1162,20 @@ export function TemplateManager() {
                 </div>
               )}
             </div>
+          </div>
+
+            <TemplatePhonePreview
+              className="lg:sticky lg:top-0"
+              label={t('previewLabel')}
+              headerFormat={form.header_format}
+              headerContent={form.header_content}
+              headerMediaUrl={form.header_media_url}
+              headerSample={form.header_sample}
+              bodyText={form.body_text}
+              bodySamples={form.body_samples}
+              footerText={form.footer_text}
+              buttons={form.buttons}
+            />
           </div>
 
           <DialogFooter className="bg-popover border-border">

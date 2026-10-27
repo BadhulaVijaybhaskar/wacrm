@@ -15,6 +15,7 @@ import {
 import { buildMetaTemplatePayload } from '@/lib/whatsapp/template-components'
 import { ensureMediaHeaderHandle } from '@/lib/whatsapp/template-header-handle'
 import { normalizeStatus } from '@/lib/whatsapp/template-status-normalize'
+import { isTemplatesDryRun } from '@/lib/whatsapp/templates-dry-run'
 
 /**
  * Shared upsert payload builder — both the Meta-failure path and the
@@ -127,9 +128,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const dryRun =
-      process.env.WHATSAPP_TEMPLATES_DRY_RUN === 'true' ||
-      process.env.WHATSAPP_TEMPLATES_DRY_RUN === '1'
+    const dryRun = isTemplatesDryRun()
 
     let metaTemplateId: string
     let metaStatus: string

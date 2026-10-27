@@ -19,7 +19,7 @@ Real DB is **wacrm-staging** (owner applies migrations). New migrations must con
 | CHAT-09 | not started | — | — | Spec TBD / deferred |
 | CHAT-11 | not started | — | — | Spec TBD / deferred |
 | CHAT-10 | not started | — | — | Spec TBD / deferred |
-| CHAT-08 | not started | — | — | Spec TBD / deferred |
+| CHAT-08 Template manager | **done** | `d485409` | stub-decision + preview tests | phone preview; META_STUB/DRY_RUN approve/reject |
 | CHAT-06 usage metering | **done** | `3a28e3e` | suite | Migration: `045_astra_usage_metering.sql` |
 | CHAT-07 Embedded Signup | **done** | `34759b9` | suite | Scaffolding only |
 | CHAT-04 outbound mirror | **done** (gated off) | `04f6113` + gate `cf8b43a` | suite | `CONNECT_MIRROR_OUTBOUND` default off |

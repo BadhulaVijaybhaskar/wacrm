@@ -1544,7 +1544,17 @@
       "toastInvalidDocument": "헤더 문서는 PDF, Word, PowerPoint, Excel 또는 텍스트 파일이어야 합니다.",
       "toastMediaTooLarge": "파일 크기가 {size}MB입니다 — 업로드 제한은 {max}MB입니다.",
       "toastUploadSuccess": "파일이 업로드되었습니다.",
-      "toastUploadFailed": "업로드에 실패했습니다."
+      "toastUploadFailed": "업로드에 실패했습니다.",
+      "previewLabel": "미리보기",
+      "stubApprove": "승인",
+      "stubReject": "거절",
+      "stubApproveTitle": "Simulate Meta approval (stub / dry-run)",
+      "stubApproveLabel": "Simulate approve template",
+      "stubRejectTitle": "Simulate Meta rejection (stub / dry-run)",
+      "stubRejectLabel": "Simulate reject template",
+      "stubDecisionFailed": "Stub decision failed (HTTP {status})",
+      "toastStubApproved": "스텁이 템플릿을 APPROVED로 표시함",
+      "toastStubRejected": "스텁이 템플릿을 REJECTED로 표시함"
     },
     "roles": {
       "admin": "관리자",
