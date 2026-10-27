@@ -52,9 +52,9 @@ export function IntegrationCard({
 }) {
   const [connectOpen, setConnectOpen] = useState(false);
   const [fields, setFields] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState<'connect' | 'disconnect' | 'test' | null>(
-    null,
-  );
+  const [busy, setBusy] = useState<
+    'connect' | 'disconnect' | 'test' | 'catalog' | null
+  >(null);
 
   const statusLabel = useMemo(() => {
     if (connection.status === 'connected') return 'Connected';
@@ -121,6 +121,34 @@ export function IntegrationCard({
       }
       onChanged(payload.connection as PublicIntegrationConnection);
       toast.success(`${meta.name} disconnected`);
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const syncCatalog = async () => {
+    setBusy('catalog');
+    try {
+      const res = await fetch(
+        `/api/account/integrations/${meta.id}/catalog-sync`,
+        { method: 'POST' },
+      );
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(
+          typeof payload.error === 'string'
+            ? payload.error
+            : 'Catalog sync failed',
+        );
+        return;
+      }
+      toast.success(
+        payload.stub
+          ? `Stub catalog synced (${payload.synced} items)`
+          : `Synced ${payload.synced} items`,
+      );
     } catch {
       toast.error('Network error');
     } finally {
@@ -246,6 +274,22 @@ export function IntegrationCard({
             ) : null}
             Test connection
           </Button>
+          {(meta.id === 'shopify' || meta.id === 'woocommerce') &&
+          canEdit &&
+          connection.status === 'connected' ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={busy !== null}
+              onClick={() => void syncCatalog()}
+            >
+              {busy === 'catalog' ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : null}
+              Sync catalog
+            </Button>
+          ) : null}
           <Button
             type="button"
             variant="ghost"

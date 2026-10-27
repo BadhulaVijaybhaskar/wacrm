@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { NextResponse } from 'next/server';
 
 import { supabaseAdmin } from '@/lib/automations/admin-client';
+import { processCommerceNotifyQueue } from '@/lib/integrations/commerce/orders';
 import { processWebhookRetryQueue } from '@/lib/webhooks/retry-queue';
 
 function secretsMatch(supplied: string, expected: string): boolean {
@@ -25,6 +26,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const result = await processWebhookRetryQueue(supabaseAdmin(), 50);
-  return NextResponse.json({ ok: true, ...result });
+  const admin = supabaseAdmin();
+  const webhooks = await processWebhookRetryQueue(admin, 50);
+  const commerce = await processCommerceNotifyQueue(admin, 50);
+  return NextResponse.json({ ok: true, webhooks, commerce });
 }

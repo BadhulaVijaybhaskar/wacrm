@@ -106,6 +106,8 @@ export async function middleware(request: NextRequest) {
       '/api/automations/cron',
       '/api/flows/cron',
       '/api/webhooks/cron',
+      '/api/integrations/shopify/webhook',
+      '/api/integrations/woocommerce/webhook',
     ]
     const isPublic = publicApiPrefixes.some(
       (prefix) => path === prefix || path.startsWith(prefix),

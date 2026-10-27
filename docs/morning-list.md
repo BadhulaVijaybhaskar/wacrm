@@ -32,8 +32,8 @@ Real DB is **wacrm-staging** (owner applies migrations). Latest on branch starts
 | Item | Status | SHA | Migrations | Notes |
 | --- | --- | --- | --- | --- |
 | CHAT-16 Integrations hub | **done** | `8d0a314` | `048_integrations_hub.sql` | Settings → Integrations; `artifacts/chat-16/` |
-| CHAT-17 Outbound webhooks / Zapier / Make | **in progress** | — | `049_webhook_retry_queue.sql` | Event catalog, REST hooks, retry cron, `/developers/api` |
-| CHAT-18 Shopify + WooCommerce | not started | — | — | |
+| CHAT-17 Outbound webhooks / Zapier / Make | **done** | `2d7e851` | `049_webhook_retry_queue.sql` | Event catalog, REST hooks, retry cron, `/developers/api` |
+| CHAT-18 Shopify + WooCommerce | **in progress** | — | `050_ecommerce_integrations.sql` | Webhooks + notify queue + catalog stub |
 | CHAT-19 Razorpay + Stripe | not started | — | — | |
 | CHAT-20 Google Sheets | not started | — | — | |
 | CHAT-21 CRM push | not started | — | — | |
@@ -52,3 +52,4 @@ Real DB is **wacrm-staging** (owner applies migrations). Latest on branch starts
 - `047_consent_ledger.sql`
 - `048_integrations_hub.sql` ← CHAT-16
 - `049_webhook_retry_queue.sql` ← CHAT-17
+- `050_ecommerce_integrations.sql` ← CHAT-18
