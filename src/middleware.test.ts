@@ -111,3 +111,33 @@ describe("middleware — refreshed auth cookies survive redirects", () => {
     expect(res.cookies.get(ROTATED.name)?.value).toBe(ROTATED.value);
   });
 });
+
+describe("middleware — /api/whatsapp auth gate", () => {
+  it("returns 401 JSON for an unauthenticated WhatsApp API call", async () => {
+    mockUser = null;
+
+    const res = await middleware(
+      new NextRequest("https://app.test/api/whatsapp/send", {
+        method: "POST",
+      }),
+    );
+
+    expect(res.status).toBe(401);
+    await expect(res.json()).resolves.toEqual({ error: "Unauthorized" });
+  });
+
+  it("allows the Meta webhook through without a session", async () => {
+    mockUser = null;
+    refreshedCookies = [ROTATED];
+
+    const res = await middleware(
+      new NextRequest("https://app.test/api/whatsapp/webhook", {
+        method: "POST",
+      }),
+    );
+
+    expect(res.status).not.toBe(401);
+    expect(res.headers.get("location")).toBeNull();
+    expect(res.cookies.get(ROTATED.name)?.value).toBe(ROTATED.value);
+  });
+});

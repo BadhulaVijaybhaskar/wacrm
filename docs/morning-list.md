@@ -11,7 +11,7 @@ Real DB is **wacrm-staging** (owner applies migrations). New migrations must con
 | --- | --- | --- | --- | --- |
 | CHAT-02b brand + Connect UI kit theme | **done** | `fec6672` | `vitest` 1114 passed; `tsc --noEmit` clean | `artifacts/chat-02b/` |
 | Golden rule + CHAT-15 UI control audit | **done** | `06fc665` | `vitest` 1125 passed; `tsc --noEmit` clean | `docs/ui-control-audit.md`; `artifacts/chat-15/`; password-reset E2E fixed; Auth template create hidden |
-| CHAT-12 security hardening | in progress | — | — | Auth on every route, tenant isolation, webhook sigs, rate limits, XSS |
+| CHAT-12 security hardening | **done** | `2176e4d` | `vitest` 1132 passed; `tsc --noEmit` clean | `docs/chat-12-security.md`; `artifacts/chat-12/chat-12-security.png`; admin gates + engine RL + middleware API tests |
 | CHAT-04b Connect read/takeover API | **done** | `9222bbe` | covered in suite at land | Migration: `046_astra_connect_read_api.sql` |
 | CHAT-05 per-tenant secrets | **done** | `e242732` | suite | Migration: `044_astra_connect_tenant_secret.sql` |
 | Staging smoke + seed + CHAT-14 screenshots | not started | — | — | `deploy/staging` smoke + seed script |
@@ -38,6 +38,5 @@ No new migration in CHAT-02b or CHAT-15.
 
 ## Next up
 
-1. CHAT-12 security + expanded tests.
-2. Staging smoke readiness + seed + CHAT-14 verification screenshots.
-3. Remaining value-ordered CHAT items only if they can ship cleanly; otherwise leave **not started**.
+1. Staging smoke readiness + seed + CHAT-14 verification screenshots.
+2. Remaining value-ordered CHAT items only if they can ship cleanly; otherwise leave **not started**.

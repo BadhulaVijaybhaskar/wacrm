@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import {
+  ForbiddenError,
+  UnauthorizedError,
+  requireRole,
+  toErrorResponse,
+} from '@/lib/auth/account'
+import {
   getSubscribedApps,
   listWabaPhoneNumbers,
   registerPhoneNumber,
@@ -246,24 +252,11 @@ export async function GET() {
  */
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient()
-
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const accountId = await resolveAccountId(supabase, user.id)
-    if (!accountId) {
-      return NextResponse.json(
-        { error: 'Your profile is not linked to an account.' },
-        { status: 403 },
-      )
-    }
+    // Saving WhatsApp credentials triggers Meta register/subscribe
+    // side effects before the local write. Membership alone is not
+    // enough — require admin (mirrors templates/submit).
+    const { supabase, accountId, userId } = await requireRole('admin')
+    const user = { id: userId }
 
     const body = await request.json()
     const { phone_number_id, waba_id, access_token, verify_token, pin } = body
@@ -568,6 +561,12 @@ export async function POST(request: Request) {
       phone_info: phoneInfo,
     })
   } catch (error) {
+    if (
+      error instanceof UnauthorizedError ||
+      error instanceof ForbiddenError
+    ) {
+      return toErrorResponse(error)
+    }
     console.error('Error in WhatsApp config POST:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
@@ -582,24 +581,7 @@ export async function POST(request: Request) {
  */
 export async function DELETE() {
   try {
-    const supabase = await createClient()
-
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const accountId = await resolveAccountId(supabase, user.id)
-    if (!accountId) {
-      return NextResponse.json(
-        { error: 'Your profile is not linked to an account.' },
-        { status: 403 },
-      )
-    }
+    const { supabase, accountId } = await requireRole('admin')
 
     const { error: deleteError } = await supabase
       .from('whatsapp_config')
@@ -616,6 +598,12 @@ export async function DELETE() {
 
     return NextResponse.json({ success: true })
   } catch (error) {
+    if (
+      error instanceof UnauthorizedError ||
+      error instanceof ForbiddenError
+    ) {
+      return toErrorResponse(error)
+    }
     console.error('Error in WhatsApp config DELETE:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
