@@ -147,16 +147,42 @@ async function collectConsoleErrors(page, bucket) {
   });
 }
 
-/** Fail if the mobile header lockup spills past the header chrome. */
+/** Fail if the mobile header lockup spills, or if it shows on desktop. */
 async function assertHeaderLockupFits(page, label) {
   const probe = await page.evaluate(() => {
     const header = document.querySelector('header.av-top, header');
     if (!header) return { ok: false, reason: 'no-header' };
+    const w = window.innerWidth;
+    const slot = header.querySelector('[data-testid="header-lockup-slot"]');
     const lockup = header.querySelector('.brand-lockup, [data-brand-lockup]');
+    const slotVisible = slot
+      ? getComputedStyle(slot).display !== 'none'
+      : false;
+    const lockupVisible = lockup
+      ? getComputedStyle(
+          lockup.classList?.contains('brand-lockup')
+            ? lockup
+            : lockup.closest('.brand-lockup') || lockup,
+        ).display !== 'none' &&
+        (slot ? slotVisible : true)
+      : false;
+
+    // Desktop must not show a second lockup next to the page title.
+    if (w >= 768) {
+      return {
+        ok: !slotVisible && !lockupVisible,
+        reason:
+          slotVisible || lockupVisible
+            ? 'desktop-lockup-visible'
+            : 'desktop-hidden',
+        width: w,
+        slotVisible,
+        lockupVisible,
+      };
+    }
+
     if (!lockup) {
-      // Desktop chrome hides the lockup — OK when viewport ≥ md.
-      const w = window.innerWidth;
-      return { ok: w >= 768, reason: w >= 768 ? 'desktop-no-lockup' : 'missing-lockup', width: w };
+      return { ok: false, reason: 'missing-lockup', width: w };
     }
     const root = lockup.classList?.contains('brand-lockup')
       ? lockup
@@ -178,15 +204,15 @@ async function assertHeaderLockupFits(page, label) {
       header: { top: h.top, bottom: h.bottom, height: h.height },
       lockup: { top: l.top, bottom: l.bottom, height: l.height, width: l.width },
       img: { top: ib.top, bottom: ib.bottom, height: ib.height },
-      width: window.innerWidth,
+      width: w,
     };
   });
   if (!probe.ok) {
     throw new Error(
-      `[shot-guard] ${label}: header lockup overflow ${JSON.stringify(probe)}`,
+      `[shot-guard] ${label}: header lockup ${JSON.stringify(probe)}`,
     );
   }
-  console.log('header-lockup-ok', label, probe.width);
+  console.log('header-lockup-ok', label, probe.width, probe.reason);
 }
 
 async function main() {

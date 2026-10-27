@@ -69,12 +69,16 @@ export function Header({ onOpenSidebar, titleOverride }: HeaderProps) {
         >
           <Menu className="size-5" />
         </button>
-        <BrandLockup
-          size={275}
-          width={154}
-          height={28}
-          className="h-7 max-h-7 w-auto max-w-[9.5rem] md:hidden"
-        />
+        {/* Wrapper carries md:hidden so .brand-lockup { display:inline-block }
+            (even if unlayered) cannot resurrect the mobile lockup on desktop. */}
+        <span className="md:hidden" data-testid="header-lockup-slot">
+          <BrandLockup
+            size={275}
+            width={154}
+            height={28}
+            className="h-7 max-h-7 w-auto max-w-[9.5rem]"
+          />
+        </span>
         <h1 className="text-foreground hidden truncate text-lg font-semibold md:block">
           {titleOverride ?? t(titleKey as string)}
         </h1>

@@ -341,6 +341,70 @@ html.dark {
   .input::placeholder {
     color: var(--s400);
   }
+
+  /*
+   * Brand lockup: both light + dark PNGs stay in the DOM. Visibility is
+   * CSS-driven so SSR/hydration never disagree on `src`.
+   *
+   * Must live in `@layer components` so Tailwind utilities like `md:hidden`
+   * on the header lockup can override `display: inline-block`. Unlayered
+   * rules beat utilities and re-show the lockup next to the page title.
+   *
+   * Intrinsic assets are ~275×92. Wrapper height (h-7 / acl-lockup) +
+   * aspect-ratio set the box; images are absolutely positioned so a bare
+   * `display:block` can never re-expand to the PNG's intrinsic height.
+   */
+  .brand-lockup {
+    position: relative;
+    display: inline-block;
+    aspect-ratio: 275 / 92;
+    line-height: 0;
+    overflow: hidden;
+    vertical-align: middle;
+  }
+
+  .brand-lockup-img,
+  .brand-lockup-light,
+  .brand-lockup-dark {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    object-position: left center;
+  }
+
+  .brand-lockup-light {
+    display: block;
+  }
+  .brand-lockup-dark {
+    display: none;
+  }
+
+  :is(html.dark, html[data-mode='dark']) .brand-lockup-light {
+    display: none;
+  }
+  :is(html.dark, html[data-mode='dark']) .brand-lockup-dark {
+    display: block;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    html:not(.dark):not([data-mode='light']) .brand-lockup-light {
+      display: none;
+    }
+    html:not(.dark):not([data-mode='light']) .brand-lockup-dark {
+      display: block;
+    }
+  }
+
+  html[data-mode='light'] .brand-lockup-light {
+    display: block;
+  }
+  html[data-mode='light'] .brand-lockup-dark {
+    display: none;
+  }
 }
 
 /* Pro shell */
@@ -504,7 +568,8 @@ html.dark {
   border: 1px solid var(--s200);
   border-radius: 22px;
   background: var(--t-surf);
-  padding: clamp(28px, 4vw, 40px);
+  /* Extra top padding so the logo isn't flush with the card edge (~32px). */
+  padding: 32px clamp(28px, 4vw, 40px) clamp(28px, 4vw, 40px);
   box-shadow: var(--sh-card);
 }
 
@@ -665,65 +730,3 @@ html.dark {
   }
 }
 
-/*
- * Brand lockup: both light + dark PNGs stay in the DOM. Visibility is
- * CSS-driven so SSR/hydration never disagree on `src` (fixes dark-on-dark
- * wordmark when theme-boot flips to dark before React hydrates).
- *
- * Intrinsic assets are ~275×92. Wrapper height (h-7 / acl-lockup) +
- * aspect-ratio set the box; images are absolutely positioned so a bare
- * `display:block` can never re-expand to the PNG's intrinsic height.
- */
-.brand-lockup {
-  position: relative;
-  display: inline-block;
-  aspect-ratio: 275 / 92;
-  line-height: 0;
-  overflow: hidden;
-  vertical-align: middle;
-}
-
-.brand-lockup-img,
-.brand-lockup-light,
-.brand-lockup-dark {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  object-position: left center;
-}
-
-.brand-lockup-light {
-  display: block;
-}
-.brand-lockup-dark {
-  display: none;
-}
-
-html.dark .brand-lockup-light,
-html[data-mode='dark'] .brand-lockup-light {
-  display: none;
-}
-html.dark .brand-lockup-dark,
-html[data-mode='dark'] .brand-lockup-dark {
-  display: block;
-}
-
-@media (prefers-color-scheme: dark) {
-  html:not(.dark):not([data-mode='light']) .brand-lockup-light {
-    display: none;
-  }
-  html:not(.dark):not([data-mode='light']) .brand-lockup-dark {
-    display: block;
-  }
-}
-
-html[data-mode='light'] .brand-lockup-light {
-  display: block;
-}
-html[data-mode='light'] .brand-lockup-dark {
-  display: none;
-}
