@@ -3,13 +3,18 @@
 import { useMemo, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
+import { isUniqueViolation } from '@/lib/contacts/dedupe';
+import { DEFAULT_IMPORT_COUNTRY, e164Digits } from '@/lib/contacts/e164';
 import {
-  dedupeByPhone,
-  isUniqueViolation,
-  normalizeKey,
-} from '@/lib/contacts/dedupe';
+  applyColumnMapping,
+  autoDetectColumnMapping,
+  mappingHasPhone,
+  type ColumnMapping,
+  type ContactImportField,
+  CONTACT_IMPORT_FIELDS,
+} from '@/lib/contacts/column-map';
 import {
-  parseContactCsv,
+  parseContactCsvRaw,
   type ParsedContactRow,
 } from '@/lib/contacts/parse-contact-csv';
 import {
@@ -17,6 +22,12 @@ import {
   resolveImportTagIds,
   type ContactTagAssignment,
 } from '@/lib/contacts/resolve-import-tags';
+import {
+  buildImportErrorCsv,
+  describeImportErrors,
+  validateImportRows,
+  type ValidatedImportRow,
+} from '@/lib/contacts/validate-import';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import {
@@ -36,11 +47,22 @@ import {
   XCircle,
   AlertTriangle,
   Tag,
+  Download,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import type { CountryCode } from 'libphonenumber-js';
 
 const DEFAULT_TAG_COLOR = '#3b82f6';
-const PREVIEW_LIMIT = 5;
+const PREVIEW_LIMIT = 8;
+
+const DEFAULT_COUNTRY_OPTIONS: { value: CountryCode; label: string }[] = [
+  { value: 'IN', label: 'India (+91)' },
+  { value: 'US', label: 'United States (+1)' },
+  { value: 'GB', label: 'United Kingdom (+44)' },
+  { value: 'AE', label: 'United Arab Emirates (+971)' },
+  { value: 'SG', label: 'Singapore (+65)' },
+  { value: 'AU', label: 'Australia (+61)' },
+];
 
 function truncateFilename(name: string, max = 48): string {
   if (name.length <= max) return name;
@@ -115,6 +137,16 @@ function ImportPreviewTags({
   );
 }
 
+function downloadTextFile(filename: string, contents: string) {
+  const blob = new Blob([contents], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 interface ImportModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -132,9 +164,15 @@ export function ImportModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [file, setFile] = useState<File | null>(null);
-  const [parsedRows, setParsedRows] = useState<ParsedContactRow[]>([]);
-  const [hasTagsColumn, setHasTagsColumn] = useState(false);
-  const [hasCompanyColumn, setHasCompanyColumn] = useState(false);
+  const [headers, setHeaders] = useState<string[]>([]);
+  const [dataRows, setDataRows] = useState<string[][]>([]);
+  const [mapping, setMapping] = useState<ColumnMapping>({});
+  const [defaultCountry, setDefaultCountry] = useState<CountryCode>(
+    DEFAULT_IMPORT_COUNTRY
+  );
+  const [existingNormalized, setExistingNormalized] = useState<Set<string>>(
+    new Set()
+  );
   const [tagColorByKey, setTagColorByKey] = useState<Map<string, string>>(
     new Map()
   );
@@ -144,15 +182,42 @@ export function ImportModal({
     skipped: number;
     invalidPhone: number;
     failed: number;
-    failedDetails: { phone: string; name?: string; reason: string }[];
+    failedDetails: {
+      rowNumber?: number;
+      phone: string;
+      name?: string;
+      email?: string;
+      company?: string;
+      reason: string;
+    }[];
     tagsAssigned: number;
+    errorCsv: string;
   } | null>(null);
+
+  const mappedRows: ParsedContactRow[] = useMemo(() => {
+    if (!mappingHasPhone(mapping) || dataRows.length === 0) return [];
+    return applyColumnMapping(headers, dataRows, mapping);
+  }, [headers, dataRows, mapping]);
+
+  const validation = useMemo(
+    () =>
+      validateImportRows(mappedRows, {
+        defaultCountry,
+        existingNormalized,
+      }),
+    [mappedRows, defaultCountry, existingNormalized]
+  );
+
+  const hasTagsColumn = Object.values(mapping).includes('tags');
+  const hasCompanyColumn = Object.values(mapping).includes('company');
 
   function reset() {
     setFile(null);
-    setParsedRows([]);
-    setHasTagsColumn(false);
-    setHasCompanyColumn(false);
+    setHeaders([]);
+    setDataRows([]);
+    setMapping({});
+    setDefaultCountry(DEFAULT_IMPORT_COUNTRY);
+    setExistingNormalized(new Set());
     setTagColorByKey(new Map());
     setResult(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -163,6 +228,22 @@ export function ImportModal({
     onOpenChange(next);
   }
 
+  function setFieldMapping(index: number, field: ContactImportField) {
+    setMapping((prev) => {
+      const next: ColumnMapping = { ...prev };
+      // Only one column per field (except ignore).
+      if (field !== 'ignore') {
+        for (const [k, v] of Object.entries(next)) {
+          if (v === field && Number(k) !== index) {
+            next[Number(k)] = 'ignore';
+          }
+        }
+      }
+      next[index] = field;
+      return next;
+    });
+  }
+
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = e.target.files?.[0];
     if (!selected) return;
@@ -171,30 +252,44 @@ export function ImportModal({
     setResult(null);
 
     const text = await selected.text();
-    const {
-      rows,
-      hasTagsColumn: csvHasTags,
-      hasCompanyColumn: csvHasCompany,
-    } = parseContactCsv(text);
+    const raw = parseContactCsvRaw(text);
 
-    if (rows.length === 0) {
+    if (raw.headers.length === 0 || raw.dataRows.length === 0) {
       toast.error(t('toastNoValidRows'));
-      setParsedRows([]);
-      setHasTagsColumn(false);
-      setHasCompanyColumn(false);
-      setTagColorByKey(new Map());
+      setHeaders([]);
+      setDataRows([]);
+      setMapping({});
       return;
     }
 
-    setParsedRows(rows);
-    setHasTagsColumn(csvHasTags);
-    setHasCompanyColumn(csvHasCompany);
+    const detected = autoDetectColumnMapping(raw.headers);
+    setHeaders(raw.headers);
+    setDataRows(raw.dataRows);
+    setMapping(detected);
 
-    if (csvHasTags && accountId) {
-      const { data: tags } = await supabase
-        .from('tags')
-        .select('name, color')
-        .eq('account_id', accountId);
+    if (!mappingHasPhone(detected)) {
+      toast.error(t('toastMapPhone'));
+    }
+
+    if (accountId) {
+      const [{ data: existingRows }, { data: tags }] = await Promise.all([
+        supabase
+          .from('contacts')
+          .select('phone_normalized')
+          .eq('account_id', accountId),
+        supabase.from('tags').select('name, color').eq('account_id', accountId),
+      ]);
+
+      setExistingNormalized(
+        new Set(
+          (existingRows ?? [])
+            .map(
+              (r) =>
+                (r as { phone_normalized: string | null }).phone_normalized
+            )
+            .filter((p): p is string => !!p)
+        )
+      );
 
       const colors = new Map<string, string>();
       for (const tag of tags ?? []) {
@@ -203,12 +298,13 @@ export function ImportModal({
       }
       setTagColorByKey(colors);
     } else {
+      setExistingNormalized(new Set());
       setTagColorByKey(new Map());
     }
   }
 
   async function handleImport() {
-    if (parsedRows.length === 0) return;
+    if (validation.ready.length === 0) return;
     setImporting(true);
 
     try {
@@ -221,46 +317,32 @@ export function ImportModal({
         throw new Error('Your profile is not linked to an account.');
 
       let imported = 0;
-      let skipped = 0;
+      let skipped =
+        validation.duplicatesInFile + validation.duplicatesExisting;
       let failed = 0;
-      const failedDetails: { phone: string; name?: string; reason: string }[] =
-        [];
+      const failedDetails: {
+        rowNumber?: number;
+        phone: string;
+        name?: string;
+        email?: string;
+        company?: string;
+        reason: string;
+      }[] = [];
 
-      // 1) De-dupe within the file by normalized phone (keep first).
-      //    Rows with no usable phone at all are counted separately —
-      //    they never duplicated anything, so lumping them into
-      //    `skipped` would misreport them as dupes (see dedupeByPhone).
-      const {
-        unique,
-        duplicates: inFileDupes,
-        invalid: invalidPhone,
-      } = dedupeByPhone(parsedRows);
-      skipped += inFileDupes;
+      // Validation-only failures → error CSV rows.
+      for (const row of validation.rows) {
+        if (row.errors.length === 0) continue;
+        failedDetails.push({
+          rowNumber: row.rowNumber,
+          phone: row.raw.phone,
+          name: row.raw.name,
+          email: row.raw.email,
+          company: row.raw.company,
+          reason: describeImportErrors(row.errors).join('; '),
+        });
+      }
 
-      // 2) Skip numbers already in this account. One read of the
-      //    generated `phone_normalized` column (migration 022) → Set.
-      const { data: existingRows } = await supabase
-        .from('contacts')
-        .select('phone_normalized')
-        .eq('account_id', accountId);
-      const existing = new Set(
-        (existingRows ?? [])
-          .map(
-            (r) => (r as { phone_normalized: string | null }).phone_normalized
-          )
-          .filter((p): p is string => !!p)
-      );
-
-      const toInsert = unique.filter((row) => {
-        if (existing.has(normalizeKey(row.phone))) {
-          skipped++;
-          return false;
-        }
-        return true;
-      });
-
-      // 3) Resolve tag names → ids (admin+ may auto-create missing tags).
-      //    Skip the round-trip when the import carries no tag names.
+      const toInsert = validation.ready;
       const allTagNames = toInsert.flatMap((row) => row.tagNames);
       let tagIdByKey = new Map<string, string>();
       let skippedNames: string[] = [];
@@ -274,10 +356,6 @@ export function ImportModal({
       }
 
       const tagAssignments: ContactTagAssignment[] = [];
-
-      // 4) Batch insert the genuinely-new rows in chunks of 50. The DB
-      //    unique index is the backstop: a 23505 (race, or a format
-      //    that normalizes equal) counts as skipped, not failed.
       const chunkSize = 50;
 
       for (let i = 0; i < toInsert.length; i += chunkSize) {
@@ -285,7 +363,7 @@ export function ImportModal({
         const rows = chunk.map((row) => ({
           user_id: user.id,
           account_id: accountId,
-          phone: row.phone,
+          phone: row.e164,
           name: row.name || null,
           email: row.email || null,
           company: row.company || null,
@@ -297,8 +375,6 @@ export function ImportModal({
           .select('id');
 
         if (error) {
-          // Retry individually so one bad/duplicate row doesn't sink
-          // the whole chunk.
           for (let j = 0; j < rows.length; j++) {
             const row = rows[j];
             const source = chunk[j];
@@ -318,12 +394,17 @@ export function ImportModal({
               }
             } else if (isUniqueViolation(singleErr)) {
               skipped++;
+              failedDetails.push({
+                phone: row.phone,
+                name: row.name ?? undefined,
+                email: row.email ?? undefined,
+                company: row.company ?? undefined,
+                reason: describeImportErrors(['duplicate_existing']).join(
+                  '; '
+                ),
+              });
             } else {
               failed++;
-              // Keep the actual DB error instead of discarding it —
-              // "N contacts failed" with no reason attached left no
-              // way to tell an RLS/constraint failure from a fluke,
-              // let alone which contact it was.
               console.error(
                 '[contacts import] insert failed for',
                 row.phone,
@@ -332,6 +413,8 @@ export function ImportModal({
               failedDetails.push({
                 phone: row.phone,
                 name: row.name ?? undefined,
+                email: row.email ?? undefined,
+                company: row.company ?? undefined,
                 reason:
                   (singleErr as { message?: string } | null)?.message ||
                   t('unknownReason'),
@@ -341,9 +424,6 @@ export function ImportModal({
         } else {
           const inserted = data ?? [];
           imported += inserted.length;
-          // inserted[j] ↔ chunk[j] only holds because a single INSERT
-          // preserves RETURNING order. If this path is ever split into
-          // parallel inserts, zip by phone or returned id instead.
           for (let j = 0; j < inserted.length; j++) {
             const source = chunk[j];
             if (!source || source.tagNames.length === 0) continue;
@@ -355,8 +435,6 @@ export function ImportModal({
         }
       }
 
-      // 5) Wire tags onto the contacts we just created. Failure here must
-      //    not mask a successful contact import.
       let tagsAssigned = 0;
       try {
         tagsAssigned = await assignImportedContactTags(
@@ -368,15 +446,37 @@ export function ImportModal({
         toast.warning(t('toastTagsWarning'));
       }
 
+      const errorCsv = buildImportErrorCsv(
+        failedDetails.map((d) => ({
+          rowNumber: d.rowNumber,
+          phone: d.phone,
+          name: d.name,
+          email: d.email,
+          company: d.company,
+          errors: [d.reason],
+        }))
+      );
+
       setResult({
         imported,
         skipped,
-        invalidPhone,
+        invalidPhone: validation.invalidPhone,
         failed,
         failedDetails,
         tagsAssigned,
+        errorCsv,
       });
+
+      // Refresh existing set so a second import in the same session
+      // sees newly inserted numbers.
       if (imported > 0) {
+        setExistingNormalized((prev) => {
+          const next = new Set(prev);
+          for (const row of toInsert) {
+            next.add(e164Digits(row.e164));
+          }
+          return next;
+        });
         toast.success(t('toastImported', { count: imported }));
         onImported();
       }
@@ -392,8 +492,10 @@ export function ImportModal({
       if (skipped > 0) {
         toast.info(t('toastSkipped', { count: skipped }));
       }
-      if (invalidPhone > 0) {
-        toast.warning(t('toastInvalidPhone', { count: invalidPhone }));
+      if (validation.invalidPhone > 0) {
+        toast.warning(
+          t('toastInvalidPhone', { count: validation.invalidPhone })
+        );
       }
       if (failed > 0) {
         toast.error(t('toastFailed', { count: failed }));
@@ -406,26 +508,31 @@ export function ImportModal({
     }
   }
 
-  const preview = parsedRows.slice(0, PREVIEW_LIMIT);
-  // Tags: OR — show when the CSV declares a column or preview rows carry
-  // values, so an all-empty tags column still renders for validation.
+  const previewRows: ValidatedImportRow[] = validation.rows.slice(
+    0,
+    PREVIEW_LIMIT
+  );
   const previewHasTags =
-    hasTagsColumn || preview.some((row) => row.tagNames.length > 0);
-  // Company: AND — hide unless the CSV declares it and preview has data,
-  // avoiding an all-dash column that wastes horizontal space.
+    hasTagsColumn || previewRows.some((row) => row.raw.tagNames.length > 0);
   const previewHasCompany =
-    hasCompanyColumn && preview.some((row) => row.company?.trim());
+    hasCompanyColumn && previewRows.some((row) => row.raw.company?.trim());
 
   const tagStats = useMemo(() => {
     const names = new Set<string>();
     let rowsWithTags = 0;
-    for (const row of parsedRows) {
+    for (const row of mappedRows) {
       if (row.tagNames.length === 0) continue;
       rowsWithTags++;
       for (const name of row.tagNames) names.add(name.trim().toLowerCase());
     }
     return { unique: names.size, rowsWithTags };
-  }, [parsedRows]);
+  }, [mappedRows]);
+
+  const readyCount = validation.ready.length;
+  const errorRowCount =
+    validation.invalidPhone +
+    validation.duplicatesInFile +
+    validation.duplicatesExisting;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -435,17 +542,9 @@ export function ImportModal({
             <DialogTitle className="text-lg text-popover-foreground">
               {t('title')}
             </DialogTitle>
-            <DialogDescription className="leading-relaxed text-muted-foreground"
-              dangerouslySetInnerHTML={{
-                __html: t.markup('desc', {
-                  phoneCode: (chunks) => `<code class="rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">${chunks}</code>`,
-                  nameCode: (chunks) => `<code class="rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">${chunks}</code>`,
-                  emailCode: (chunks) => `<code class="rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">${chunks}</code>`,
-                  companyCode: (chunks) => `<code class="rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">${chunks}</code>`,
-                  tagsCode: (chunks) => `<code class="rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">${chunks}</code>`,
-                })
-              }}
-            />
+            <DialogDescription className="leading-relaxed text-muted-foreground">
+              {t('descPlain')}
+            </DialogDescription>
           </DialogHeader>
 
           <div
@@ -475,7 +574,7 @@ export function ImportModal({
                   {truncateFilename(file.name)}
                 </p>
                 <span className="rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
-                  {t('rowsReady', { count: parsedRows.length })}
+                  {t('rowsReady', { count: mappedRows.length })}
                 </span>
               </>
             ) : (
@@ -500,20 +599,94 @@ export function ImportModal({
             onChange={handleFileChange}
             className="hidden"
           />
+
+          {headers.length > 0 && !result && (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+                    {t('columnMapping')}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {t('columnMappingHint')}
+                  </p>
+                </div>
+                <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                  <span className="font-medium">{t('defaultCountry')}</span>
+                  <select
+                    value={defaultCountry}
+                    onChange={(e) =>
+                      setDefaultCountry(e.target.value as CountryCode)
+                    }
+                    className="h-8 rounded-md border border-border bg-background px-2 text-sm text-popover-foreground"
+                  >
+                    {DEFAULT_COUNTRY_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-2">
+                {headers.map((header, index) => (
+                  <label
+                    key={`${header}-${index}`}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-border/80 bg-background/40 px-3 py-2 text-xs"
+                  >
+                    <span
+                      className="truncate font-medium text-popover-foreground"
+                      title={header}
+                    >
+                      {header || t('emptyHeader')}
+                    </span>
+                    <select
+                      value={mapping[index] ?? 'ignore'}
+                      onChange={(e) =>
+                        setFieldMapping(
+                          index,
+                          e.target.value as ContactImportField
+                        )
+                      }
+                      className="h-7 max-w-[9rem] rounded-md border border-border bg-background px-2 text-xs text-popover-foreground"
+                    >
+                      {CONTACT_IMPORT_FIELDS.map((field) => (
+                        <option key={field} value={field}>
+                          {t(`fields.${field}`)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-          {preview.length > 0 && !result && (
+          {previewRows.length > 0 && !result && (
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-                  {t('preview', { count: preview.length })}
+                  {t('validationPreview', { count: previewRows.length })}
                 </p>
                 <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="rounded-md bg-muted/90 px-2 py-0.5 text-[11px] text-muted-foreground">
+                    {t('readyCount', { count: readyCount })}
+                  </span>
+                  {errorRowCount > 0 && (
+                    <span className="rounded-md bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-500">
+                      {t('errorCount', { count: errorRowCount })}
+                    </span>
+                  )}
                   {tagStats.rowsWithTags > 0 && (
                     <span className="inline-flex items-center gap-1 rounded-md bg-muted/90 px-2 py-0.5 text-[11px] text-muted-foreground">
                       <Tag className="text-primary/80 size-3" />
-                      {t('previewTags', { tags: tagStats.unique, contacts: tagStats.rowsWithTags })}
+                      {t('previewTags', {
+                        tags: tagStats.unique,
+                        contacts: tagStats.rowsWithTags,
+                      })}
                     </span>
                   )}
                 </div>
@@ -521,17 +694,20 @@ export function ImportModal({
 
               <div className="overflow-hidden rounded-xl border border-border ring-1 ring-border/50">
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[32rem] text-xs">
+                  <table className="w-full min-w-[36rem] text-xs">
                     <thead>
                       <tr className="border-b border-border bg-background/60">
+                        <th className="px-3 py-2 text-left font-medium whitespace-nowrap text-muted-foreground">
+                          {t('columns.status')}
+                        </th>
                         <th className="px-3 py-2 text-left font-medium whitespace-nowrap text-muted-foreground">
                           {t('columns.phone')}
                         </th>
                         <th className="px-3 py-2 text-left font-medium whitespace-nowrap text-muted-foreground">
-                          {t('columns.name')}
+                          {t('columns.e164')}
                         </th>
                         <th className="px-3 py-2 text-left font-medium whitespace-nowrap text-muted-foreground">
-                          {t('columns.email')}
+                          {t('columns.name')}
                         </th>
                         {previewHasCompany && (
                           <th className="px-3 py-2 text-left font-medium whitespace-nowrap text-muted-foreground">
@@ -546,56 +722,79 @@ export function ImportModal({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/70">
-                      {preview.map((row, i) => (
-                        <tr
-                          key={i}
-                          className="bg-popover/40 transition-colors hover:bg-muted/30"
-                        >
-                          <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">
-                            <PreviewCell
-                              value={row.phone}
-                              mono
-                              maxWidth="max-w-[7.5rem]"
-                            />
-                          </td>
-                          <td className="px-3 py-2 text-popover-foreground">
-                            <PreviewCell
-                              value={row.name || '—'}
-                              maxWidth="max-w-[8.5rem]"
-                            />
-                          </td>
-                          <td className="px-3 py-2 text-muted-foreground">
-                            <PreviewCell
-                              value={row.email || '—'}
-                              maxWidth="max-w-[10rem]"
-                            />
-                          </td>
-                          {previewHasCompany && (
-                            <td className="px-3 py-2 text-muted-foreground">
-                              <PreviewCell
-                                value={row.company || '—'}
-                                maxWidth="max-w-[7rem]"
-                              />
-                            </td>
-                          )}
-                          {previewHasTags && (
+                      {previewRows.map((row) => {
+                        const hasError = row.errors.length > 0;
+                        return (
+                          <tr
+                            key={row.rowNumber}
+                            className={cn(
+                              'bg-popover/40 transition-colors hover:bg-muted/30',
+                              hasError && 'bg-amber-500/[0.04]'
+                            )}
+                          >
                             <td className="px-3 py-2 align-top">
-                              <ImportPreviewTags
-                                tagNames={row.tagNames}
-                                tagColorByKey={tagColorByKey}
+                              {hasError ? (
+                                <span
+                                  className="text-amber-500"
+                                  title={describeImportErrors(row.errors).join(
+                                    '; '
+                                  )}
+                                >
+                                  {describeImportErrors(row.errors)[0]}
+                                </span>
+                              ) : (
+                                <span className="text-primary">{t('rowOk')}</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">
+                              <PreviewCell
+                                value={row.raw.phone || '—'}
+                                mono
+                                maxWidth="max-w-[7.5rem]"
                               />
                             </td>
-                          )}
-                        </tr>
-                      ))}
+                            <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">
+                              <PreviewCell
+                                value={row.e164 || '—'}
+                                mono
+                                maxWidth="max-w-[8rem]"
+                              />
+                            </td>
+                            <td className="px-3 py-2 text-popover-foreground">
+                              <PreviewCell
+                                value={row.raw.name || '—'}
+                                maxWidth="max-w-[8.5rem]"
+                              />
+                            </td>
+                            {previewHasCompany && (
+                              <td className="px-3 py-2 text-muted-foreground">
+                                <PreviewCell
+                                  value={row.raw.company || '—'}
+                                  maxWidth="max-w-[7rem]"
+                                />
+                              </td>
+                            )}
+                            {previewHasTags && (
+                              <td className="px-3 py-2 align-top">
+                                <ImportPreviewTags
+                                  tagNames={row.raw.tagNames}
+                                  tagColorByKey={tagColorByKey}
+                                />
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
               </div>
 
-              {parsedRows.length > PREVIEW_LIMIT && (
+              {validation.rows.length > PREVIEW_LIMIT && (
                 <p className="text-center text-[11px] text-muted-foreground">
-                  {t('moreRows', { count: parsedRows.length - PREVIEW_LIMIT })}
+                  {t('moreRows', {
+                    count: validation.rows.length - PREVIEW_LIMIT,
+                  })}
                 </p>
               )}
             </div>
@@ -603,7 +802,9 @@ export function ImportModal({
 
           {result && (
             <div className="rounded-xl border border-border bg-background/50 p-4">
-              <p className="text-sm font-medium text-popover-foreground">{t('importComplete')}</p>
+              <p className="text-sm font-medium text-popover-foreground">
+                {t('importComplete')}
+              </p>
               <div className="mt-3 flex flex-wrap gap-3">
                 {result.imported > 0 && (
                   <div className="text-primary flex items-center gap-1.5 text-sm">
@@ -627,7 +828,9 @@ export function ImportModal({
                   <div className="space-y-0.5">
                     <div className="flex items-center gap-1.5 text-sm text-amber-400">
                       <AlertTriangle className="size-4 shrink-0" />
-                      {t('resultInvalidPhone', { count: result.invalidPhone })}
+                      {t('resultInvalidPhone', {
+                        count: result.invalidPhone,
+                      })}
                     </div>
                     <p className="pl-[1.375rem] text-xs text-muted-foreground">
                       {t('invalidPhoneHint')}
@@ -643,10 +846,27 @@ export function ImportModal({
               </div>
 
               {result.failedDetails.length > 0 && (
-                <div className="mt-3 space-y-1 border-t border-border/80 pt-3">
-                  <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-                    {t('failedRowsHeading')}
-                  </p>
+                <div className="mt-3 space-y-2 border-t border-border/80 pt-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+                      {t('failedRowsHeading')}
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 gap-1.5 border-border text-xs text-muted-foreground"
+                      onClick={() =>
+                        downloadTextFile(
+                          'contact-import-errors.csv',
+                          result.errorCsv
+                        )
+                      }
+                    >
+                      <Download className="size-3.5" />
+                      {t('downloadErrorCsv')}
+                    </Button>
+                  </div>
                   <ul className="max-h-32 space-y-1 overflow-y-auto text-xs">
                     {result.failedDetails.map((row, i) => (
                       <li
@@ -678,12 +898,12 @@ export function ImportModal({
           {!result && (
             <Button
               type="button"
-              disabled={parsedRows.length === 0 || importing}
+              disabled={readyCount === 0 || importing}
               onClick={handleImport}
               className="bg-primary hover:bg-primary/90 text-primary-foreground"
             >
               {importing && <Loader2 className="size-4 animate-spin" />}
-              {parsedRows.length > 0 ? t('importBtn', { count: parsedRows.length }) : t('importBtn', { count: 0 })}
+              {t('importBtn', { count: readyCount })}
             </Button>
           )}
         </DialogFooter>

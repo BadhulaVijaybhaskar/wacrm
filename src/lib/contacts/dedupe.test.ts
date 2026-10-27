@@ -70,6 +70,20 @@ describe("dedupeByPhone", () => {
     expect(invalid).toBe(2);
   });
 
+  it("with defaultCountry IN, accepts national numbers and rewrites to E.164", () => {
+    const { unique, duplicates, invalid } = dedupeByPhone(
+      [
+        { phone: "9876543210", name: "Ada" },
+        { phone: "+919876543210", name: "Dup" },
+        { phone: "bad", name: "Bad" },
+      ],
+      { defaultCountry: "IN", rewriteToE164: true },
+    );
+    expect(unique).toEqual([{ phone: "+919876543210", name: "Ada" }]);
+    expect(duplicates).toBe(1);
+    expect(invalid).toBe(1);
+  });
+
   it("drops rows with no digits, counted as invalid rather than duplicate", () => {
     const { unique, duplicates, invalid } = dedupeByPhone([
       { phone: "   " },

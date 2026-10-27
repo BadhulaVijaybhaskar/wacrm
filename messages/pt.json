@@ -487,14 +487,16 @@
       "resultFailed": "{count} com falha",
       "failedRowsHeading": "Linhas com falha",
       "unknownReason": "Erro desconhecido",
-      "invalidPhoneHint": "Os números de telefone devem começar com + e o código do país (ex.: +5511999990000). Números sem código seriam entregues no país errado.",
+      "invalidPhoneHint": "Phones are normalized to E.164 with libphonenumber. National numbers use the default country (IN). Invalid or duplicate rows are listed in the error CSV.",
       "willBeCreated": "{name} (será criada na importação)",
       "columns": {
         "phone": "Telefone",
         "name": "Nome",
         "email": "E-mail",
         "company": "Empresa",
-        "tags": "Tags"
+        "tags": "Tags",
+        "status": "Status",
+        "e164": "E.164"
       },
       "cancel": "Cancelar",
       "close": "Fechar",
@@ -513,7 +515,26 @@
       "toastInvalidPhone_plural": "{count} contatos não tinham um número de telefone utilizável",
       "toastFailed": "{count} contato não pôde ser importado",
       "toastFailed_plural": "{count} contatos não puderam ser importados",
-      "toastError": "Falha na importação"
+      "toastError": "Falha na importação",
+      "descPlain": "Upload a CSV, map columns, and preview E.164 validation. National numbers use the default country (India) unless a + country code is present.",
+      "validationPreview": "Validation · first {count}",
+      "columnMapping": "Column mapping",
+      "columnMappingHint": "Map each CSV header to a contact field. One column must be Phone.",
+      "defaultCountry": "Default country",
+      "emptyHeader": "(empty header)",
+      "readyCount": "{count} ready",
+      "errorCount": "{count} with errors",
+      "rowOk": "OK",
+      "downloadErrorCsv": "Download error CSV",
+      "toastMapPhone": "Map one column to Phone before importing.",
+      "fields": {
+        "phone": "Telefone",
+        "name": "Nome",
+        "email": "E-mail",
+        "company": "Empresa",
+        "tags": "Tags",
+        "ignore": "Ignore"
+      }
     },
     "customFields": {
       "title": "Campos personalizados",

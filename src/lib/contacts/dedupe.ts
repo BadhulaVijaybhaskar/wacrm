@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { CountryCode } from "libphonenumber-js";
+import { e164Digits, normalizeToE164 } from "@/lib/contacts/e164";
 import {
   normalizePhone,
   parseInternationalPhone,
@@ -78,6 +80,21 @@ export function isUniqueViolation(error: unknown): boolean {
   return (error as { code?: string }).code === "23505";
 }
 
+export interface DedupeByPhoneOptions {
+  /**
+   * When set, national-format numbers are resolved via libphonenumber
+   * against this country (CHAT-10 CSV import, default IN). When omitted,
+   * behaviour stays `parseInternationalPhone` (leading `+` required) so
+   * broadcast CSV and older callers do not silently re-country numbers.
+   */
+  defaultCountry?: CountryCode;
+  /**
+   * When true (and `defaultCountry` is set), rewrite each kept row's
+   * `phone` to the E.164 form before returning.
+   */
+  rewriteToE164?: boolean;
+}
+
 /**
  * De-duplicate parsed CSV rows by normalized phone, keeping the first
  * occurrence of each. Rows whose phone is not a usable international
@@ -86,14 +103,13 @@ export function isUniqueViolation(error: unknown): boolean {
  * the import result should say so instead of telling the user a
  * contact with a real, unique number was skipped as a dupe.
  *
- * "Usable" means `parseInternationalPhone` accepts it: a leading `+`
- * and country code are required. A CSV of national-format numbers
- * ("4155551212") is the bulk version of issue #586 — every row would
- * be stored and later delivered to the wrong country — so those rows
- * are reported as invalid here, before anything is written.
+ * Without `defaultCountry`, "usable" means `parseInternationalPhone`
+ * accepts it (leading `+` required — issue #586). With `defaultCountry`,
+ * libphonenumber E.164 normalization is used instead (CHAT-10).
  */
 export function dedupeByPhone<T extends { phone: string }>(
   rows: T[],
+  options: DedupeByPhoneOptions = {},
 ): { unique: T[]; duplicates: number; invalid: number } {
   const seen = new Set<string>();
   const unique: T[] = [];
@@ -101,7 +117,16 @@ export function dedupeByPhone<T extends { phone: string }>(
   let invalid = 0;
 
   for (const row of rows) {
-    const key = parseInternationalPhone(row.phone);
+    let key: string | null = null;
+    let e164: string | null = null;
+
+    if (options.defaultCountry) {
+      e164 = normalizeToE164(row.phone, options.defaultCountry);
+      key = e164 ? e164Digits(e164) : null;
+    } else {
+      key = parseInternationalPhone(row.phone);
+    }
+
     if (!key) {
       invalid++;
       continue;
@@ -111,7 +136,11 @@ export function dedupeByPhone<T extends { phone: string }>(
       continue;
     }
     seen.add(key);
-    unique.push(row);
+    if (options.rewriteToE164 && e164) {
+      unique.push({ ...row, phone: e164 });
+    } else {
+      unique.push(row);
+    }
   }
 
   return { unique, duplicates, invalid };
