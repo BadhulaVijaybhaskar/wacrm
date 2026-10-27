@@ -249,24 +249,24 @@ function ShellPreviewInner() {
                     <h3 className="text-muted-foreground mb-3 text-xs font-semibold tracking-wide uppercase">
                       {CATEGORY_LABELS[category]}
                     </h3>
-                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-4">
                       {items.map((p) => (
                         <div
                           key={p.id}
-                          className="rounded-2xl border border-[color-mix(in_srgb,var(--s200)_70%,transparent)] bg-[var(--t-surf)] p-4 shadow-[var(--sh-card)]"
+                          className="min-w-0 rounded-2xl border border-[color-mix(in_srgb,var(--s200)_70%,transparent)] bg-[var(--t-surf)] p-4 shadow-[var(--sh-card)]"
                         >
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <p className="text-foreground text-sm font-semibold">
+                          <div className="min-w-0 space-y-2">
+                            <div className="flex min-w-0 items-center justify-between gap-3">
+                              <p className="text-foreground min-w-0 truncate text-sm font-semibold">
                                 {p.name}
                               </p>
-                              <p className="text-muted-foreground mt-1 text-xs">
-                                {p.description}
-                              </p>
+                              <span className="text-muted-foreground shrink-0 rounded-full border border-[color-mix(in_srgb,var(--s200)_80%,transparent)] px-2 py-0.5 text-[10px] whitespace-nowrap">
+                                Not connected
+                              </span>
                             </div>
-                            <span className="text-muted-foreground rounded-full border border-[color-mix(in_srgb,var(--s200)_80%,transparent)] px-2 py-0.5 text-[10px]">
-                              Not connected
-                            </span>
+                            <p className="text-muted-foreground text-xs text-pretty break-words whitespace-normal">
+                              {p.description}
+                            </p>
                           </div>
                           <div className="mt-4 flex flex-wrap gap-2">
                             <span className="bg-primary text-primary-foreground rounded-md px-2.5 py-1 text-xs">

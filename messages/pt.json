@@ -141,7 +141,10 @@
   },
   "Inbox": {
     "page": {
-      "whatsappNotConnected": "O WhatsApp® não está conectado. Vá em Configurações para conectar sua conta."
+      "whatsappNotConnected": "Conecte seu número Business para enviar e receber mensagens de clientes nesta caixa de entrada.",
+      "whatsappBannerTitle": "WhatsApp® ainda não está conectado",
+      "connectWhatsapp": "Conectar WhatsApp",
+      "dismissWhatsappBanner": "Dispensar"
     },
     "conversationList": {
       "searchPlaceholder": "Pesquisar contactos e mensagens…",

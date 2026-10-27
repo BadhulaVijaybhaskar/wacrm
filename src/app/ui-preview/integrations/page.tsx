@@ -27,20 +27,22 @@ export default function IntegrationsPreviewPage() {
               <h2 className="mb-3 text-sm font-semibold tracking-wide text-slate-500 uppercase">
                 {CATEGORY_LABELS[category]}
               </h2>
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-4">
                 {items.map((p) => (
                   <div
                     key={p.id}
-                    className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+                    className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <h3 className="font-semibold">{p.name}</h3>
-                        <p className="mt-1 text-xs text-slate-600">{p.description}</p>
+                    <div className="min-w-0 space-y-2">
+                      <div className="flex min-w-0 items-center justify-between gap-3">
+                        <h3 className="min-w-0 truncate font-semibold">{p.name}</h3>
+                        <span className="shrink-0 rounded-full border border-slate-200 px-2 py-0.5 text-[10px] whitespace-nowrap text-slate-500">
+                          Not connected
+                        </span>
                       </div>
-                      <span className="rounded-full border border-slate-200 px-2 py-0.5 text-[10px] text-slate-500">
-                        Not connected
-                      </span>
+                      <p className="text-xs text-pretty break-words whitespace-normal text-slate-600">
+                        {p.description}
+                      </p>
                     </div>
                     <div className="mt-4 flex flex-wrap gap-2">
                       <span className="rounded-md bg-slate-900 px-2.5 py-1 text-xs text-white">

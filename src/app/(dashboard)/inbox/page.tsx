@@ -13,13 +13,16 @@ import { useRealtime } from "@/hooks/use-realtime";
 import { ConversationList } from "@/components/inbox/conversation-list";
 import { MessageThread } from "@/components/inbox/message-thread";
 import { ContactSidebar } from "@/components/inbox/contact-sidebar";
+import Link from "next/link";
 import { toast } from "sonner";
-import { WifiOff } from "lucide-react";
+import { WifiOff, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button, buttonVariants } from "@/components/ui/button";
 
 // Remembers the agent's show/hide choice for the desktop contact panel
 // across reloads and sessions (device-scoped, like the theme prefs).
 const CONTACT_PANEL_STORAGE_KEY = "astra-chat:inbox:contact-panel-open";
+const WHATSAPP_BANNER_DISMISS_KEY = "astra-chat:inbox:whatsapp-banner-dismissed";
 
 // `useSearchParams` (the `?c=<id>` deep link below) requires a Suspense
 // boundary or the production build bails to CSR and errors out. Thin
@@ -51,6 +54,24 @@ function InboxPageInner() {
   const [whatsappConnected, setWhatsappConnected] = useState<boolean | null>(
     null
   );
+  const [whatsappBannerDismissed, setWhatsappBannerDismissed] = useState(false);
+  useEffect(() => {
+    try {
+      setWhatsappBannerDismissed(
+        localStorage.getItem(WHATSAPP_BANNER_DISMISS_KEY) === "1",
+      );
+    } catch {
+      // ignore
+    }
+  }, []);
+  const dismissWhatsappBanner = useCallback(() => {
+    setWhatsappBannerDismissed(true);
+    try {
+      localStorage.setItem(WHATSAPP_BANNER_DISMISS_KEY, "1");
+    } catch {
+      // ignore
+    }
+  }, []);
   /**
    * Bumped whenever we want children (ConversationList, MessageThread)
    * to refetch from the DB — used as a safety net against missed
@@ -581,12 +602,37 @@ function InboxPageInner() {
     <div className="-m-4 flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden sm:-m-6">
       {/* WhatsApp connection banner — in the flex column, not absolute,
           so it pushes the panels down instead of overlapping them. */}
-      {whatsappConnected === false && (
-        <div className="flex shrink-0 items-center justify-center gap-2 border-b border-amber-500/20 bg-amber-500/10 px-4 py-2">
-          <WifiOff className="h-4 w-4 text-amber-400" />
-          <p className="text-xs text-amber-400">
-            {t("whatsappNotConnected")}
-          </p>
+      {whatsappConnected === false && !whatsappBannerDismissed && (
+        <div className="border-border/70 bg-card flex shrink-0 items-center gap-3 border-b px-3 py-2.5 sm:px-4">
+          <div className="bg-amber-500/15 text-amber-700 dark:text-amber-300 grid size-8 shrink-0 place-items-center rounded-full">
+            <WifiOff className="size-4" aria-hidden />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-foreground text-sm font-medium leading-snug">
+              {t("whatsappBannerTitle")}
+            </p>
+            <p className="text-muted-foreground mt-0.5 text-xs leading-snug">
+              {t("whatsappNotConnected")}
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Link
+              href="/settings?tab=whatsapp"
+              className={cn(buttonVariants({ size: "sm" }), "h-8")}
+            >
+              {t("connectWhatsapp")}
+            </Link>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="text-muted-foreground"
+              aria-label={t("dismissWhatsappBanner")}
+              onClick={dismissWhatsappBanner}
+            >
+              <X className="size-4" />
+            </Button>
+          </div>
         </div>
       )}
 

@@ -126,7 +126,7 @@ export function IntegrationsHub() {
             <h2 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
               {group.label}
             </h2>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-4">
               {group.items.map((meta) => (
                 <IntegrationCard
                   key={meta.id}

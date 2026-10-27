@@ -141,7 +141,10 @@
   },
   "Inbox": {
     "page": {
-      "whatsappNotConnected": "WhatsApp®이 연결되어 있지 않습니다. 설정으로 이동해 계정을 연결하세요."
+      "whatsappNotConnected": "비즈니스 번호를 연결하면 이 인박스에서 고객 메시지를 주고·수신할 수 있습니다.",
+      "whatsappBannerTitle": "WhatsApp®이 아직 연결되지 않았습니다",
+      "connectWhatsapp": "WhatsApp 연결",
+      "dismissWhatsappBanner": "닫기"
     },
     "conversationList": {
       "searchPlaceholder": "연락처 및 메시지 검색…",

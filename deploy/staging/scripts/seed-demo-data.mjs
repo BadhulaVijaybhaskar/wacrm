@@ -8,37 +8,143 @@
  *   NEXT_PUBLIC_SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… \
  *   node deploy/staging/scripts/seed-demo-data.mjs
  *
+ * Optionally renames the profile (and auth email when possible) to the
+ * demo agent identity below so screens show "Demo Agent" / demo@….
+ *
  * Flags:
  *   --dry-run   print the payload and exit 0 (no network)
  *   --help
  *
  * Idempotent: contacts keyed by phone; tags by name; conversation by
- * contact. Safe to re-run. Branding is "Astra Chat" (not third-party demos).
+ * contact; broadcast by name. Safe to re-run.
  */
 'use strict';
 
 import { pathToFileURL } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 
+export const DEMO_AGENT = Object.freeze({
+  fullName: 'Demo Agent',
+  email: 'demo@astraconnect.io',
+});
+
 export const DEMO_TAG = {
-  name: 'Astra Chat Demo',
+  name: 'VIP',
   color: '#145CF6',
 };
 
+export const DEMO_NOTE =
+  'Interested in the enterprise plan — follow up after Thursday’s product walkthrough.';
+
+/** Eight contacts; first five get open conversations. */
 export const DEMO_CONTACTS = Object.freeze([
   {
     phone: '+15550100001',
     name: 'Priya Sharma',
-    email: 'priya.demo@astrachat.example',
-    company: 'Astra Chat Demo Co',
+    email: 'priya.sharma@northwind.example',
+    company: 'Northwind Retail',
+    withConversation: true,
+    handoff: 'ai',
+    lastMessage: 'Perfect — see you then.',
+    messages: [
+      { sender: 'customer', text: 'Hi — can we schedule a demo tomorrow?' },
+      { sender: 'agent', text: 'Absolutely. Does 11:00 IST work?' },
+      { sender: 'customer', text: 'Perfect — see you then.' },
+    ],
   },
   {
     phone: '+15550100002',
     name: 'Jordan Lee',
-    email: 'jordan.demo@astrachat.example',
-    company: 'Astra Chat Demo Co',
+    email: 'jordan.lee@brightline.example',
+    company: 'Brightline Logistics',
+    withConversation: true,
+    handoff: 'human',
+    lastMessage: 'Thanks — I’ll wait for your callback.',
+    messages: [
+      {
+        sender: 'customer',
+        text: 'The AI bot couldn’t answer my billing question.',
+      },
+      {
+        sender: 'agent',
+        text: 'I’ve taken this over — happy to help with billing.',
+      },
+      { sender: 'customer', text: 'Thanks — I’ll wait for your callback.' },
+    ],
+  },
+  {
+    phone: '+15550100003',
+    name: 'Amelia Chen',
+    email: 'amelia.chen@harbor.example',
+    company: 'Harbor Clinics',
+    withConversation: true,
+    handoff: 'ai',
+    lastMessage: 'Could you send the clinic hours?',
+    messages: [
+      { sender: 'customer', text: 'Could you send the clinic hours?' },
+      {
+        sender: 'bot',
+        text: 'We’re open Mon–Fri 9:00–18:00. Anything else I can help with?',
+      },
+    ],
+  },
+  {
+    phone: '+15550100004',
+    name: 'Marcus Okonkwo',
+    email: 'marcus@oakstreet.example',
+    company: 'Oak Street Goods',
+    withConversation: true,
+    handoff: 'ai',
+    lastMessage: 'Order #4821 arrived damaged.',
+    messages: [
+      { sender: 'customer', text: 'Order #4821 arrived damaged.' },
+      {
+        sender: 'agent',
+        text: 'Sorry about that — I’ll open a replacement shipment today.',
+      },
+    ],
+  },
+  {
+    phone: '+15550100005',
+    name: 'Sofia Reyes',
+    email: 'sofia.reyes@lumen.example',
+    company: 'Lumen Design Studio',
+    withConversation: true,
+    handoff: 'ai',
+    lastMessage: 'Looking forward to the kickoff call.',
+    messages: [
+      { sender: 'customer', text: 'Looking forward to the kickoff call.' },
+    ],
+  },
+  {
+    phone: '+15550100006',
+    name: 'Noah Patel',
+    email: 'noah.patel@cedar.example',
+    company: 'Cedar Finance',
+    withConversation: false,
+  },
+  {
+    phone: '+15550100007',
+    name: 'Elena Rossi',
+    email: 'elena.rossi@atelier.example',
+    company: 'Atelier Rossi',
+    withConversation: false,
+  },
+  {
+    phone: '+15550100008',
+    name: 'Kenji Watanabe',
+    email: 'kenji@sakura.example',
+    company: 'Sakura Imports',
+    withConversation: false,
   },
 ]);
+
+export const DEMO_BROADCAST = Object.freeze({
+  name: 'Spring welcome offer',
+  template_name: 'welcome_offer',
+  template_language: 'en',
+  status: 'sent',
+});
 
 export function buildSeedPlan({ accountId, userId }) {
   if (!accountId || !userId) {
@@ -47,14 +153,26 @@ export function buildSeedPlan({ accountId, userId }) {
   return {
     accountId,
     userId,
+    agent: { ...DEMO_AGENT },
     tag: { ...DEMO_TAG, account_id: accountId, user_id: userId },
+    noteText: DEMO_NOTE,
     contacts: DEMO_CONTACTS.map((c) => ({
-      ...c,
+      phone: c.phone,
+      name: c.name,
+      email: c.email,
+      company: c.company,
       account_id: accountId,
       user_id: userId,
+      withConversation: c.withConversation,
+      handoff: c.handoff ?? 'ai',
+      lastMessage: c.lastMessage ?? null,
+      messages: c.messages ?? [],
     })),
-    noteText:
-      'Seeded by deploy/staging/scripts/seed-demo-data.mjs for Astra Chat staging smoke.',
+    broadcast: {
+      ...DEMO_BROADCAST,
+      account_id: accountId,
+      user_id: userId,
+    },
   };
 }
 
@@ -84,6 +202,14 @@ async function upsertTag(db, plan) {
 }
 
 async function upsertContact(db, plan, contact) {
+  const row = {
+    phone: contact.phone,
+    name: contact.name,
+    email: contact.email,
+    company: contact.company,
+    account_id: contact.account_id,
+    user_id: contact.user_id,
+  };
   const { data: existing } = await db
     .from('contacts')
     .select('id')
@@ -91,40 +217,45 @@ async function upsertContact(db, plan, contact) {
     .eq('phone', contact.phone)
     .maybeSingle();
   if (existing?.id) {
-    await db
-      .from('contacts')
-      .update({
-        name: contact.name,
-        email: contact.email,
-        company: contact.company,
-      })
-      .eq('id', existing.id);
+    await db.from('contacts').update(row).eq('id', existing.id);
     return existing.id;
   }
-  const { data, error } = await db
-    .from('contacts')
-    .insert(contact)
-    .select('id')
-    .single();
+  const { data, error } = await db.from('contacts').insert(row).select('id').single();
   if (error) throw error;
   return data.id;
 }
 
-async function ensureConversation(db, plan, contactId) {
+async function ensureConversation(db, plan, contact) {
   const { data: existing } = await db
     .from('conversations')
     .select('id')
     .eq('account_id', plan.accountId)
-    .eq('contact_id', contactId)
+    .eq('contact_id', contact.id)
     .maybeSingle();
-  if (existing?.id) return existing.id;
+
+  const patch = {
+    status: 'open',
+    last_message_text: contact.lastMessage,
+    last_message_at: contact.lastMessage ? new Date().toISOString() : null,
+    assigned_agent_id: contact.handoff === 'human' ? plan.userId : null,
+    ai_autoreply_disabled: contact.handoff === 'human',
+    ai_handoff_summary:
+      contact.handoff === 'human'
+        ? 'Customer asked about billing — transferred to a human agent.'
+        : null,
+  };
+
+  if (existing?.id) {
+    await db.from('conversations').update(patch).eq('id', existing.id);
+    return existing.id;
+  }
   const { data, error } = await db
     .from('conversations')
     .insert({
       account_id: plan.accountId,
       user_id: plan.userId,
-      contact_id: contactId,
-      status: 'open',
+      contact_id: contact.id,
+      ...patch,
     })
     .select('id')
     .single();
@@ -132,7 +263,34 @@ async function ensureConversation(db, plan, contactId) {
   return data.id;
 }
 
+async function ensureMessages(db, conversationId, messages) {
+  if (!messages.length) return;
+  const { count } = await db
+    .from('messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('conversation_id', conversationId);
+  if ((count ?? 0) > 0) return;
+  const rows = messages.map((m, i) => ({
+    conversation_id: conversationId,
+    sender_type: m.sender,
+    content_type: 'text',
+    content_text: m.text,
+    status: 'delivered',
+    created_at: new Date(Date.now() - (messages.length - i) * 600_000).toISOString(),
+  }));
+  const { error } = await db.from('messages').insert(rows);
+  if (error) throw error;
+}
+
 async function ensureNote(db, plan, contactId) {
+  // Replace any prior internal seed notes on this contact.
+  await db
+    .from('contact_notes')
+    .delete()
+    .eq('account_id', plan.accountId)
+    .eq('contact_id', contactId)
+    .ilike('note_text', '%seed%');
+
   const { data: existing } = await db
     .from('contact_notes')
     .select('id')
@@ -161,6 +319,88 @@ async function linkTag(db, contactId, tagId) {
     { onConflict: 'contact_id,tag_id', ignoreDuplicates: true },
   );
   if (error) throw error;
+}
+
+async function ensureBroadcast(db, plan, contactIds) {
+  const { data: existing } = await db
+    .from('broadcasts')
+    .select('id')
+    .eq('account_id', plan.accountId)
+    .eq('name', plan.broadcast.name)
+    .maybeSingle();
+
+  let broadcastId = existing?.id;
+  if (!broadcastId) {
+    const recipients = contactIds.slice(0, 5);
+    const { data, error } = await db
+      .from('broadcasts')
+      .insert({
+        account_id: plan.accountId,
+        user_id: plan.userId,
+        name: plan.broadcast.name,
+        template_name: plan.broadcast.template_name,
+        template_language: plan.broadcast.template_language,
+        status: 'sent',
+        total_recipients: recipients.length,
+        sent_count: recipients.length,
+        delivered_count: Math.max(0, recipients.length - 1),
+        read_count: Math.max(0, recipients.length - 2),
+        failed_count: 0,
+      })
+      .select('id')
+      .single();
+    if (error) throw error;
+    broadcastId = data.id;
+
+    if (recipients.length) {
+      const { error: rErr } = await db.from('broadcast_recipients').insert(
+        recipients.map((contact_id, i) => ({
+          broadcast_id: broadcastId,
+          contact_id,
+          status: i === 0 ? 'read' : i === 1 ? 'delivered' : 'sent',
+          sent_at: new Date().toISOString(),
+        })),
+      );
+      if (rErr) throw rErr;
+    }
+  }
+  return broadcastId;
+}
+
+async function applyDemoAgentIdentity(db, plan) {
+  // Prefer matching by user_id; fall back to id === userId.
+  const { data: profile } = await db
+    .from('profiles')
+    .select('id, user_id')
+    .eq('user_id', plan.userId)
+    .maybeSingle();
+  if (profile?.id) {
+    const { error } = await db
+      .from('profiles')
+      .update({
+        full_name: plan.agent.fullName,
+        email: plan.agent.email,
+      })
+      .eq('id', profile.id);
+    if (error) throw error;
+  }
+
+  await db
+    .from('accounts')
+    .update({ name: 'Demo Workspace' })
+    .eq('id', plan.accountId);
+
+  // Best-effort auth email rename (service role). Ignore failures so
+  // CRM seeding still succeeds when Auth Admin is unavailable.
+  try {
+    await db.auth.admin.updateUserById(plan.userId, {
+      email: plan.agent.email,
+      email_confirm: true,
+      user_metadata: { full_name: plan.agent.fullName },
+    });
+  } catch {
+    // ignore
+  }
 }
 
 async function main(argv = process.argv.slice(2)) {
@@ -192,24 +432,35 @@ async function main(argv = process.argv.slice(2)) {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
+  await applyDemoAgentIdentity(db, plan);
+
   const tagId = await upsertTag(db, plan);
   const contactIds = [];
+  let conversationCount = 0;
   for (const c of plan.contacts) {
     const id = await upsertContact(db, plan, c);
     contactIds.push(id);
     await linkTag(db, id, tagId);
-    await ensureConversation(db, plan, id);
     await ensureNote(db, plan, id);
+    if (c.withConversation) {
+      const convId = await ensureConversation(db, plan, { ...c, id });
+      await ensureMessages(db, convId, c.messages);
+      conversationCount += 1;
+    }
   }
+
+  const broadcastId = await ensureBroadcast(db, plan, contactIds);
 
   console.log(
     JSON.stringify(
       {
         ok: true,
         account_id: plan.accountId,
+        agent: plan.agent,
         tag_id: tagId,
         contact_ids: contactIds,
-        brand: 'Astra Chat',
+        conversations: conversationCount,
+        broadcast_id: broadcastId,
       },
       null,
       2,
