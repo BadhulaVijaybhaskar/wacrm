@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/avatar';
 import { Card, CardContent } from '@/components/ui/card';
 import { useTranslations } from 'next-intl';
+import { formatAppDate } from '@/lib/format/date';
 import { SettingsPanelHead } from './settings-panel-head';
 import { BrowserNotificationsCard } from './browser-notifications-card';
 
@@ -199,13 +200,7 @@ export function ProfileForm() {
       pendingAvatar !== null ||
       removeAvatar);
 
-  const joined = user?.created_at
-    ? new Date(user.created_at).toLocaleDateString(undefined, {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      })
-    : '—';
+  const joined = user?.created_at ? formatAppDate(user.created_at) : '—';
 
   return (
     <section className="max-w-2xl animate-in fade-in-50 duration-200">

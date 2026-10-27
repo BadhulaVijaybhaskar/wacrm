@@ -43,6 +43,7 @@ import {
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { format } from 'date-fns';
+import { formatAppDateTime } from '@/lib/format/date';
 import { contactHandle } from '@/lib/whatsapp/wa-identity';
 import { parseInternationalPhone } from '@/lib/whatsapp/phone-utils';
 
@@ -659,13 +660,7 @@ export function ContactDetailView({
                           </button>
                         </div>
                         <p className="text-xs text-muted-foreground mt-1.5">
-                          {new Date(note.created_at).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
+                          {formatAppDateTime(note.created_at)}
                         </p>
                       </div>
                     ))

@@ -18,11 +18,16 @@ import { toast } from "sonner";
 import { WifiOff, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { useAuth } from "@/hooks/use-auth";
+import {
+  readWhatsappBannerDismissed,
+  WHATSAPP_SETUP_HREF,
+  writeWhatsappBannerDismissed,
+} from "@/lib/inbox/whatsapp-banner";
 
 // Remembers the agent's show/hide choice for the desktop contact panel
 // across reloads and sessions (device-scoped, like the theme prefs).
 const CONTACT_PANEL_STORAGE_KEY = "astra-chat:inbox:contact-panel-open";
-const WHATSAPP_BANNER_DISMISS_KEY = "astra-chat:inbox:whatsapp-banner-dismissed";
 
 // `useSearchParams` (the `?c=<id>` deep link below) requires a Suspense
 // boundary or the production build bails to CSR and errors out. Thin
@@ -39,6 +44,7 @@ function InboxPageInner() {
   const t = useTranslations("Inbox.page");
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user } = useAuth();
   /**
    * `?c=<id>` deep-link support. Used when landing here from the
    * dashboard's recent-conversations list so the right thread opens
@@ -56,22 +62,17 @@ function InboxPageInner() {
   );
   const [whatsappBannerDismissed, setWhatsappBannerDismissed] = useState(false);
   useEffect(() => {
-    try {
-      setWhatsappBannerDismissed(
-        localStorage.getItem(WHATSAPP_BANNER_DISMISS_KEY) === "1",
-      );
-    } catch {
-      // ignore
-    }
-  }, []);
+    if (!user?.id) return;
+    setWhatsappBannerDismissed(
+      readWhatsappBannerDismissed(window.localStorage, user.id),
+    );
+  }, [user?.id]);
   const dismissWhatsappBanner = useCallback(() => {
     setWhatsappBannerDismissed(true);
-    try {
-      localStorage.setItem(WHATSAPP_BANNER_DISMISS_KEY, "1");
-    } catch {
-      // ignore
+    if (user?.id) {
+      writeWhatsappBannerDismissed(window.localStorage, user.id);
     }
-  }, []);
+  }, [user?.id]);
   /**
    * Bumped whenever we want children (ConversationList, MessageThread)
    * to refetch from the DB — used as a safety net against missed
@@ -617,7 +618,7 @@ function InboxPageInner() {
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             <Link
-              href="/settings?tab=whatsapp"
+              href={WHATSAPP_SETUP_HREF}
               className={cn(buttonVariants({ size: "sm" }), "h-8")}
             >
               {t("connectWhatsapp")}

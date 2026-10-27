@@ -19,6 +19,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Copy, KeyRound, Loader2, Plus, Trash2 } from 'lucide-react';
 
+import { formatAppDate } from '@/lib/format/date';
+
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -55,11 +57,7 @@ interface ApiKey {
 }
 
 function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
+  return formatAppDate(iso);
 }
 
 function keyStatus(k: ApiKey): 'active' | 'revoked' | 'expired' {

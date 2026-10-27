@@ -36,10 +36,12 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { broadcastRatePercent } from '@/lib/broadcast-counts';
 import {
   getBroadcastStatus,
   getRecipientStatus,
 } from '@/lib/broadcast-status';
+import { formatAppDate } from '@/lib/format/date';
 import { useTranslations } from 'next-intl';
 
 interface StatCardProps {
@@ -51,7 +53,7 @@ interface StatCardProps {
 }
 
 function StatCard({ label, value, total, icon, color }: StatCardProps) {
-  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
+  const pct = broadcastRatePercent(value, total);
   return (
     <div className="rounded-xl border border-border bg-card p-4">
       <div className="flex items-center justify-between">
@@ -84,11 +86,11 @@ function FunnelChart({ steps }: { steps: FunnelStep[] }) {
       <h3 className="mb-4 text-sm font-medium text-foreground">Funnel</h3>
       <div className="space-y-2">
         {steps.map((step) => {
-          const pctOfMax = Math.max(5, Math.round((step.value / max) * 100));
-          const pctOfSent =
-            steps[0].value > 0
-              ? Math.round((step.value / steps[0].value) * 100)
-              : 0;
+          const pctOfMax = Math.max(
+            5,
+            broadcastRatePercent(step.value, max),
+          );
+          const pctOfSent = broadcastRatePercent(step.value, steps[0].value);
           return (
             <div key={step.label} className="flex items-center gap-3">
               <span className="w-20 shrink-0 text-xs text-muted-foreground">
@@ -359,7 +361,7 @@ export default function BroadcastDetailPage() {
               <span>{t('template', { name: broadcast.template_name })}</span>
               <span>-</span>
               <span>
-                {t('createdAt', { date: new Date(broadcast.created_at).toLocaleDateString() })}
+                {t('createdAt', { date: formatAppDate(broadcast.created_at) })}
               </span>
             </div>
           </div>

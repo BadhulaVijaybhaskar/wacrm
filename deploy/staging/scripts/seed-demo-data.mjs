@@ -332,6 +332,9 @@ async function ensureBroadcast(db, plan, contactIds) {
   let broadcastId = existing?.id;
   if (!broadcastId) {
     const recipients = contactIds.slice(0, 5);
+    // Insert with zero delivery counts — migration 005's incremental
+    // trigger bumps sent/delivered/read from broadcast_recipients rows.
+    // Hand-setting counts here used to double-count (Delivery 120%).
     const { data, error } = await db
       .from('broadcasts')
       .insert({
@@ -342,9 +345,10 @@ async function ensureBroadcast(db, plan, contactIds) {
         template_language: plan.broadcast.template_language,
         status: 'sent',
         total_recipients: recipients.length,
-        sent_count: recipients.length,
-        delivered_count: Math.max(0, recipients.length - 1),
-        read_count: Math.max(0, recipients.length - 2),
+        sent_count: 0,
+        delivered_count: 0,
+        read_count: 0,
+        replied_count: 0,
         failed_count: 0,
       })
       .select('id')
@@ -362,6 +366,17 @@ async function ensureBroadcast(db, plan, contactIds) {
         })),
       );
       if (rErr) throw rErr;
+    }
+  } else {
+    // Heal older seeds that double-counted before the zero-insert fix.
+    const { error: rpcErr } = await db.rpc('recompute_broadcast_counts', {
+      bid: broadcastId,
+    });
+    if (rpcErr) {
+      console.warn(
+        '[seed-demo-data] recompute_broadcast_counts failed:',
+        rpcErr.message,
+      );
     }
   }
   return broadcastId;

@@ -353,9 +353,12 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
 
           <div className="shrink-0 pt-3">
             {!collapsed && showAccountStrip && account?.name ? (
-              <div className="mb-2 flex items-center gap-2 px-2 text-xs text-white/50">
-                <UsersRound className="size-3.5 shrink-0" />
-                <span className="truncate" title={account.name}>
+              <div className="mb-2 flex items-start gap-1.5 px-2 text-xs text-white/50">
+                <UsersRound className="mt-0.5 size-3.5 shrink-0" />
+                <span
+                  className="min-w-0 flex-1 leading-snug line-clamp-2 break-words"
+                  title={account.name}
+                >
                   {account.name}
                 </span>
                 {accountRole
@@ -365,11 +368,12 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                       return (
                         <span
                           className={cn(
-                            'ml-auto inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium tracking-wider uppercase',
+                            'mt-0.5 inline-flex shrink-0 items-center gap-0.5 rounded-md border px-1 py-px text-[9px] font-medium tracking-wide uppercase leading-none',
                             meta.className
                           )}
+                          title={t(meta.labelKey as string)}
                         >
-                          <Icon className="size-3" />
+                          <Icon className="size-2.5" />
                           {t(meta.labelKey as string)}
                         </span>
                       );

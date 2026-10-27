@@ -16,7 +16,9 @@ import {
 import { Radio, Plus, Loader2 } from 'lucide-react';
 import { useCan } from '@/hooks/use-can';
 import { GatedButton } from '@/components/ui/gated-button';
+import { broadcastRatePercent } from '@/lib/broadcast-counts';
 import { getBroadcastStatus } from '@/lib/broadcast-status';
+import { formatAppDate } from '@/lib/format/date';
 import { useTranslations } from 'next-intl';
 
 /**
@@ -25,11 +27,6 @@ import { useTranslations } from 'next-intl';
  * counts consistent; we just need to surface the freshest snapshot.
  */
 const POLL_INTERVAL_MS = 5_000;
-
-function percent(numerator: number, denominator: number): number {
-  if (!denominator) return 0;
-  return Math.round((numerator / denominator) * 100);
-}
 
 function RateCell({
   value,
@@ -41,7 +38,7 @@ function RateCell({
   /** Tailwind bg class for the fill, e.g. "bg-primary" */
   color: string;
 }) {
-  const pct = percent(value, total);
+  const pct = broadcastRatePercent(value, total);
   return (
     <div className="flex items-center gap-2">
       <span className="w-10 text-right text-xs tabular-nums text-muted-foreground">
@@ -277,7 +274,7 @@ export default function BroadcastsPage() {
                       </span>
                     </TableCell>
                     <TableCell className="hidden text-muted-foreground sm:table-cell">
-                      {new Date(broadcast.created_at).toLocaleDateString()}
+                      {formatAppDate(broadcast.created_at)}
                     </TableCell>
                   </TableRow>
                 );

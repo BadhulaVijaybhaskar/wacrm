@@ -33,6 +33,8 @@ import {
   UsersRound,
 } from 'lucide-react';
 
+import { formatAppDate } from '@/lib/format/date';
+
 import {
   Avatar,
   AvatarBadge,
@@ -106,13 +108,7 @@ const EDITABLE_ROLES: { value: AccountRole }[] = [
 // primary (admin) → muted (agent / viewer).
 
 function fmtDate(iso: string): string {
-  // Match the rest of the dashboard's locale-light formatting.
-  const d = new Date(iso);
-  return d.toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
+  return formatAppDate(iso);
 }
 
 function fmtExpiresIn(iso: string, t: (key: string, values?: Record<string, string | number>) => string): string {
