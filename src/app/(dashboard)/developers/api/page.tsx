@@ -20,7 +20,7 @@ export default function PublicApiDocsPage() {
         <p className="mt-1 text-sm text-muted-foreground">
           Authenticate with Settings → API keys. Outbound webhooks and
           Zapier/Make REST Hooks use HMAC signatures (
-          <code className="text-xs">X-Wacrm-Signature</code>).
+          <code className="text-xs">X-Astra-Signature</code>).
         </p>
         <p className="mt-2 text-sm">
           <Link href="/settings?tab=api" className="underline">

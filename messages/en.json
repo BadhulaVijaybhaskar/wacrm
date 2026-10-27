@@ -2024,10 +2024,10 @@
       "enable": "Enable",
       "disable": "Disable",
       "events": "Events",
-      "createDesc": "Subscribe to events. We POST JSON with an X-Wacrm-Signature header.",
+      "createDesc": "Subscribe to events. We POST JSON with an X-Astra-Signature header.",
       "create": "Create endpoint",
       "secretTitle": "Copy your signing secret",
-      "secretDesc": "Shown once. Use it to verify X-Wacrm-Signature on deliveries.",
+      "secretDesc": "Shown once. Use it to verify X-Astra-Signature on deliveries.",
       "copied": "Secret copied"
     }
   },

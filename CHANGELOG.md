@@ -166,7 +166,7 @@ automations can *react* to activity instead of polling.
   happens in your account — `message.received`, `message.status_updated`,
   or `conversation.created`. Manage endpoints with
   `GET/POST /api/v1/webhooks` and `GET/PATCH/DELETE /api/v1/webhooks/{id}`.
-  Each delivery is signed with an `X-Wacrm-Signature`
+  Each delivery is signed with an `X-Astra-Signature`
   (HMAC-SHA256 over `timestamp.body`) so receivers can verify
   authenticity and reject replays; the signing secret is returned once
   at creation and stored encrypted. Delivery is best-effort — an

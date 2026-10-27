@@ -185,9 +185,9 @@ async function attemptDelivery(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Wacrm-Event': event,
-        'X-Wacrm-Webhook-Id': row.id,
-        'X-Wacrm-Signature': buildSignatureHeader(payload, secret, tsSeconds),
+        'X-Astra-Event': event,
+        'X-Astra-Webhook-Id': row.id,
+        'X-Astra-Signature': buildSignatureHeader(payload, secret, tsSeconds),
       },
       body: payload,
       redirect: 'manual',
