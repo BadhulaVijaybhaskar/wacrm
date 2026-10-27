@@ -1,0 +1,13 @@
+{
+  "name": "wacrm-connect-stub",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Staging stub for Astra Connect WhatsApp adapter endpoints",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

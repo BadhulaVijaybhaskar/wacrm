@@ -1,0 +1,96 @@
+# Isolated staging stack for wacrm + Connect adapter stub.
+# Run from this directory:
+#   docker compose -f docker-compose.staging.yml --env-file .env.staging up -d --build
+#
+# App is bound ONLY to 127.0.0.1:3101 (nginx on the host terminates TLS).
+# Do NOT publish 3101 on 0.0.0.0.
+
+name: wacrm-staging
+
+services:
+  app:
+    build:
+      context: ../..
+      dockerfile: deploy/staging/Dockerfile
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://wa.astraconnect.io}
+        NEXT_PUBLIC_APP_LOCALE: ${NEXT_PUBLIC_APP_LOCALE:-en}
+    env_file:
+      - .env.staging
+    environment:
+      PORT: "3000"
+      # Default: talk to the local Connect stub, never live Connect.
+      CONNECT_ADAPTER_URL: ${CONNECT_ADAPTER_URL:-http://connect-stub:8090}
+    ports:
+      - "127.0.0.1:3101:3000"
+    mem_limit: 1g
+    memswap_limit: 1g
+    cpus: 0.5
+    restart: unless-stopped
+    depends_on:
+      connect-stub:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000').then((r)=>process.exit(r.ok||r.status<500?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 25s
+    networks:
+      - staging
+
+  # Optional: canned Astra Connect adapter. Staging must NOT call live Connect.
+  # Disable with: docker compose ... up app  (omit connect-stub) and point
+  # CONNECT_ADAPTER_URL elsewhere only if you know what you are doing.
+  connect-stub:
+    build:
+      context: ./connect-stub
+    environment:
+      PORT: "8090"
+      HOST: "0.0.0.0"
+      WACRM_ADAPTER_SECRET: ${WACRM_ADAPTER_SECRET}
+      # Every 5th unique inbound message_id returns one 429 (smoke tests).
+      RATE_LIMIT_EVERY: ${CONNECT_STUB_RATE_LIMIT_EVERY:-5}
+    ports:
+      # Host-side access for smoke scripts; app reaches it as connect-stub:8090.
+      - "127.0.0.1:3102:8090"
+    mem_limit: 128m
+    memswap_limit: 128m
+    cpus: 0.1
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8090/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    networks:
+      - staging
+
+networks:
+  staging:
+    driver: bridge
