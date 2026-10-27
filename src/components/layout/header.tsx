@@ -24,6 +24,8 @@ const pageTitles: Record<string, string> = {
   '/broadcasts': 'broadcasts',
   '/automations': 'automations',
   '/settings': 'settings',
+  '/templates': 'templates',
+  '/integrations': 'integrations',
 };
 
 function getPageTitleKey(pathname: string): string {
@@ -38,11 +40,14 @@ interface HeaderProps {
   /** Wired to the shell's drawer state. Used only on mobile — the
    *  hamburger button is hidden at 768px and above. */
   onOpenSidebar?: () => void;
+  /** Optional visible title when the route alone would resolve wrong
+   *  (e.g. `/ui-preview/shell?surface=inbox`). */
+  titleOverride?: string;
 }
 
 import { useTranslations } from 'next-intl';
 
-export function Header({ onOpenSidebar }: HeaderProps) {
+export function Header({ onOpenSidebar, titleOverride }: HeaderProps) {
   const t = useTranslations('Header');
   const pathname = usePathname();
   const { profile, signOut } = useAuth();
@@ -71,7 +76,7 @@ export function Header({ onOpenSidebar }: HeaderProps) {
           className="h-7 w-auto md:hidden"
         />
         <h1 className="text-foreground hidden truncate text-lg font-semibold md:block">
-          {t(titleKey as string)}
+          {titleOverride ?? t(titleKey as string)}
         </h1>
       </div>
 

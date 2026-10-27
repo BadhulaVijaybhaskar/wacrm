@@ -280,7 +280,7 @@ export function TemplateManager() {
           body: JSON.stringify({
             decision,
             reason:
-              decision === 'REJECTED' ? 'Rejected by Meta stub' : undefined,
+              decision === 'REJECTED' ? 'Rejected (test mode)' : undefined,
           }),
         },
       );

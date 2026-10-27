@@ -187,7 +187,7 @@ export const INTEGRATION_CATALOG: ReadonlyArray<IntegrationProviderMeta> = [
   {
     id: 'astra_crm',
     name: 'Astra CRM',
-    description: 'Frappe CRM–compatible signed webhook to your Astra CRM URL.',
+    description: 'Signed webhook to your Astra CRM URL.',
     category: 'crm',
     fields: [
       { key: 'webhook_url', label: 'CRM webhook URL', required: true },

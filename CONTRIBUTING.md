@@ -95,9 +95,8 @@ closed — open the issue first to align.
 
 ## If you maintain a public fork
 
-- Rebrand. The "CRM Template for WhatsApp" name, favicon, and
-  `wacrm.tech` URL belong to the upstream project; please swap them
-  for your own before putting your deployment in front of users.
+- Rebrand. Swap the Astra Chat name, favicon, and any public docs
+  URLs for your own before putting your deployment in front of users.
 - Keep the MIT [`LICENSE`](./LICENSE) file — that's how the template's
   permissions travel with the code. Attribution in a `README` section
   is appreciated but not required.

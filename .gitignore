@@ -56,3 +56,4 @@ next-env.d.ts
 # Ephemeral preview dumps (CHAT-02b ship set lives in artifacts/chat-02b/)
 /artifacts/screenshots/
 /artifacts/chat02b-login-*.png
+supabase/.temp/

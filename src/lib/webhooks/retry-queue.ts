@@ -6,7 +6,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { decrypt } from '@/lib/whatsapp/encryption';
-import { buildSignatureHeader } from '@/lib/webhooks/sign';
+import { buildWebhookDeliveryHeaders } from '@/lib/webhooks/delivery-headers';
 import { isDeliverableUrl } from '@/lib/webhooks/ssrf';
 
 /** Keep in sync with deliver.ts DELIVERY_TIMEOUT_MS (avoid import cycle). */
@@ -183,12 +183,13 @@ async function attemptDelivery(
   try {
     const res = await fetch(row.url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Astra-Event': event,
-        'X-Astra-Webhook-Id': row.id,
-        'X-Astra-Signature': buildSignatureHeader(payload, secret, tsSeconds),
-      },
+      headers: buildWebhookDeliveryHeaders({
+        event,
+        webhookId: row.id,
+        rawBody: payload,
+        secret,
+        tsSeconds,
+      }),
       body: payload,
       redirect: 'manual',
       signal: AbortSignal.timeout(DELIVERY_TIMEOUT_MS),

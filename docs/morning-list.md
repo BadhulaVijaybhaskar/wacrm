@@ -17,7 +17,7 @@ Real DB is **wacrm-staging** (owner applies migrations). Latest on branch starts
 | Shared crypto | 32-byte AES key (64 hex chars) | Generate offline; store in host secrets | `ENCRYPTION_KEY` |
 | Meta / WhatsApp | App + WABA + phone | Meta Developer Console | WhatsApp Settings (encrypted tokens); `META_STUB` for fake |
 | Astra Connect | Adapter URL + HMAC secret | Astra Connect tenant | `CONNECT_ADAPTER_URL`, `WACRM_ADAPTER_SECRET`; per-account secret in Settings → Astra Connect; Connect must send `X-Astra-Tenant` on all `/api/astra-connect/v1/*` reads (CHAT-04b) |
-| Outbound webhooks | HTTPS receiver that verifies HMAC | Your automation host | Settings → Integrations → Outbound webhooks / `webhook_endpoints` |
+| Outbound webhooks | HTTPS receiver that verifies HMAC | Your automation host | Settings → Integrations → Outbound webhooks / `webhook_endpoints`; deliveries send `X-Astra-*` plus legacy `X-Wacrm-*` through **2026-11-26** (`WEBHOOK_LEGACY_HEADERS=0` to disable early) |
 | Zapier | Zapier account + REST Hook app | zapier.com | Settings → Integrations → Zapier (`hook_url`) |
 | Make | Make.com scenario webhook | make.com | Settings → Integrations → Make (`hook_url`) |
 | Shopify | Custom app + webhook secret | Shopify Partners | Settings → Integrations → Shopify (`shop_domain`, `webhook_secret`, `admin_token`) |
@@ -27,7 +27,7 @@ Real DB is **wacrm-staging** (owner applies migrations). Latest on branch starts
 | Google Sheets | OAuth client (consent screen) | Google Cloud Console | Settings → Integrations → Google Sheets; cron: `AUTOMATION_CRON_SECRET` |
 | HubSpot | Private app token | HubSpot settings | Settings → Integrations → HubSpot |
 | Zoho CRM | OAuth client + refresh token | Zoho API console | Settings → Integrations → Zoho |
-| Astra CRM | Signed webhook URL | Astra / Frappe CRM | Settings → Integrations → Astra CRM (`webhook_url`, `signing_secret`) |
+| Astra CRM | Signed webhook URL | Astra CRM | Settings → Integrations → Astra CRM (`webhook_url`, `signing_secret`) |
 | Instagram / Messenger | Meta page + tokens | Meta Developer Console | Settings → Integrations → Instagram / Messenger |
 | Click-to-WhatsApp ads | Meta Ads account + CTWA ads | Meta Ads Manager | Referral captured automatically on inbound; report at `/ads` |
 | Public API | Account API keys | Settings → API keys | Bearer key; scopes in `api_keys` |
@@ -51,6 +51,7 @@ Real DB is **wacrm-staging** (owner applies migrations). Latest on branch starts
 | CHAT-26 Re-verify (13/14/15) | **done** | `9625885` | — | White-label + 1293 tests + UI audit; `artifacts/chat-26/` |
 | CHAT-04b read-API additions | **done** | `fea18a1` | `058_astra_connect_read_api_additions.sql` | conversation on messages; handoff filter; media object; employee COALESCE; takeover reason |
 | CHAT-14 staging smoke seed | **done** | `debdfe4` | — | `deploy/staging/scripts/seed-demo-data.mjs` (+ test + `chat-14-verify.sh`); test data only |
+| Review scrub + dual webhook headers | **in progress** | — | — | Upstream scrub; `X-Astra-*` + `X-Wacrm-*` dual-send; real signed-in screenshots |
 
 ## Migrations owner must apply on wacrm-staging
 

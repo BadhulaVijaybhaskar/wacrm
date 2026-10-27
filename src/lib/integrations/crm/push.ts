@@ -66,7 +66,7 @@ async function stubPush(
   };
 }
 
-/** Frappe CRM–compatible signed webhook body for Astra CRM. */
+/** Signed webhook body for Astra CRM. */
 export function buildAstraCrmPayload(
   contact: CrmContactPayload,
   mapped: Record<string, string>,

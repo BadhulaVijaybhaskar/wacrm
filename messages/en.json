@@ -54,6 +54,8 @@
     "broadcasts": "Broadcasts",
     "automations": "Automations",
     "settings": "Settings",
+    "templates": "Templates",
+    "integrations": "Integrations",
     "openMenu": "Open menu",
     "openAccountMenu": "Open account menu",
     "defaultUser": "User",
@@ -1364,6 +1366,7 @@
     }
   },
   "Settings": {
+    "title": "Settings",
     "pageTitle": "Settings",
     "pageDesc": "Everything in one place — your account and your workspace. Pick a section to manage it.",
     "sectionsNav": "Settings sections",

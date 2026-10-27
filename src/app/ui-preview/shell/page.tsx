@@ -70,7 +70,10 @@ function ShellPreviewInner() {
     <div className="bg-background flex h-dvh overflow-hidden">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="flex h-dvh min-w-0 flex-1 flex-col overflow-hidden">
-        <Header onOpenSidebar={() => setSidebarOpen(true)} />
+        <Header
+          onOpenSidebar={() => setSidebarOpen(true)}
+          titleOverride={title}
+        />
         <main className="min-h-0 min-w-0 flex-1 overflow-y-auto px-3 py-4 sm:px-5 sm:py-5 lg:px-6 2xl:px-10">
           {surface === 'dashboard' ? (
             <div className="space-y-4">
@@ -80,7 +83,7 @@ function ShellPreviewInner() {
                 </div>
                 <div>
                   <h2 className="text-foreground text-xl font-semibold tracking-tight">
-                    {tDash('title') === 'title' ? title : tDash('title')}
+                    {tDash('title')}
                   </h2>
                   <p className="text-muted-foreground text-sm">
                     Overview of your Astra Chat workspace.
@@ -196,7 +199,7 @@ function ShellPreviewInner() {
                 </div>
                 <div>
                   <h2 className="text-foreground text-xl font-semibold">
-                    {tSettings('title') === 'title' ? 'Settings' : tSettings('title')}
+                    {tSettings('title')}
                   </h2>
                   <p className="text-muted-foreground text-sm">
                     Workspace preferences, WhatsApp, and team access.
@@ -218,7 +221,7 @@ function ShellPreviewInner() {
                   >
                     <p className="text-foreground text-sm font-semibold">{label}</p>
                     <p className="text-muted-foreground mt-1 text-xs">
-                      Configure {label.toLowerCase()} for this workspace.
+                      Configure {label} for this workspace.
                     </p>
                   </div>
                 ))}

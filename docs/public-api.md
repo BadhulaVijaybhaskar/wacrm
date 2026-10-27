@@ -343,7 +343,7 @@ All under scope `webhooks:manage`.
 curl -X POST https://your-crm.example.com/api/v1/webhooks \
   -H "Authorization: Bearer wacrm_live_xxx" \
   -H "Content-Type: application/json" \
-  -d '{ "url": "https://example.com/hooks/wacrm", "events": ["message.received"] }'
+  -d '{ "url": "https://example.com/hooks/astra-chat", "events": ["message.received"] }'
 # → 201 { "data": { "id": "…", "url": "…", "events": [...], "secret": "whsec_…" } }
 ```
 
@@ -374,13 +374,18 @@ delivery uuid you can dedupe on, and `data` varies by `event`:
 ```
 
 Headers: `X-Astra-Event`, `X-Astra-Webhook-Id`, and `X-Astra-Signature`.
+During a temporary dual-send window (through **2026-11-26**, or until
+`WEBHOOK_LEGACY_HEADERS=0`), the same values are also sent as
+`X-Wacrm-Event`, `X-Wacrm-Webhook-Id`, and `X-Wacrm-Signature` so
+existing receivers keep working while they migrate.
 
 ### Verifying the signature
 
 `X-Astra-Signature: t=<unix_seconds>,v1=<hex>` where `v1 =
 HMAC-SHA256(secret, "${t}.${rawBody}")`. Recompute it over the **raw
 request body** and compare in constant time; reject if `t` is more than
-a few minutes old (replay protection).
+a few minutes old (replay protection). Prefer the `X-Astra-*` names;
+legacy `X-Wacrm-*` mirrors are identical during the dual-send window.
 
 ```js
 const [, t, v1] = header.match(/t=(\d+),v1=([0-9a-f]+)/);

@@ -23,7 +23,7 @@ import { randomUUID } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { decrypt } from '@/lib/whatsapp/encryption';
-import { buildSignatureHeader } from '@/lib/webhooks/sign';
+import { buildWebhookDeliveryHeaders } from '@/lib/webhooks/delivery-headers';
 import { isDeliverableUrl } from '@/lib/webhooks/ssrf';
 import type { WebhookEvent } from '@/lib/webhooks/events';
 import { enqueueWebhookRetry } from '@/lib/webhooks/retry-queue';
@@ -126,12 +126,13 @@ async function deliverOne(
   try {
     const res = await fetch(row.url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Astra-Event': event,
-        'X-Astra-Webhook-Id': row.id,
-        'X-Astra-Signature': buildSignatureHeader(payload, secret, tsSeconds),
-      },
+      headers: buildWebhookDeliveryHeaders({
+        event,
+        webhookId: row.id,
+        rawBody: payload,
+        secret,
+        tsSeconds,
+      }),
       body: payload,
       // Do NOT follow redirects — a public URL could 3xx-bounce to an
       // internal address, bypassing the SSRF check above. A 3xx is a

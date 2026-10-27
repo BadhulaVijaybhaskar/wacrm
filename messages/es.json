@@ -60,7 +60,9 @@
     "defaultAvatar": "Avatar",
     "menuProfile": "Perfil",
     "menuSettings": "Configuración",
-    "menuSignOut": "Cerrar sesión"
+    "menuSignOut": "Cerrar sesión",
+    "templates": "Plantillas",
+    "integrations": "Integraciones"
   },
   "ModeToggle": {
     "switchMode": "Cambiar al modo {mode}"
@@ -2029,7 +2031,8 @@
       "secretTitle": "Copy your signing secret",
       "secretDesc": "Shown once. Use it to verify X-Astra-Signature on deliveries.",
       "copied": "Secret copied"
-    }
+    },
+    "title": "Configuración"
   },
   "SignupPage": {
     "passwordsMismatch": "Las contraseñas no coinciden",

@@ -87,7 +87,7 @@ export async function POST(
       body.decision === 'REJECTED'
         ? typeof body.reason === 'string' && body.reason.trim()
           ? body.reason.trim()
-          : 'Rejected by Meta stub'
+          : 'Rejected (test mode)'
         : null;
 
     const { data: row, error: updErr } = await supabase
