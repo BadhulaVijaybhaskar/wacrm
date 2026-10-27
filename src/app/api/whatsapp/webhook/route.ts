@@ -13,7 +13,15 @@ import {
 } from '@/lib/whatsapp/wa-identity'
 import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe'
 import { reopenClosedConversation } from '@/lib/conversations/reopen'
-import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
+import {
+  isMetaWebhookPayloadFresh,
+  verifyMetaWebhookSignature,
+} from '@/lib/whatsapp/webhook-signature'
+import {
+  checkRateLimit,
+  rateLimitResponse,
+  RATE_LIMITS,
+} from '@/lib/rate-limit'
 import { runAutomationsForTrigger } from '@/lib/automations/engine'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
@@ -225,6 +233,12 @@ export async function GET(request: Request) {
 
 // POST - Receive messages
 export async function POST(request: Request) {
+  // Per-IP webhook budget — bounds unsigned flood attempts before HMAC.
+  const forwarded = request.headers.get('x-forwarded-for')
+  const ip = forwarded?.split(',')[0]?.trim() || 'unknown'
+  const rl = checkRateLimit(`webhook:${ip}`, RATE_LIMITS.webhook)
+  if (!rl.success) return rateLimitResponse(rl)
+
   // Read raw body first so we can HMAC-verify the exact bytes Meta
   // signed. request.json() would re-encode and break the signature.
   const rawBody = await request.text()
@@ -236,6 +250,11 @@ export async function POST(request: Request) {
     // rather than silently eating events.
     console.warn('[webhook] rejected request with invalid signature')
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
+  }
+
+  if (!isMetaWebhookPayloadFresh(rawBody)) {
+    console.warn('[webhook] rejected stale / replayed payload')
+    return NextResponse.json({ error: 'Stale webhook payload' }, { status: 401 })
   }
 
   let body: { entry?: WhatsAppWebhookEntry[] }

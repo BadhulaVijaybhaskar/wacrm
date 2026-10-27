@@ -78,3 +78,53 @@ export function verifyMetaWebhookSignature(
   }
   return ok
 }
+
+/**
+ * Default Meta webhook replay window (seconds). Meta does not sign a
+ * timestamp into the HMAC the way Stripe/Connect do, so we approximate
+ * freshness from the newest message/status `timestamp` in the payload.
+ * Entries older than this window are rejected as replayed.
+ */
+export const META_WEBHOOK_REPLAY_WINDOW_SECONDS = 15 * 60
+
+/**
+ * Return false when every timestamped entry in a Meta webhook body is
+ * outside the replay window (or unparsable). Empty / challenge bodies
+ * with no timestamps are treated as fresh so GET verification still
+ * works when this helper is reused.
+ */
+export function isMetaWebhookPayloadFresh(
+  rawBody: string,
+  nowSeconds: number = Math.floor(Date.now() / 1000),
+  windowSeconds: number = META_WEBHOOK_REPLAY_WINDOW_SECONDS,
+): boolean {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(rawBody)
+  } catch {
+    return false
+  }
+
+  const timestamps: number[] = []
+  const walk = (node: unknown) => {
+    if (!node || typeof node !== 'object') return
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item)
+      return
+    }
+    const obj = node as Record<string, unknown>
+    if (typeof obj.timestamp === 'string' || typeof obj.timestamp === 'number') {
+      const n = Number(obj.timestamp)
+      if (Number.isFinite(n)) {
+        // Meta uses unix seconds; tolerate ms.
+        timestamps.push(n > 1e12 ? Math.floor(n / 1000) : n)
+      }
+    }
+    for (const value of Object.values(obj)) walk(value)
+  }
+  walk(parsed)
+
+  if (timestamps.length === 0) return true
+  const newest = Math.max(...timestamps)
+  return Math.abs(nowSeconds - newest) <= windowSeconds
+}

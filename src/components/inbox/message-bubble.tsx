@@ -23,7 +23,26 @@ import {
   MediaVideoBubble,
 } from './message-media';
 import { InteractivePreview } from '@/components/interactive/interactive-preview';
+import {
+  sanitizeInteractivePayload,
+  stripControlChars,
+} from '@/lib/security/sanitize-message';
 import { useTranslations } from 'next-intl';
+
+/** React text node after control-char strip — never HTML-unescaped. */
+function SafeText({
+  value,
+  className,
+}: {
+  value: string | null | undefined;
+  className?: string;
+}) {
+  return (
+    <p className={className ?? 'text-sm break-words whitespace-pre-wrap'}>
+      {stripControlChars(value)}
+    </p>
+  );
+}
 
 interface MessageBubbleProps {
   message: Message;
@@ -98,11 +117,7 @@ function MessageContent({
 
   switch (message.content_type) {
     case 'text':
-      return (
-        <p className="text-sm break-words whitespace-pre-wrap">
-          {message.content_text}
-        </p>
-      );
+      return <SafeText value={message.content_text} />;
 
     case 'image':
       return (
@@ -113,9 +128,10 @@ function MessageContent({
             <MediaUnavailable label={t('photo')} t={t} />
           )}
           {message.content_text && (
-            <p className="mt-1 text-sm break-words whitespace-pre-wrap">
-              {message.content_text}
-            </p>
+            <SafeText
+              value={message.content_text}
+              className="mt-1 text-sm break-words whitespace-pre-wrap"
+            />
           )}
         </div>
       );
@@ -129,9 +145,10 @@ function MessageContent({
             <MediaUnavailable label={t('video')} t={t} />
           )}
           {message.content_text && (
-            <p className="mt-1 text-sm break-words whitespace-pre-wrap">
-              {message.content_text}
-            </p>
+            <SafeText
+              value={message.content_text}
+              className="mt-1 text-sm break-words whitespace-pre-wrap"
+            />
           )}
         </div>
       );
@@ -180,13 +197,14 @@ function MessageContent({
             {t('template')}
           </span>
           {message.content_text ? (
-            <p className="mt-1 text-sm break-words whitespace-pre-wrap">
-              {message.content_text}
-            </p>
+            <SafeText
+              value={message.content_text}
+              className="mt-1 text-sm break-words whitespace-pre-wrap"
+            />
           ) : (
             message.template_name && (
               <p className="mt-1 text-sm break-words italic opacity-80">
-                {message.template_name}
+                {stripControlChars(message.template_name)}
               </p>
             )
           )}
@@ -197,7 +215,9 @@ function MessageContent({
       return (
         <div className="flex items-center gap-2 text-sm">
           <MapPin className="text-muted-foreground h-4 w-4 shrink-0" />
-          <span>{message.content_text || t('locationShared')}</span>
+          <span>
+            {stripControlChars(message.content_text) || t('locationShared')}
+          </span>
         </div>
       );
 
@@ -212,7 +232,11 @@ function MessageContent({
       //    migration 035 backfilled the column): show the body text plainly —
       //    it is our own message, NOT a customer tap.
       if (message.interactive_payload) {
-        return <InteractivePreview payload={message.interactive_payload} />;
+        return (
+          <InteractivePreview
+            payload={sanitizeInteractivePayload(message.interactive_payload)}
+          />
+        );
       }
       if (message.sender_type === 'customer') {
         return (
@@ -221,25 +245,19 @@ function MessageContent({
               <CornerDownLeft className="h-3 w-3" />
               {t('buttonReply')}
             </span>
-            <p className="text-sm break-words whitespace-pre-wrap">
-              {message.content_text || t('interactiveReply')}
-            </p>
+            <SafeText
+              value={message.content_text || t('interactiveReply')}
+            />
           </div>
         );
       }
       return (
-        <p className="text-sm break-words whitespace-pre-wrap">
-          {message.content_text || t('interactiveReply')}
-        </p>
+        <SafeText value={message.content_text || t('interactiveReply')} />
       );
     }
 
     default:
-      return (
-        <p className="text-sm break-words whitespace-pre-wrap">
-          {message.content_text || t('unsupported')}
-        </p>
-      );
+      return <SafeText value={message.content_text || t('unsupported')} />;
   }
 }
 

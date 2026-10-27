@@ -173,6 +173,14 @@ export const RATE_LIMITS = {
    *  capping a stampede; excess inbounds simply don't get an auto-reply
    *  (they still land in the inbox for a human). */
   aiAutoReplyAccount: { limit: 30, windowMs: 60_000 },
+  /** Meta + adapter webhook POSTs, per IP. 120/min absorbs Meta retries
+   *  and multi-WABA fan-in while bounding unsigned flood attempts before
+   *  HMAC verification spends CPU. */
+  webhook: { limit: 120, windowMs: 60_000 },
+  /** Auth-adjacent public endpoints (password reset callback, invite
+   *  peek already has its own bucket). Per-IP ceiling for /login|/signup
+   *  middleware probes and /auth/callback. */
+  auth: { limit: 30, windowMs: 60_000 },
 } as const;
 
 /** Test-only helper. Clears the in-memory state so unit tests don't

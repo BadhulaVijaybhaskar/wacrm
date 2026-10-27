@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  isMetaWebhookPayloadFresh,
   parseAppSecrets,
   verifyMetaWebhookSignature,
 } from "./webhook-signature";
@@ -103,6 +104,28 @@ describe("verifyMetaWebhookSignature", () => {
       expect(parseAppSecrets(undefined)).toEqual([]);
       expect(parseAppSecrets("")).toEqual([]);
       expect(parseAppSecrets(" , ,")).toEqual([]);
+    });
+  });
+
+  describe("isMetaWebhookPayloadFresh (replay window)", () => {
+    it("accepts a payload whose newest timestamp is inside the window", () => {
+      const now = 1_700_000_000;
+      const body = JSON.stringify({
+        entry: [{ changes: [{ value: { messages: [{ timestamp: String(now - 60) }] } }] }],
+      });
+      expect(isMetaWebhookPayloadFresh(body, now, 900)).toBe(true);
+    });
+
+    it("rejects a payload whose timestamps are all outside the window", () => {
+      const now = 1_700_000_000;
+      const body = JSON.stringify({
+        entry: [{ changes: [{ value: { statuses: [{ timestamp: String(now - 3600) }] } }] }],
+      });
+      expect(isMetaWebhookPayloadFresh(body, now, 900)).toBe(false);
+    });
+
+    it("treats bodies without timestamps as fresh", () => {
+      expect(isMetaWebhookPayloadFresh("{}", 1_700_000_000)).toBe(true);
     });
   });
 

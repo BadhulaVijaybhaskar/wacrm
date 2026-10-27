@@ -89,12 +89,26 @@ export async function middleware(request: NextRequest) {
     return withRefreshedCookies(NextResponse.redirect(url))
   }
 
-  // API routes that need auth (not webhooks)
-  if (!user && request.nextUrl.pathname.startsWith('/api/whatsapp/') &&
-      !request.nextUrl.pathname.includes('/webhook')) {
-    return withRefreshedCookies(
-      NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // API routes that need a session cookie (not webhooks, public API keys,
+  // Connect HMAC, or tokenized invitation / media endpoints).
+  const path = request.nextUrl.pathname
+  if (!user && path.startsWith('/api/')) {
+    const publicApiPrefixes = [
+      '/api/whatsapp/webhook',
+      '/api/v1/',
+      '/api/astra-connect/',
+      '/api/invitations/',
+      '/api/automations/cron',
+      '/api/flows/cron',
+    ]
+    const isPublic = publicApiPrefixes.some(
+      (prefix) => path === prefix || path.startsWith(prefix),
     )
+    if (!isPublic) {
+      return withRefreshedCookies(
+        NextResponse.json({ error: 'Unauthorized' }, { status: 401 }),
+      )
+    }
   }
 
   return supabaseResponse

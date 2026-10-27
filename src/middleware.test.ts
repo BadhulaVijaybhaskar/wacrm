@@ -111,3 +111,55 @@ describe("middleware — refreshed auth cookies survive redirects", () => {
     expect(res.cookies.get(ROTATED.name)?.value).toBe(ROTATED.value);
   });
 });
+
+describe("middleware — /api auth gate", () => {
+  it("returns 401 JSON for an unauthenticated WhatsApp API call", async () => {
+    mockUser = null;
+
+    const res = await middleware(
+      new NextRequest("https://app.test/api/whatsapp/send", {
+        method: "POST",
+      }),
+    );
+
+    expect(res.status).toBe(401);
+    await expect(res.json()).resolves.toEqual({ error: "Unauthorized" });
+  });
+
+  it("returns 401 for unauthenticated dashboard API routes", async () => {
+    mockUser = null;
+    const res = await middleware(
+      new NextRequest("https://app.test/api/contacts/x/tags", {
+        method: "POST",
+      }),
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it("allows the Meta webhook through without a session", async () => {
+    mockUser = null;
+    refreshedCookies = [ROTATED];
+
+    const res = await middleware(
+      new NextRequest("https://app.test/api/whatsapp/webhook", {
+        method: "POST",
+      }),
+    );
+
+    expect(res.status).not.toBe(401);
+    expect(res.headers.get("location")).toBeNull();
+    expect(res.cookies.get(ROTATED.name)?.value).toBe(ROTATED.value);
+  });
+
+  it("allows public API and Connect routes without a session", async () => {
+    mockUser = null;
+    for (const path of [
+      "/api/v1/me",
+      "/api/astra-connect/v1/conversations",
+      "/api/invitations/tok/peek",
+    ]) {
+      const res = await middleware(new NextRequest(`https://app.test${path}`));
+      expect(res.status).not.toBe(401);
+    }
+  });
+});
