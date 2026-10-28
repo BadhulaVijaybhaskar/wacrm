@@ -43,3 +43,5 @@ Evidence bundle: `bdcb314` (shots + script + this doc). Branch tip after pins: s
 - 5d Consent list with opted-out contact + Opt back in
 
 Evidence commit: `bdcb314` · 4c service-read fix: `dd9a85d`
+
+Branch tip: `3ca39d6`
