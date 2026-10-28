@@ -1,18 +1,19 @@
 
-### 0. regenerate wacrm_schema.sql from the 058 ref dump
+### 0. regenerate from the 058 ref dump into a TEMP file and check it matches the shipped file (never overwrites it)
 ok 28 functions, 52 tables
+shipped wacrm_schema.sql == regenerated output
 
-### 1. fresh scratch DB v2pack with Voice's stubs
+### 1. fresh scratch DB v3pack with Voice's stubs
 stubs ok
 
 ### 2. clean install
-install v2_schema_test.sql: exit 0
+install wacrm_schema_test.Y9yavh.sql: exit 0
 install shared_storage.sql: exit 0
 install shared_realtime.sql: exit 0
 install shared_cron.sql: exit 0
 
 ### 3. install twice (each file must fail cleanly or no-op)
-reinstall v2_schema_test.sql: exit 3 :: ERROR:  schema wacrm already exists; run rollback_wacrm.sql first (nothing was changed)
+reinstall wacrm_schema_test.Y9yavh.sql: exit 3 :: ERROR:  schema wacrm already exists; run rollback_wacrm.sql first (nothing was changed)
 reinstall shared_storage.sql: exit 3 :: ERROR:  wacrm_* storage policies already exist; run rollback_wacrm.sql first (nothing was changed)
 reinstall shared_realtime.sql: exit 0 :: 
 reinstall shared_cron.sql: exit 0 :: 
@@ -46,16 +47,18 @@ psql:/tmp/wacrm-review-pg/exploit.sql:37: ERROR:  duplicate key value violates u
 --
  messages in B conv |     0
 == S1 tenant A sees only own wacrm objects (expect 1: a.png)
- S1       | account-40ac63ba-28c7-4d1b-949d-8cf42d8646d5/a.png
+ S1       | account-f4595bae-c7a8-4ec2-b8fa-53210d950ba1/a.png
 == S2 tenant A writes into B prefix (expect RLS error)
-psql:/workspace/wacrm-staging/v2work/exploit_extra.sql:22: ERROR:  new row violates row-level security policy for table "objects"
+psql:/workspace/wacrm-staging/v3work/exploit_extra.sql:22: ERROR:  new row violates row-level security policy for table "objects"
 == S3 tenant A writes into own prefix (expect INSERT 0 1)
 INSERT 0 1
 == S4 malformed prefix (expect RLS error, not cast error)
-psql:/workspace/wacrm-staging/v2work/exploit_extra.sql:26: ERROR:  new row violates row-level security policy for table "objects"
+psql:/workspace/wacrm-staging/v3work/exploit_extra.sql:26: ERROR:  new row violates row-level security policy for table "objects"
 == S5 A uploads avatar into B user folder (expect RLS error)
-psql:/workspace/wacrm-staging/v2work/exploit_extra.sql:28: ERROR:  new row violates row-level security policy for table "objects"
-== S6 A deletes B object (expect DELETE 0)
+psql:/workspace/wacrm-staging/v3work/exploit_extra.sql:28: ERROR:  new row violates row-level security policy for table "objects"
+== S6a A deletes B object directly (expect 42501 from protect_objects_delete stub)
+psql:/workspace/wacrm-staging/v3work/exploit_extra.sql:30: ERROR:  Direct deletion from storage tables is not allowed. Use the Storage API instead.
+== S6b same delete with allow_delete_query on, i.e. the Storage API path (expect DELETE 0: RLS)
 DELETE 0
 == S7 voice-only user sees no wacrm objects (expect 0)
  S7       |     0
@@ -63,23 +66,66 @@ DELETE 0
  S8       |     1
 == S9 anon sees no wacrm objects (expect 0) and no wacrm tables (expect permission denied)
  S9       |     0
-psql:/workspace/wacrm-staging/v2work/exploit_extra.sql:40: ERROR:  permission denied for schema wacrm
-psql:/workspace/wacrm-staging/v2work/exploit_extra.sql:41: ERROR:  permission denied for schema wacrm
+psql:/workspace/wacrm-staging/v3work/exploit_extra.sql:44: ERROR:  permission denied for schema wacrm
+psql:/workspace/wacrm-staging/v3work/exploit_extra.sql:45: ERROR:  permission denied for schema wacrm
 == S10 authenticated: merge_duplicate_contacts, create_broadcast (service-only) denied; notifications UPDATE non-read_at denied
-psql:/workspace/wacrm-staging/v2work/exploit_extra.sql:45: ERROR:  permission denied for function merge_duplicate_contacts
-psql:/workspace/wacrm-staging/v2work/exploit_extra.sql:46: ERROR:  permission denied for function claim_ai_reply_slot
-psql:/workspace/wacrm-staging/v2work/exploit_extra.sql:47: ERROR:  permission denied for table notifications
+psql:/workspace/wacrm-staging/v3work/exploit_extra.sql:49: ERROR:  permission denied for function merge_duplicate_contacts
+psql:/workspace/wacrm-staging/v3work/exploit_extra.sql:50: ERROR:  permission denied for function claim_ai_reply_slot
+psql:/workspace/wacrm-staging/v3work/exploit_extra.sql:51: ERROR:  permission denied for table notifications
 UPDATE 0
 == S11 user RPCs still callable (expect rows/no permission error)
  S11      | t
  S11b     |     0
 == S12 service_role can call service-only fn
+== S14 profiles: no direct INSERT for authenticated (self, own account; expect permission denied)
+psql:/workspace/wacrm-staging/v3work/exploit_extra.sql:63: ERROR:  permission denied for table profiles
+== S15 accounts: user cannot INSERT an account (expect RLS error; only ensure_chat_profile creates one)
+psql:/workspace/wacrm-staging/v3work/exploit_extra.sql:65: ERROR:  new row violates row-level security policy for table "accounts"
+== S16 invitations: non-member C invites self into B (expect RLS error)
+psql:/workspace/wacrm-staging/v3work/exploit_extra.sql:67: ERROR:  new row violates row-level security policy for table "account_invitations"
+== S17 invitations: owner A creates an owner-role invite in own account (expect check violation)
+psql:/workspace/wacrm-staging/v3work/exploit_extra.sql:70: ERROR:  new row for relation "account_invitations" violates check constraint "account_invitations_role_check"
+== S18 ensure_chat_profile (SECURITY DEFINER) still creates profile+account for a new user (expect 1 1 owner), and is idempotent (expect 1 1)
+INSERT 0 1
+ S18      |     1 |     1 | owner
+ S18b     |     1 |     1
+== S19 non-member C inserts into B-scoped tables (contacts, tags, notifications, member_presence; expect RLS error each)
+psql:/workspace/wacrm-staging/v3work/exploit_extra.sql:83: ERROR:  new row violates row-level security policy for table "contacts"
+psql:/workspace/wacrm-staging/v3work/exploit_extra.sql:84: ERROR:  new row violates row-level security policy for table "tags"
+psql:/workspace/wacrm-staging/v3work/exploit_extra.sql:85: ERROR:  new row violates row-level security policy for table "notifications"
+psql:/workspace/wacrm-staging/v3work/exploit_extra.sql:86: ERROR:  new row violates row-level security policy for table "member_presence"
+== S20 static audit: INSERT/ALL policies on tables with account_id/user_id/role columns whose WITH CHECK does not gate on is_account_member(account_id) (expect only the audited rows listed in VERIFY.md)
+ S20      | astra_connect_handoff_audit | astra_connect_handoff_audit_deny_all | false
+ S20      | astra_usage_daily           | astra_usage_daily_deny_all           | false
+ S20      | automation_steps            | automation_steps_modify              | (EXISTS ( SELECT 1                                                                                                                +
+ S20      | broadcast_recipients        | broadcast_recipients_modify          | (EXISTS ( SELECT 1                                                                                                                +
+ S20      | contact_custom_values       | contact_custom_values_modify         | (EXISTS ( SELECT 1                                                                                                                +
+ S20      | contact_tags                | contact_tags_modify                  | (EXISTS ( SELECT 1                                                                                                                +
+ S20      | flow_nodes                  | flow_nodes_modify                    | (EXISTS ( SELECT 1                                                                                                                +
+ S20      | intent_entities             | intent_entities_write                | (EXISTS ( SELECT 1                                                                                                                +
+ S20      | intent_training_phrases     | intent_phrases_write                 | (EXISTS ( SELECT 1                                                                                                                +
+ S20      | message_reactions           | message_reactions_modify             | (EXISTS ( SELECT 1                                                                                                                +
+ S20      | messages                    | messages_modify                      | (EXISTS ( SELECT 1                                                                                                                +
+ S20      | pipeline_stages             | pipeline_stages_modify               | (EXISTS ( SELECT 1                                                                                                                +
+== S21 static audit: tables with an account_id/account_role/owner_user_id column without RLS (expect 0)
+ S21      |     0
+== S22 static audit: authenticated INSERT privilege on profiles / accounts (expect f f t)
+ S22      | f                   | t                            | t
 == S13 delete owner B cascades their account (expect 0 accounts for B, 0 B profiles)
 DELETE 1
  S13      |     0 |     0
 
+### 4b. Voice T9 repro (t9.sql): profile self-insert must FAIL; T10 ensure_chat_profile twice
+INSERT 0 2
+== T9 voice-only user self-inserts profile into B account as owner/viewer
+psql:/workspace/wacrm-staging/v3work/t9.sql:13: ERROR:  permission denied for table profiles
+psql:/workspace/wacrm-staging/v3work/t9.sql:14: ERROR:  permission denied for table profiles
+ T9 C sees B account rows |     0
+== T10 ensure_chat_profile twice
+ T10 B accounts |     1
+
 ### 5. catalog diff vs migrated ref (cat.sql, body md5 normalised for schema qualifier)
-full diff lines: 174
+full diff lines: 176
 --- non-privilege diff:
 644c644
 < CON accounts accounts_owner_user_id_fkey FOREIGN KEY (owner_user_id) REFERENCES auth.users(id) ON DELETE RESTRICT
@@ -101,6 +147,8 @@ full diff lines: 174
 > FN update_ai_configs_updated_at() secdef=false cfg=search_path=wacrm, extensions md5=a3a8dcc15e232b73d3f5c4abfa43f3d8
 > FN update_ai_knowledge_documents_updated_at() secdef=false cfg=search_path=wacrm, extensions md5=a3a8dcc15e232b73d3f5c4abfa43f3d8
 > FN update_updated_at_column() secdef=false cfg=search_path=wacrm, extensions md5=976aa1a9d8a76703090d1a9459f8e6c2
+1180d1179
+< POL profiles profiles_insert INSERT {public} U= C=(auth.uid() = user_id)
 --- ref storage/realtime (public names) vs pack:
 1,3c1,3
 < BKT avatars public=true lim=2097152 mimes=084fe90f5a5913389365e9cce3826143
@@ -130,9 +178,14 @@ rollback with non-empty bucket: exit 3 :: ERROR:  aborting: wacrm-* buckets are 
 rollback with foreign dependent view: exit 3 :: ERROR:  aborting: objects outside wacrm depend on wacrm: rule _RETURN on view public.foreign_dep
 wacrm still present: true
 
+### 6b. protect_buckets_delete stub: rollback WITHOUT the allow_delete_query line must fail with 42501
+rollback without SET LOCAL: exit 3 :: ERROR:  42501: Direct deletion from storage tables is not allowed. Use the Storage API instead.
+after failed rollback: wacrm present=true wacrm policies=12 buckets=3
+stub triggers: protect_buckets_delete,protect_objects_delete
+
 ### 7. rollback
 rollback: exit 0
-psql:/workspace/wacrm-staging/shared-sql-v2/rollback_wacrm.sql:103: NOTICE:  drop cascades to 81 other objects
+psql:/workspace/wacrm-staging/shared-sql-v3/rollback_wacrm.sql:104: NOTICE:  drop cascades to 81 other objects
 DETAIL:  drop cascades to type account_role_enum
 drop cascades to function _bcast_bump(uuid,text,integer)
 drop cascades to function _bcast_cols_for_status(text)
@@ -223,9 +276,9 @@ uuid-ossp still=1
 rollback twice: exit 0 
 
 ### 8. reinstall after rollback
-reinstall v2_schema_test.sql: exit 0
+reinstall wacrm_schema_test.Y9yavh.sql: exit 0
 reinstall shared_storage.sql: exit 0
 reinstall shared_realtime.sql: exit 0
 
 ### 9. Voice reference DB untouched
-ref db wacrm tables=0
+Voice ref db wacrm tables (read-only check)=0

@@ -5734,13 +5734,6 @@ CREATE POLICY product_catalog_items_write ON wacrm.product_catalog_items USING (
 ALTER TABLE wacrm.profiles ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: profiles profiles_insert; Type: POLICY; Schema: wacrm; Owner: -
---
-
-CREATE POLICY profiles_insert ON wacrm.profiles FOR INSERT WITH CHECK ((auth.uid() = user_id));
-
-
---
 -- Name: profiles profiles_select; Type: POLICY; Schema: wacrm; Owner: -
 --
 
@@ -6082,7 +6075,8 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE wacrm.pipelines TO authenticated;
 GRANT ALL ON TABLE wacrm.pipelines TO service_role;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE wacrm.product_catalog_items TO authenticated;
 GRANT ALL ON TABLE wacrm.product_catalog_items TO service_role;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE wacrm.profiles TO authenticated;
+-- profiles: no INSERT for users (created only via SECURITY DEFINER ensure_chat_profile / redeem_invitation)
+GRANT SELECT, UPDATE, DELETE ON TABLE wacrm.profiles TO authenticated;
 GRANT ALL ON TABLE wacrm.profiles TO service_role;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE wacrm.quick_replies TO authenticated;
 GRANT ALL ON TABLE wacrm.quick_replies TO service_role;

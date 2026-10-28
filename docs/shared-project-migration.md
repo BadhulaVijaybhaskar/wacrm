@@ -6,7 +6,7 @@ This document lists every **non-`wacrm`** surface touched when installing or run
 
 ## Install order
 
-Pack: shared-sql-v2 under [`supabase/shared-project/`](../supabase/shared-project/) (`SHA256SUMS`, `VERIFY.md`, `CODE-CHANGES.md`, `verify/`).
+Pack: shared-sql-v3 under [`supabase/shared-project/`](../supabase/shared-project/) (`SHA256SUMS`, `VERIFY.md`, `CODE-CHANGES.md`, `verify/`).
 
 1. [`live-precheck.sql`](../supabase/shared-project/live-precheck.sql) — read-only preflight (ends in `ROLLBACK`)
 2. [`wacrm_schema.sql`](../supabase/shared-project/wacrm_schema.sql) — schema `wacrm` (tables, RLS, functions, grants)
@@ -72,7 +72,7 @@ Installed as `CREATE EXTENSION ... WITH SCHEMA extensions;` — shared cluster e
 | `wacrm-flow-media` | Flow builder media (16 MB) — **private** |
 | `wacrm-chat-media` | Inbox / inbound mirrored media (16 MB, extended MIME list) — **private** |
 
-Policies in `shared_storage.sql` are scoped to `bucket_id = 'wacrm-*'` and read `wacrm.profiles` for account folder checks. Buckets are `public = false` (shared-sql-v2). The app persists **Storage object paths** (not public URLs) and mints signed URLs at display time (short TTL) and Meta-send time (longer TTL). See [`CODE-CHANGES.md`](../supabase/shared-project/CODE-CHANGES.md).
+Policies in `shared_storage.sql` are scoped to `bucket_id = 'wacrm-*'` and read `wacrm.profiles` for account folder checks. Buckets are `public = false` (shared-sql-v3). The app persists **Storage object paths** (not public URLs) and mints signed URLs at display time (short TTL) and Meta-send time (longer TTL). See [`CODE-CHANGES.md`](../supabase/shared-project/CODE-CHANGES.md).
 
 ## `supabase_realtime` publication
 
@@ -84,12 +84,13 @@ App realtime subscriptions use `schema: getSupabaseDbSchema()` (so `SUPABASE_DB_
 
 Dashboard: add **`wacrm`** to exposed schemas (`db-schemas`). Does not modify Voice schemas.
 
-## Auth / ownership notes (shared-sql-v2)
+## Auth / ownership notes (shared-sql-v3)
 
 - **No `auth.users` trigger.** First Chat login calls `ensure_chat_profile` (no direct `profiles` insert fallback).
+- **`authenticated` has no INSERT on `wacrm.profiles`** (and `profiles_insert` is dropped). Only `ensure_chat_profile` / `redeem_invitation` create profile rows.
 - **Invitation peek** (`GET /api/invitations/[token]/peek`) uses the service-role client — `anon` has no `wacrm` USAGE.
 - **`accounts.owner_user_id` is ON DELETE CASCADE.** Any admin auth-user delete for an owner must call `transfer_account_ownership` first (see `src/lib/auth/safe-delete-auth-user.ts`).
-- **Rollback:** [`rollback_wacrm.sql`](../supabase/shared-project/rollback_wacrm.sql) (empty buckets first). Pre-install: [`live-precheck.sql`](../supabase/shared-project/live-precheck.sql). Verification notes: [`VERIFY.md`](../supabase/shared-project/VERIFY.md).
+- **Rollback:** [`rollback_wacrm.sql`](../supabase/shared-project/rollback_wacrm.sql) (empty buckets first; sets `storage.allow_delete_query`). Pre-install: [`live-precheck.sql`](../supabase/shared-project/live-precheck.sql). Verification notes: [`VERIFY.md`](../supabase/shared-project/VERIFY.md).
 
 ## pg_cron
 

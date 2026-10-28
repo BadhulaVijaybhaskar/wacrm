@@ -18,3 +18,5 @@
 > FN update_ai_configs_updated_at() secdef=false cfg=search_path=wacrm, extensions md5=a3a8dcc15e232b73d3f5c4abfa43f3d8
 > FN update_ai_knowledge_documents_updated_at() secdef=false cfg=search_path=wacrm, extensions md5=a3a8dcc15e232b73d3f5c4abfa43f3d8
 > FN update_updated_at_column() secdef=false cfg=search_path=wacrm, extensions md5=976aa1a9d8a76703090d1a9459f8e6c2
+1180d1179
+< POL profiles profiles_insert INSERT {public} U= C=(auth.uid() = user_id)

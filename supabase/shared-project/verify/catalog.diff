@@ -66,7 +66,9 @@
 > FNACL update_ai_configs_updated_at() {postgres=X/postgres}
 > FNACL update_ai_knowledge_documents_updated_at() {postgres=X/postgres}
 > FNACL update_updated_at_column() {postgres=X/postgres}
-1233,1284c1233,1284
+1209d1208
+< POL profiles profiles_insert INSERT {public} U= C=(auth.uid() = user_id)
+1233,1284c1232,1283
 < TACL account_invitations  rls=true ri=d
 < TACL accounts  rls=true ri=d
 < TACL ad_attributions  rls=true ri=d
@@ -165,7 +167,7 @@
 > TACL pipeline_stages {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
 > TACL pipelines {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
 > TACL product_catalog_items {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
-> TACL profiles {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL profiles {postgres=arwdDxtm/postgres,authenticated=rwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
 > TACL quick_replies {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
 > TACL sheets_sync_runs {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
 > TACL tags {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d

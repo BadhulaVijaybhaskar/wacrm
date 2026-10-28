@@ -23,7 +23,7 @@ Change the peek route to call `peek_invitation` through `supabaseAdmin()` (servi
 - Realtime subscriptions: `schema: 'wacrm'` in every `postgres_changes` filter.
 
 ## 4. Signup profile creation
-There is no trigger on auth.users. The app must call `rpc('ensure_chat_profile', { p_full_name })` after sign-up / first login (the d202a03 behaviour). The old fallback direct INSERT into profiles is now blocked by RLS. That is expected, so remove it or ignore its error.
+There is no trigger on auth.users. The app must call `rpc('ensure_chat_profile', { p_full_name })` after sign-up / first login (the d202a03 behaviour). In v3 `authenticated` has **no INSERT privilege on profiles at all**, so any direct `from('profiles').insert(...)` (for example the ensure-chat-profile fallback) now fails with `permission denied`. Remove it: `ensure_chat_profile` is the only creation path, and invitations go through `redeem_invitation`.
 
 ## 5. Owner deletion semantics
 `accounts.owner_user_id` is now ON DELETE CASCADE. Deleting an owner's auth user deletes the whole tenant, including teammates' profiles. Any admin "delete user" path must call `transfer_account_ownership` first. See VERIFY.md.

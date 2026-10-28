@@ -97,6 +97,7 @@ DROP POLICY IF EXISTS wacrm_chat_media_update ON storage.objects;
 DROP POLICY IF EXISTS wacrm_chat_media_delete ON storage.objects;
 
 -- Buckets are empty (checked above), so removing the bucket rows is safe.
+SET LOCAL storage.allow_delete_query = 'true';
 DELETE FROM storage.buckets WHERE id IN ('wacrm-avatars', 'wacrm-flow-media', 'wacrm-chat-media');
 
 -- Publication membership of wacrm tables goes away with the tables.

@@ -63,4 +63,19 @@ describe('no direct profiles inserts (shared-sql-v3)', () => {
     }
     expect(offenders).toEqual([]);
   });
+
+  it('shared pack: authenticated has no INSERT on profiles; no profiles_insert policy', () => {
+    const sql = readFileSync(
+      join(process.cwd(), 'supabase/shared-project/wacrm_schema.sql'),
+      'utf8',
+    );
+    expect(sql).not.toMatch(/CREATE\s+POLICY\s+profiles_insert\b/i);
+    // Exact grant shape from shared-sql-v3
+    expect(sql).toMatch(
+      /GRANT SELECT,\s*UPDATE,\s*DELETE ON TABLE wacrm\.profiles TO authenticated/i,
+    );
+    expect(sql).not.toMatch(
+      /GRANT[^;\n]*INSERT[^;\n]*ON TABLE wacrm\.profiles TO authenticated/i,
+    );
+  });
 });

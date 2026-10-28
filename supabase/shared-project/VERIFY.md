@@ -1,9 +1,32 @@
-# shared-sql-v2: verification (box harness only)
+# shared-sql-v3: verification (box harness only)
 
-Generated at 2026-10-28 (IST) from branch `cursor/astra-connect-adapter-f6ad` @ c678ea9, migrations 001–058.
-**No remote database was contacted.** Everything ran against the local PG17 harness at `/tmp/wacrm-review-pg` (unix socket, port 55439) in my own scratch DBs:
-- `v2ref`: stubs + 001–058, used as the reference
-- `v2pack`: stubs + this pack
+## v3 changes (Astra Voice review of v2)
+1. **CRITICAL fixed: profile self-insert (Voice T9).**
+   - Dropped the `profiles_insert` policy (gen.py step 3b, asserted).
+   - `authenticated` now has only SELECT, UPDATE, DELETE on `wacrm.profiles`, with no INSERT.
+   - Profiles are created only by SECURITY DEFINER code: `ensure_chat_profile` (tested in S18 and T10) and `redeem_invitation`, which UPDATEs an existing profile.
+   - Live, the `postgres` owner has BYPASSRLS and owns the tables, so the DEFINER path is not affected by RLS.
+2. **Self-assign audit.**
+   - Membership lives in `profiles.account_id`/`account_role`; there is no account_members table.
+   - Tests added: S14 (profiles INSERT denied), S15 (accounts INSERT denied by RLS: no INSERT policy), S16 (non-member invite into B denied), S17 (owner-role invite rejected by `account_invitations_role_check`), S19 (cross-tenant INSERT into contacts, tags, notifications and member_presence denied), S20/S21/S22 (static policy and grant audit).
+   - S20 audit result:
+     - Every INSERT/ALL policy on a table with `account_id` checks `wacrm.is_account_member(account_id, …)`.
+     - The 10 child tables without `account_id` (messages, message_reactions, contact_tags, contact_custom_values, broadcast_recipients, automation_steps, flow_nodes, pipeline_stages, intent_entities, intent_training_phrases) gate through the parent row's `is_account_member(parent.account_id, …)`.
+     - The 2 audit tables are `deny_all` (false).
+   - `profiles.role` is a legacy display-only column. No SQL authorization reads it (only `account_role` is used), and the column-privilege trigger already blocks `account_role`/`account_id` changes (T2).
+3. **HIGH fixed: rollback vs Supabase `protect_buckets_delete`.**
+   - Added `SET LOCAL storage.allow_delete_query = 'true';` right before `DELETE FROM storage.buckets`. The file is byte-identical to Voice's `/tmp/myv2/rollback_fixed.sql`.
+   - The harness stubs lacked the trigger. I added `storage.protect_delete()` plus statement-level `protect_buckets_delete` and `protect_objects_delete` triggers. They raise 42501 unless `storage.allow_delete_query = 'true'`, mirroring the live trigger names Voice reported.
+   - Step 6b proves a rollback without the line fails with 42501 and changes nothing; the real rollback passes.
+4. **verify.sh no longer writes the shipped file.**
+   - It regenerates into a `mktemp` file and `cmp`s it against the shipped `wacrm_schema.sql`, failing loudly on mismatch.
+   - The harness copy also goes to a temp file.
+
+
+Generated 2026-10-28 (IST); v3 at 08:45 IST from branch `cursor/astra-connect-adapter-f6ad` @ c678ea9, migrations 001–058.
+**No remote database was contacted (v3 included).** Everything ran against the local PG17 harness at `/tmp/wacrm-review-pg` (unix socket, port 55439) in my own scratch DBs:
+- `v2ref`: stubs + 001–058, used read-only as the reference
+- `v3pack`: v3 stubs + this pack
 
 Voice's `ref` and `pack` DBs were only read, by the last line of verify.sh. `service-role.env` was never opened.
 
@@ -13,7 +36,10 @@ Voice's `ref` and `pack` DBs were only read, by the last line of verify.sh. `ser
 |---|---|
 | Clean install (4 files, ON_ERROR_STOP) | PASS: all exit 0 |
 | Voice exploit.sql T1–T8 | PASS: every exploit fails (table below) |
-| Extra storage/grant tests S1–S13 | PASS: all as expected |
+| Voice t9.sql T9 (profile self-insert) | PASS: both INSERTs `permission denied for table profiles`; C sees 0 B accounts. T10: ensure_chat_profile twice leaves 1 account |
+| Extra storage/grant tests S1–S22 | PASS: all as expected |
+| Regenerated schema == shipped file | PASS (`cmp`) |
+| Rollback without allow_delete_query against the protect_buckets_delete stub | fails with 42501 and changes nothing (expected); the shipped rollback passes |
 | Catalog diff vs migrated 058 ref | PASS: empty apart from the schema name and exceptions E1–E6 |
 | Install twice | PASS: schema and storage fail cleanly (exit 3, nothing changed); realtime and cron are idempotent no-ops |
 | Rollback pre-checks | PASS: aborts on non-empty bucket and on a foreign dependent object |
@@ -42,12 +68,12 @@ This matches the stand-in that m_030/m_032 used in v2ref. **The shipped file use
 ## Commands
 ```
 export PGHOST=/tmp/wacrm-review-pg PGPORT=55439 PGUSER=postgres
-verify/verify.sh > verify/verify.out 2>&1     # whole suite, rebuilds v2pack from scratch
-# per file it runs:  psql -X -q -v ON_ERROR_STOP=1 -d v2pack -f <file>
+verify/verify.sh > verify/verify.out 2>&1     # whole suite, rebuilds v3pack from scratch; never writes shipped files
+# per file it runs:  psql -X -q -v ON_ERROR_STOP=1 -d v3pack -f <file>
 # order: wacrm_schema.sql, shared_storage.sql, shared_realtime.sql, shared_cron.sql
-# catalog: psql -XAt -d v2ref -v schema=public -f verify/cat_norm.sql  vs  -d v2pack -v schema=wacrm
+# catalog: psql -XAt -d v2ref -v schema=public -f verify/cat_norm.sql  vs  -d v3pack -v schema=wacrm
 ```
-Full outputs: `verify/verify.out`, `verify/exploit.out`, `verify/exploit_extra.out`, `verify/catalog.diff` (full, including privileges), `verify/catalog_noacl.diff` (non-privilege only).
+Full outputs: `verify/verify.out`, `verify/exploit.out`, `verify/t9.out`, `verify/exploit_extra.out`, `verify/catalog.diff` (full, including privileges), `verify/catalog_noacl.diff` (non-privilege only).
 
 ## Exploit results
 | # | Attack | Result |
@@ -66,7 +92,8 @@ Full outputs: `verify/verify.out`, `verify/exploit.out`, `verify/exploit_extra.o
 | S3 | A uploads into own prefix | INSERT 0 1 |
 | S4 | malformed prefix (`account-not-a-uuid/`) | RLS error (no cast error) |
 | S5 | A uploads avatar into B's user folder | RLS error |
-| S6 | A deletes B's object | DELETE 0 |
+| S6a | A deletes B's object directly | 42501 (protect_objects_delete stub) |
+| S6b | same delete with allow_delete_query on (the Storage API path) | DELETE 0 (RLS) |
 | S7 | voice-only user lists wacrm objects | 0 |
 | S8 | existing voice storage policy still works | 1 |
 | S9 | anon lists objects / wacrm tables / peek_invitation | 0 / permission denied for schema wacrm |
@@ -74,6 +101,17 @@ Full outputs: `verify/verify.out`, `verify/exploit.out`, `verify/exploit_extra.o
 | S11 | user RPCs (is_account_member, touch_presence, …) | work |
 | S12 | service_role calls service-only fn | works |
 | S13 | delete owner B | B's account and profiles removed (0/0) |
+| T9 | voice-only C self-inserts a profile into B as owner / viewer | `permission denied for table profiles` (both); C sees 0 B accounts |
+| T10 | ensure_chat_profile called twice | 1 account |
+| S14 | authenticated INSERT into profiles | `permission denied for table profiles` |
+| S15 | authenticated INSERT into accounts (self as owner) | RLS error |
+| S16 | non-member invites self into B | RLS error on account_invitations |
+| S17 | owner creates an owner-role invite | `account_invitations_role_check` violation |
+| S18 | ensure_chat_profile for a new user; second call | 1 profile / 1 account / owner; still 1 / 1 |
+| S19 | non-member INSERT into B's contacts, tags, notifications, member_presence | RLS error (all 4) |
+| S20 | static: INSERT/ALL policies not gated by is_account_member(account_id) | only the parent-gated child tables (no account_id column) and the 2 deny_all tables |
+| S21 | static: account-scoped tables without RLS | 0 |
+| S22 | static: authenticated INSERT on profiles / accounts; INSERT policies on either | f / t (granted, but no INSERT policy, so RLS denies) / none |
 
 ## Catalog diff (non-privilege; full text in verify/catalog_noacl.diff)
 Compared: tables, columns (type/default/null), constraints, indexes, triggers, policies (cmd/roles/qual/check), function signatures, SECURITY DEFINER, proconfig, body md5 (with `public.`/`wacrm.` normalised), RLS, replica identity, enums, sequences.
@@ -84,13 +122,14 @@ FN handle_new_user()  removed;  FN ensure_chat_profile(text) added              
 FN _bcast_cols_for_status, update_ai_configs_updated_at, update_ai_knowledge_documents_updated_at,
    update_updated_at_column: cfg ''  →  search_path=wacrm, extensions (bodies identical)     (E4)
 BKT avatars / chat-media / flow-media: public=true → false (limits and MIME lists identical) (E5)
+POL profiles_insert removed                                                                  (E7)
 PUB: same 6 tables (conversations, flow_runs, member_presence, message_reactions, messages, notifications)
 ```
 
 ## Exceptions (intended differences vs the 058 end state)
 - **E1. Privileges.**
   - Schema: PUBLIC and anon revoked; USAGE granted to authenticated and service_role.
-  - Tables: authenticated gets SELECT/INSERT/UPDATE/DELETE on 51 tables. On notifications it gets SELECT/INSERT/DELETE plus UPDATE(read_at) only, the same column grant as the ref. service_role gets ALL. There is no blanket GRANT ALL to other roles and no TRUNCATE/REFERENCES/TRIGGER for authenticated.
+  - Tables: authenticated gets SELECT/INSERT/UPDATE/DELETE on 50 tables. On profiles it gets SELECT/UPDATE/DELETE only (no INSERT, E7). On notifications it gets SELECT/INSERT/DELETE plus UPDATE(read_at) only, the same column grant as the ref. service_role gets ALL. There is no blanket GRANT ALL to other roles and no TRUNCATE/REFERENCES/TRIGGER for authenticated.
   - Functions: PUBLIC EXECUTE revoked everywhere; explicit EXECUTE per function:
     - service_role only: `_bcast_bump, recompute_broadcast_counts, bump_conversation_on_inbound, increment_flow_execution_count, increment_automation_execution_count, claim_ai_reply_slot, record_webhook_failure, create_broadcast_with_recipients(8-arg)`
     - authenticated + service_role: `is_account_member, filter_contacts_by_tags, match_ai_knowledge_fts, match_ai_knowledge_semantic, peek_invitation, redeem_invitation, remove_account_member, set_member_role, transfer_account_ownership, touch_presence, ensure_chat_profile`
@@ -110,6 +149,7 @@ PUB: same 6 tables (conversations, flow_runs, member_presence, message_reactions
     - avatars: write/update/delete only in own `<auth.uid()>/` folder. Select: own folder, or the folder of a user who shares an account with the caller.
   - Dropped the legacy user-id-folder alternative on flow-media. The app writes `account-*` only and this is a fresh install.
   - The guard aborts if `wacrm.is_account_member` is missing or any `wacrm_*` policy already exists.
+- **E7. `profiles_insert` policy removed and no INSERT grant on profiles for authenticated** (v3, Voice T9). Without this, any authenticated user on the shared project could insert a profile with an arbitrary `account_id`/`account_role` and join any tenant.
 - **E6. Shared change outside wacrm:** `CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA extensions` (live: not installed, 0.8.2 available). It is required for `ai_knowledge_chunks.embedding vector(1536)` and the hnsw index. Rollback does not drop it.
 
 Realtime (`shared_realtime.sql`): aborts if the publication is missing or `FOR ALL TABLES`. It then keeps Voice's guarded `ALTER PUBLICATION … ADD TABLE` for the 6 tables (idempotent).
@@ -124,7 +164,12 @@ Cron (`shared_cron.sql`): no-op; migrations 001–058 schedule no pg_cron jobs.
 - Steps, in one transaction:
   1. unschedule `wacrm_%` cron jobs if pg_cron exists
   2. drop the 12 `wacrm_*` policies
-  3. delete the 3 bucket rows
+  3. delete the 3 bucket rows, after `SET LOCAL storage.allow_delete_query = 'true'` (required by Supabase's `protect_buckets_delete` trigger)
   4. `DROP SCHEMA wacrm CASCADE`, which removes the publication entries too
 - Untouched: extensions (vector, uuid-ossp), other buckets, policies and objects.
 - Run before install, so the live state is as Voice reported: `live-precheck.sql` (READ ONLY transaction, ends in ROLLBACK).
+
+## Notes and risks (not changed in v3)
+- **Other live bucket triggers.** Live `storage.buckets` also has `protect_bucket_control_insert`/`_update` (`protect_bucket_control_columns`) and `protect_bucket_control_update_role` (`enforce_bucket_lifecycle_service_role`). They are not stubbed here, so the `shared_storage.sql` bucket INSERT is untested against them. Check that they allow `postgres` to insert private buckets with `file_size_limit`/`allowed_mime_types`. If not, create the 3 buckets via the Storage API with the same settings and run `shared_storage.sql` for the policies only; its `ON CONFLICT DO NOTHING` plus the public check handle that.
+- **pgvector** is still untested on the box; the harness maps vector to `real[]` (see the harness note).
+- **Cross-tenant links (pre-existing, from the 058 ref):** child-table policies check only the parent row being written. For example, `contact_tags` checks the contact but not that `tag_id` belongs to the same account, so a user could link their own contact to another tenant's tag id. This grants no read access. Left as-is, matching the 058 behaviour.

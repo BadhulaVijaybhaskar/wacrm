@@ -1,0 +1,25 @@
+BEGIN
+INSERT 0 2
+SET
+RESET
+SET
+== T9 voice-only user self-inserts profile into B account as owner/viewer
+psql:/workspace/wacrm-staging/v3work/t9.sql:13: ERROR:  permission denied for table profiles
+psql:/workspace/wacrm-staging/v3work/t9.sql:14: ERROR:  permission denied for table profiles
+         ?column?         | count 
+--------------------------+-------
+ T9 C sees B account rows |     0
+(1 row)
+
+== T10 ensure_chat_profile twice
+ ensure_chat_profile 
+---------------------
+ 
+(1 row)
+
+    ?column?    | count 
+----------------+-------
+ T10 B accounts |     1
+(1 row)
+
+ROLLBACK

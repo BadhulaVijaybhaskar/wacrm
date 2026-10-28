@@ -25,6 +25,13 @@ old = "REFERENCES auth.users(id) ON DELETE RESTRICT;"
 assert s.count(old) == 1
 s = s.replace(old, "REFERENCES auth.users(id) ON DELETE CASCADE;")
 
+# 3b. drop profiles_insert: users never INSERT profiles directly; the only
+#     creation paths are SECURITY DEFINER (ensure_chat_profile, redeem_invitation)
+#     -- otherwise a user could self-insert with any account_id/account_role (Voice T9)
+m = re.search(r"--\n-- Name: profiles profiles_insert; Type: POLICY;[^\n]*\n--\n\nCREATE POLICY profiles_insert ON public\.profiles FOR INSERT [^\n]*\n\n\n", s)
+assert m; s = s[:m.start()] + s[m.end():]
+assert "profiles_insert" not in s
+
 # 4. schema rename public -> wacrm (object names, type refs, function bodies)
 s = s.replace("public.", "wacrm.")
 s = s.replace("Schema: public;", "Schema: wacrm;")
@@ -103,6 +110,9 @@ for t in tables:
     if t == "notifications":
         g.append("GRANT SELECT, INSERT, DELETE ON TABLE wacrm.notifications TO authenticated;")
         g.append("GRANT UPDATE (read_at) ON TABLE wacrm.notifications TO authenticated;")
+    elif t == "profiles":
+        g.append("-- profiles: no INSERT for users (created only via SECURITY DEFINER ensure_chat_profile / redeem_invitation)")
+        g.append("GRANT SELECT, UPDATE, DELETE ON TABLE wacrm.profiles TO authenticated;")
     else:
         g.append(f"GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE wacrm.{t} TO authenticated;")
     g.append(f"GRANT ALL ON TABLE wacrm.{t} TO service_role;")
