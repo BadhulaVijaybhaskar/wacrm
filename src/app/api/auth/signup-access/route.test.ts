@@ -102,17 +102,19 @@ describe('GET /api/auth/signup-access', () => {
     })
   })
 
-  it('invite token allows may_signup but not owner auto-create', async () => {
+  it('invite token allows may_signup and owner bootstrap', async () => {
     process.env.WACRM_SIGNUP_MODE = 'invite'
     delete process.env.WACRM_SIGNUP_ALLOWLIST
     const res = await GET(
       new Request(
-        'https://chat.example/api/auth/signup-access?email=x@y.com&invite=1',
+        'https://chat.example/api/auth/signup-access?email=x@y.com&invite=tok_abc',
       ),
     )
     await expect(res.json()).resolves.toMatchObject({
       may_signup: true,
-      may_auto_create_owner: false,
+      may_auto_create_owner: true,
+      has_invite_token: true,
+      reason: 'invite_token_bootstrap',
     })
   })
 })

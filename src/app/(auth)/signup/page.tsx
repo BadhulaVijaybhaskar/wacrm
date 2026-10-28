@@ -53,7 +53,7 @@ function SignupPageInner() {
     ;(async () => {
       try {
         const qs = new URLSearchParams();
-        if (inviteToken) qs.set('invite', '1')
+        if (inviteToken) qs.set('invite', inviteToken)
         const res = await fetch(`/api/auth/signup-access?${qs.toString()}`)
         if (!res.ok || cancelled) return
         const body = (await res.json()) as {
@@ -98,7 +98,7 @@ function SignupPageInner() {
     // an Auth user — invite mode without token needs allowlist match.
     try {
       const qs = new URLSearchParams({ email });
-      if (inviteToken) qs.set('invite', '1');
+      if (inviteToken) qs.set('invite', inviteToken);
       const accessRes = await fetch(`/api/auth/signup-access?${qs.toString()}`);
       if (accessRes.ok) {
         const access = (await accessRes.json()) as {

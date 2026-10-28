@@ -16,13 +16,18 @@ import {
  *
  * Query:
  *   email — optional; when signed out (signup page) pass the typed email
- *   invite — optional invite token presence flag (`1`)
+ *   invite — optional invite token (`1`/`true` = presence flag, or the
+ *            real token from /join/<token> / signup?invite=)
  */
 export async function GET(request: Request) {
   const url = new URL(request.url)
-  const inviteFlag = url.searchParams.get('invite')
+  const inviteParam = (url.searchParams.get('invite') ?? '').trim()
   const hasInviteToken =
-    inviteFlag === '1' || inviteFlag === 'true' || Boolean(inviteFlag?.trim())
+    inviteParam === '1' ||
+    inviteParam === 'true' ||
+    (inviteParam.length > 0 &&
+      inviteParam !== '0' &&
+      inviteParam !== 'false')
 
   const mode = getSignupMode()
 
@@ -63,6 +68,7 @@ export async function GET(request: Request) {
   const owner = mayAutoCreateOwnerAccount({
     email,
     hasPendingInviteLabel,
+    hasInviteToken,
   })
 
   return NextResponse.json({
@@ -70,6 +76,7 @@ export async function GET(request: Request) {
     email: email ? email.replace(/(^.).*(@.*$)/, '$1***$2') : null,
     allowlisted: email ? isEmailAllowlisted(email) : false,
     has_pending_invite_label: hasPendingInviteLabel,
+    has_invite_token: hasInviteToken,
     may_signup: provision.allowed,
     may_auto_create_owner: owner.allowed,
     reason: owner.allowed

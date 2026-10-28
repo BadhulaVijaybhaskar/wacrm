@@ -98,13 +98,19 @@ export function mayProvisionChatProfile(args: {
 }
 
 /**
- * Owner auto-provision (ensure_chat_profile) is only for allowlisted
- * emails in invite mode. Invite-token users join via redeem_invitation
- * and must not get a personal owner account first.
+ * Owner auto-provision via ensure_chat_profile.
+ *
+ * In invite mode:
+ * - allowlisted emails may create a personal owner account
+ * - users with a real invite token may bootstrap a fresh personal
+ *   account so redeem_invitation can move them (RPC requires a profile)
+ * - pending invite-label match alone still points them at /join
  */
 export function mayAutoCreateOwnerAccount(args: {
   email?: string | null
   hasPendingInviteLabel?: boolean
+  /** Plaintext invite token present on /join or ?invite= */
+  hasInviteToken?: boolean
   env?: NodeJS.ProcessEnv
 }): { allowed: boolean; mode: SignupMode; reason?: string } {
   const env = args.env ?? process.env
@@ -115,9 +121,10 @@ export function mayAutoCreateOwnerAccount(args: {
   if (isEmailAllowlisted(args.email, env)) {
     return { allowed: true, mode, reason: 'allowlist' }
   }
+  if (args.hasInviteToken) {
+    return { allowed: true, mode, reason: 'invite_token_bootstrap' }
+  }
   if (args.hasPendingInviteLabel) {
-    // Soft: label matched email — still prefer redeem over owner create.
-    // Do not auto-create an owner account; they should use /join.
     return { allowed: false, mode, reason: 'use_invite_link' }
   }
   return { allowed: false, mode, reason: 'invite_only' }

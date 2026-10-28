@@ -67,7 +67,7 @@ describe('mayProvisionChatProfile / mayAutoCreateOwnerAccount', () => {
     ).toBe(true)
   })
 
-  it('invite token allows signup UI but not owner auto-create', () => {
+  it('invite token allows signup UI and owner bootstrap for /join', () => {
     expect(
       mayProvisionChatProfile({
         email: 'stranger@x.com',
@@ -81,5 +81,15 @@ describe('mayProvisionChatProfile / mayAutoCreateOwnerAccount', () => {
         env: inviteEnv,
       }).allowed,
     ).toBe(false)
+    expect(
+      mayAutoCreateOwnerAccount({
+        email: 'stranger@x.com',
+        hasInviteToken: true,
+        env: inviteEnv,
+      }),
+    ).toMatchObject({
+      allowed: true,
+      reason: 'invite_token_bootstrap',
+    })
   })
 })

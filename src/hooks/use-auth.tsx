@@ -11,7 +11,10 @@ import {
   type ReactNode,
 } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { ensureChatProfile } from "@/lib/auth/ensure-chat-profile";
+import {
+  ensureChatProfile,
+  readInviteTokenFromLocation,
+} from "@/lib/auth/ensure-chat-profile";
 import type { User } from "@supabase/supabase-js";
 import { DEFAULT_CURRENCY } from "@/lib/currency";
 import {
@@ -231,15 +234,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Shared-project installs have no auth.users trigger — Voice
       // signups must never create Chat rows. Lazily bootstrap on first
       // Chat login when the profiles row is missing — but only when
-      // WACRM_SIGNUP_MODE allows owner auto-create (open, or allowlisted).
+      // WACRM_SIGNUP_MODE allows owner auto-create (open, allowlisted,
+      // or /join invite-token bootstrap before redeem).
       if (!data) {
         const {
           data: { user: authUser },
         } = await supabase.auth.getUser();
         if (authUser && authUser.id === userId) {
+          const inviteToken = readInviteTokenFromLocation();
           let mayCreate = true;
           try {
-            const accessRes = await fetch("/api/auth/signup-access", {
+            const qs = new URLSearchParams();
+            if (inviteToken) qs.set("invite", inviteToken);
+            const accessUrl = qs.size
+              ? `/api/auth/signup-access?${qs.toString()}`
+              : "/api/auth/signup-access";
+            const accessRes = await fetch(accessUrl, {
               credentials: "same-origin",
             });
             if (accessRes.ok) {
@@ -271,7 +281,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             return;
           }
 
-          const ensured = await ensureChatProfile(supabase, authUser);
+          const ensured = await ensureChatProfile(supabase, authUser, {
+            inviteToken,
+          });
           if (ensured.created) {
             const retry = await supabase
               .from("profiles")
