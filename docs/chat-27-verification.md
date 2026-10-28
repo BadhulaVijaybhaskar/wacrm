@@ -1,7 +1,7 @@
 # CHAT-27 verification — golden rule (everything selectable works E2E)
 
 Branch: `cursor/astra-connect-adapter-f6ad`  
-SHA: `8c45a1ee1cbc803c0fead238b7bfb57c6a325de1`  
+SHA (landing): `19cd9056d0e846e73ee8d858652a407b4485eaa5` · tip: `74613d9757fa7e9dabab6867357dc3714e765207`  
 Mode: `META_STUB=1` · `INTEGRATIONS_STUB=1` · `WHATSAPP_TEMPLATES_DRY_RUN=1` · production `next start`  
 Migrations: **none** added this chat.
 
