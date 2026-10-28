@@ -12,13 +12,13 @@ import {
 /**
  * GET /api/astra-connect/v1/whatsapp/templates
  *
- * Connect §16 — list APPROVED templates for the tenant's
+ * Connect §16.1 — list APPROVED templates for the tenant's
  * phone_number_id / WABA. Flag-gated (`WACRM_AFTER_CALL_TEMPLATES`,
  * default off → 404).
  *
- * Query: tenant_id, phone_number_id (both required).
- * Auth: §13 HMAC over `${pathname}${search}.${tenant}`.
- * Cross-tenant phone → 404.
+ * Query: tenant_id, phone_number_id (required); waba_id, status
+ * (optional; status defaults to APPROVED filtering server-side).
+ * Auth: §16 → §2 + X-Astra-Tenant (Chat: path+query.tenant).
  */
 export async function GET(request: Request) {
   if (!isAfterCallTemplatesEnabled()) {
@@ -30,26 +30,17 @@ export async function GET(request: Request) {
   const phoneNumberId = (url.searchParams.get('phone_number_id') ?? '').trim()
 
   if (!tenantId) {
-    return NextResponse.json(
-      { error: 'tenant_id is required', code: 'missing_tenant' },
-      { status: 400 },
-    )
+    return NextResponse.json({ error: 'missing_tenant' }, { status: 400 })
   }
   if (!phoneNumberId) {
     return NextResponse.json(
-      {
-        error: 'phone_number_id is required',
-        code: 'missing_phone_number_id',
-      },
+      { error: 'missing_phone_number_id' },
       { status: 400 },
     )
   }
   if (!/^\d+$/.test(phoneNumberId)) {
     return NextResponse.json(
-      {
-        error: 'phone_number_id must contain only digits',
-        code: 'bad_phone_number_id',
-      },
+      { error: 'bad_phone_number_id' },
       { status: 400 },
     )
   }
@@ -72,15 +63,22 @@ export async function GET(request: Request) {
 
     if (!result.ok) {
       return NextResponse.json(
-        { error: result.error, code: result.code },
+        { error: result.error },
         { status: result.status },
       )
     }
 
+    // §16.1 response: { templates: [{ name, language, status, category,
+    // body_text, variable_count }] }
     return NextResponse.json({
-      templates: result.templates,
-      phone_number_id: result.phone_number_id,
-      waba_id: result.waba_id,
+      templates: result.templates.map((t) => ({
+        name: t.name,
+        language: t.language,
+        status: t.status,
+        category: t.category,
+        body_text: t.body_text,
+        variable_count: t.variable_count,
+      })),
     })
   } catch (err) {
     if (isUpstreamUnavailable(err)) return upstreamUnavailableResponse()
@@ -88,6 +86,6 @@ export async function GET(request: Request) {
       '[after-call/templates]',
       err instanceof Error ? err.message : err,
     )
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+    return NextResponse.json({ error: 'internal_error' }, { status: 500 })
   }
 }

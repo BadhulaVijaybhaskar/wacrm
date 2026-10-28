@@ -8,7 +8,7 @@ const PHONE = '106540352242922'
 
 const h = vi.hoisted(() => ({
   authenticateConnectRequest: vi.fn(),
-  sendAfterCallTemplate: vi.fn(),
+  sendAfterCallMessage: vi.fn(),
   isAfterCallTemplatesEnabled: vi.fn(),
 }))
 
@@ -28,7 +28,7 @@ vi.mock('@/lib/astra-connect/after-call-templates', async () => {
   >('@/lib/astra-connect/after-call-templates')
   return {
     ...actual,
-    sendAfterCallTemplate: h.sendAfterCallTemplate,
+    sendAfterCallMessage: h.sendAfterCallMessage,
     isAfterCallTemplatesEnabled: h.isAfterCallTemplatesEnabled,
   }
 })
@@ -38,21 +38,32 @@ import { POST } from './route'
 function body(over: Record<string, unknown> = {}) {
   return {
     kind: AFTER_CALL_SEND_KIND,
+    send_id: 'wac_0123456789abcdef',
     tenant_id: TENANT,
+    employee_id: 'emp_a',
+    call_id: 'call_1',
     phone_number_id: PHONE,
-    to: '919876543210',
-    template_name: 'visit_reminder',
-    request_id: 'req_1',
+    waba_id: '200000000000002',
+    to: '+919876543210',
+    type: 'template',
+    template: {
+      name: 'hello_world',
+      language: 'en_US',
+      variables: [],
+    },
     ...over,
   }
 }
 
-function signedRequest(payload: object) {
+function signedRequest(
+  payload: object,
+  opts: { idempotencyKey?: string } = {},
+) {
   const raw = JSON.stringify(payload)
   const ts = Math.floor(Date.now() / 1000)
   const sig = buildAstraSignature(`${raw}.${TENANT}`, SECRET, ts)
   return new Request(
-    'https://chat.example/api/astra-connect/v1/whatsapp/templates/send',
+    'https://chat.example/api/astra-connect/v1/whatsapp/send',
     {
       method: 'POST',
       headers: {
@@ -60,16 +71,18 @@ function signedRequest(payload: object) {
         'X-Astra-Timestamp': String(ts),
         'X-Astra-Signature': sig,
         'X-Astra-Tenant': TENANT,
+        'Idempotency-Key':
+          opts.idempotencyKey ?? 'after-call:call_1',
       },
       body: raw,
     },
   )
 }
 
-describe('POST /api/astra-connect/v1/whatsapp/templates/send', () => {
+describe('POST /api/astra-connect/v1/whatsapp/send', () => {
   beforeEach(() => {
     h.authenticateConnectRequest.mockReset()
-    h.sendAfterCallTemplate.mockReset()
+    h.sendAfterCallMessage.mockReset()
     h.isAfterCallTemplatesEnabled.mockReset()
     h.isAfterCallTemplatesEnabled.mockReturnValue(true)
   })
@@ -83,6 +96,38 @@ describe('POST /api/astra-connect/v1/whatsapp/templates/send', () => {
     const res = await POST(signedRequest(body()))
     expect(res.status).toBe(404)
     expect(h.authenticateConnectRequest).not.toHaveBeenCalled()
+  })
+
+  it('returns 400 bad_kind for wrong kind', async () => {
+    const res = await POST(
+      signedRequest(body({ kind: 'whatsapp.template_send' })),
+    )
+    expect(res.status).toBe(400)
+    await expect(res.json()).resolves.toEqual({ error: 'bad_kind' })
+  })
+
+  it('returns 400 missing_idempotency_key', async () => {
+    const raw = JSON.stringify(body())
+    const ts = Math.floor(Date.now() / 1000)
+    const sig = buildAstraSignature(`${raw}.${TENANT}`, SECRET, ts)
+    const req = new Request(
+      'https://chat.example/api/astra-connect/v1/whatsapp/send',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Astra-Timestamp': String(ts),
+          'X-Astra-Signature': sig,
+          'X-Astra-Tenant': TENANT,
+        },
+        body: raw,
+      },
+    )
+    const res = await POST(req)
+    expect(res.status).toBe(400)
+    await expect(res.json()).resolves.toEqual({
+      error: 'missing_idempotency_key',
+    })
   })
 
   it('propagates auth 401 for bad signature', async () => {
@@ -108,22 +153,21 @@ describe('POST /api/astra-connect/v1/whatsapp/templates/send', () => {
         db: {},
       },
     })
-    h.sendAfterCallTemplate.mockResolvedValue({
+    h.sendAfterCallMessage.mockResolvedValue({
       ok: true,
-      message_id: 'wamid.1',
-      request_id: 'req_1',
-      dry_run: false,
+      status: 200,
+      body: { ok: true, message_id: 'wamid.1' },
       replay: false,
     })
     const res = await POST(signedRequest(body()))
     expect(res.status).toBe(200)
-    await expect(res.json()).resolves.toMatchObject({
+    await expect(res.json()).resolves.toEqual({
       ok: true,
       message_id: 'wamid.1',
     })
   })
 
-  it('returns dry_run result', async () => {
+  it('returns dry_run:true with no message_id', async () => {
     h.authenticateConnectRequest.mockResolvedValue({
       ok: true,
       ctx: {
@@ -135,19 +179,20 @@ describe('POST /api/astra-connect/v1/whatsapp/templates/send', () => {
         db: {},
       },
     })
-    h.sendAfterCallTemplate.mockResolvedValue({
+    h.sendAfterCallMessage.mockResolvedValue({
       ok: true,
-      message_id: 'dry-run-abc',
-      request_id: 'req_1',
-      dry_run: true,
+      status: 200,
+      body: { ok: true, dry_run: true },
       replay: false,
     })
     const res = await POST(signedRequest(body()))
     expect(res.status).toBe(200)
-    await expect(res.json()).resolves.toMatchObject({ dry_run: true })
+    const json = await res.json()
+    expect(json).toEqual({ ok: true, dry_run: true })
+    expect(json).not.toHaveProperty('message_id')
   })
 
-  it('maps Meta error from apply', async () => {
+  it('returns 409 window_closed as {error}', async () => {
     h.authenticateConnectRequest.mockResolvedValue({
       ok: true,
       ctx: {
@@ -159,13 +204,45 @@ describe('POST /api/astra-connect/v1/whatsapp/templates/send', () => {
         db: {},
       },
     })
-    h.sendAfterCallTemplate.mockResolvedValue({
+    h.sendAfterCallMessage.mockResolvedValue({
       ok: false,
-      status: 400,
-      error: 'template not found',
-      code: 'meta_error',
+      status: 409,
+      body: { error: 'window_closed' },
+    })
+    const res = await POST(
+      signedRequest(
+        body({
+          type: 'text',
+          text: 'Thanks for your call',
+          template: undefined,
+        }),
+      ),
+    )
+    expect(res.status).toBe(409)
+    await expect(res.json()).resolves.toEqual({ error: 'window_closed' })
+  })
+
+  it('maps Meta template_not_found 422', async () => {
+    h.authenticateConnectRequest.mockResolvedValue({
+      ok: true,
+      ctx: {
+        accountId: 'acct-1',
+        tenantId: TENANT,
+        phoneNumberId: PHONE,
+        employeeId: null,
+        enabled: true,
+        db: {},
+      },
+    })
+    h.sendAfterCallMessage.mockResolvedValue({
+      ok: false,
+      status: 422,
+      body: { error: 'template_not_found' },
     })
     const res = await POST(signedRequest(body()))
-    expect(res.status).toBe(400)
+    expect(res.status).toBe(422)
+    await expect(res.json()).resolves.toEqual({
+      error: 'template_not_found',
+    })
   })
 })
