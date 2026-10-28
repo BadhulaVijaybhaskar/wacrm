@@ -24,6 +24,9 @@ export function isStorageObjectPath(value: string): boolean {
   }
   // Proxy routes stay absolute-ish paths under /api/…
   if (v.startsWith('api/')) return false;
+  // Require a folder/object separator and no whitespace so free-text
+  // like "not a url" is not mistaken for a Storage key.
+  if (/\s/.test(v) || !v.includes('/')) return false;
   return true;
 }
 

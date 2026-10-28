@@ -16,6 +16,7 @@ describe('embedded signup flags', () => {
   })
 
   it('isEmbeddedSignupEnabled reads truthy env values', () => {
+    delete process.env.WHATSAPP_EMBEDDED_SIGNUP
     expect(isEmbeddedSignupEnabled()).toBe(false)
     process.env.WHATSAPP_EMBEDDED_SIGNUP = '1'
     expect(isEmbeddedSignupEnabled()).toBe(true)
@@ -26,6 +27,7 @@ describe('embedded signup flags', () => {
   })
 
   it('isMetaStubMode reads truthy env values', () => {
+    delete process.env.META_STUB
     expect(isMetaStubMode()).toBe(false)
     process.env.META_STUB = '1'
     expect(isMetaStubMode()).toBe(true)

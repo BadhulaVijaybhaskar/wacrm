@@ -12,6 +12,8 @@ describe('signed-url helpers', () => {
     expect(isStorageObjectPath('account-abc/file.png')).toBe(true);
     expect(isStorageObjectPath('https://x/y')).toBe(false);
     expect(isStorageObjectPath('/api/whatsapp/media/1')).toBe(false);
+    expect(isStorageObjectPath('not a url')).toBe(false);
+    expect(isStorageObjectPath('filename-only.png')).toBe(false);
   });
 
   it('parses legacy public storage URLs into bucket+path', () => {

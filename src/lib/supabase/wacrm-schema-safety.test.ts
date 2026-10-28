@@ -32,32 +32,56 @@ function stripSqlComments(sql: string): string {
   return out;
 }
 
+/**
+ * Track whether a line is inside a pg_dump function / DO body.
+ * Bodies open with `AS $$` / `AS $_$` / `DO $guard$` (etc.) and close
+ * on a line that is only the matching dollar-quote terminator.
+ */
+function makeFunctionBodyTracker() {
+  let tag: string | null = null;
+  return (line: string): boolean => {
+    if (tag) {
+      const t = line.trim();
+      if (t === `${tag};` || t === tag) {
+        tag = null;
+        return true; // still inside for this terminator line
+      }
+      return true;
+    }
+    const m = line.match(/\b(?:AS|DO)\s+(\$[A-Za-z0-9_]*\$)\s*$/i);
+    if (m) {
+      tag = m[1];
+      return true;
+    }
+    return false;
+  };
+}
+
 describe('wacrm_schema.sql safety', () => {
   const raw = fs.readFileSync(SCHEMA_PATH, 'utf8');
   const sql = stripSqlComments(raw);
+
   it('exists and is non-empty', () => {
     expect(raw.length).toBeGreaterThan(1000);
   });
 
   it('has no forbidden top-level DDL on auth/public/storage (except allowed patterns)', () => {
-    const lines = sql.split('\n');
-    let inFunction = false;
-    for (const line of lines) {
-      if (/CREATE\s+OR\s+REPLACE\s+FUNCTION/i.test(line)) inFunction = true;
-      if (inFunction && /^\$\$\s*LANGUAGE/i.test(line.trim())) inFunction = false;
+    const inBody = makeFunctionBodyTracker();
+    for (const line of sql.split('\n')) {
+      const inside = inBody(line);
       const t = line.trim();
-      if (!t || t.startsWith('--')) continue;
-      if (inFunction) continue;
+      if (!t || inside) continue;
       if (/^(DROP|TRUNCATE|DELETE|UPDATE)\b/i.test(t)) {
         throw new Error(`Forbidden top-level statement: ${t.slice(0, 120)}`);
       }
-      if (/^ALTER\s+TABLE\s+(auth|public|storage)\./i.test(t)) {
+      if (/^ALTER\s+TABLE\s+(ONLY\s+)?(auth|public|storage)\./i.test(t)) {
         throw new Error(`ALTER on shared schema: ${t}`);
       }
       if (
         /^ALTER\b/i.test(t) &&
-        !/^ALTER\s+TABLE\s+wacrm\./i.test(t) &&
-        !/^ALTER\s+FUNCTION\s+wacrm\./i.test(t)
+        !/^ALTER\s+TABLE\s+(ONLY\s+)?wacrm\./i.test(t) &&
+        !/^ALTER\s+FUNCTION\s+wacrm\./i.test(t) &&
+        !/^ALTER\s+TYPE\s+wacrm\./i.test(t)
       ) {
         throw new Error(`ALTER must target wacrm only: ${t}`);
       }
@@ -93,7 +117,7 @@ describe('wacrm_schema.sql safety', () => {
       if (/^CREATE\s+TYPE\s+(?!wacrm\.)/i.test(line)) {
         throw new Error(`Unqualified CREATE TYPE: ${line}`);
       }
-      if (/^CREATE\s+OR\s+REPLACE\s+FUNCTION\s+(?!wacrm\.)/i.test(line)) {
+      if (/^CREATE\s+(OR\s+REPLACE\s+)?FUNCTION\s+(?!wacrm\.)/i.test(line)) {
         throw new Error(`Unqualified CREATE FUNCTION: ${line}`);
       }
     }
@@ -106,18 +130,10 @@ describe('wacrm_schema.sql safety', () => {
   });
 
   it('has no top-level procedural debris (END IF / END $$ outside functions)', () => {
-    let inFunction = false;
+    const inBody = makeFunctionBodyTracker();
     for (const line of sql.split('\n')) {
-      if (/CREATE\s+(OR\s+REPLACE\s+)?FUNCTION/i.test(line)) inFunction = true;
-      if (inFunction && /\$\$\s*;?\s*$/.test(line.trim()) && !/AS\s+\$\$/i.test(line)) {
-        // Closing body dollar-quote — next lines are out of function
-        // until LANGUAGE / OWNER; keep inFunction until we see a blank
-        // after $$; for simplicity clear on bare END $$;
-        if (/^\$\$;?\s*$/i.test(line.trim()) || /\$\$\s*;\s*$/.test(line.trim())) {
-          inFunction = false;
-        }
-      }
-      if (inFunction) continue;
+      const inside = inBody(line);
+      if (inside) continue;
       const t = line.trim();
       if (/^END\s+IF\s*;?\s*$/i.test(t) || /^END\s+\$\$\s*;?\s*$/i.test(t)) {
         throw new Error(`Top-level procedural debris: ${t}`);
@@ -125,11 +141,11 @@ describe('wacrm_schema.sql safety', () => {
     }
   });
 
-  it('creates accounts before account_invitations (FK order)', () => {
-    const accountsAt = raw.indexOf('CREATE TABLE wacrm.accounts');
-    const invitesAt = raw.indexOf('CREATE TABLE wacrm.account_invitations');
-    expect(accountsAt).toBeGreaterThan(-1);
-    expect(invitesAt).toBeGreaterThan(-1);
-    expect(accountsAt).toBeLessThan(invitesAt);
+  it('defers account_invitations → accounts FK (pg_dump table order is alpha)', () => {
+    // shared-sql-v2 is a pg_dump: CREATE TABLE order is alphabetical
+    // (invitations before accounts). The FK is applied later via ALTER.
+    expect(raw).toMatch(
+      /ALTER TABLE ONLY wacrm\.account_invitations[\s\S]*?FOREIGN KEY \(account_id\) REFERENCES wacrm\.accounts\(id\)/i,
+    );
   });
 });
