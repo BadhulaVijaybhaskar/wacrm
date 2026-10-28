@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const h = vi.hoisted(() => ({
   requireRole: vi.fn(),
   billingWebhookUrl: vi.fn(() => null as string | null),
+  createServiceClient: vi.fn(),
   supabase: { from: vi.fn() },
 }))
 
@@ -18,15 +19,19 @@ vi.mock('@/lib/astra-billing/usage', () => ({
   billingWebhookUrl: h.billingWebhookUrl,
 }))
 
+vi.mock('@/lib/supabase/admin', () => ({
+  createServiceClient: h.createServiceClient,
+}))
+
 import { GET } from './route'
 
 describe('GET /api/billing/usage', () => {
   beforeEach(() => {
     h.requireRole.mockReset().mockResolvedValue({
-      supabase: h.supabase,
       accountId: 'acct-1',
     })
     h.billingWebhookUrl.mockReset().mockReturnValue(null)
+    h.createServiceClient.mockReset().mockReturnValue(h.supabase)
     h.supabase.from.mockReset()
   })
 

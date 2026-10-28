@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { billingWebhookUrl } from '@/lib/astra-billing/usage'
+import { createServiceClient } from '@/lib/supabase/admin'
 
 /**
  * GET /api/billing/usage
@@ -8,10 +9,15 @@ import { billingWebhookUrl } from '@/lib/astra-billing/usage'
  * Admin+ view of `astra_usage_daily` for the caller's account (last 30 UTC
  * days by default). Also reports whether BILLING_WEBHOOK_URL is configured
  * (never the URL itself).
+ *
+ * Reads via the service role because migration 045 locks the table behind
+ * deny-all RLS (writers are service-only; this route scopes by accountId
+ * after requireRole('admin')).
  */
 export async function GET(request: Request) {
   try {
-    const { supabase, accountId } = await requireRole('admin')
+    const { accountId } = await requireRole('admin')
+    const supabase = createServiceClient()
     const url = new URL(request.url)
     const daysRaw = Number(url.searchParams.get('days') ?? '30')
     const days = Number.isFinite(daysRaw)
