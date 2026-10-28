@@ -31,6 +31,8 @@ export {
   ChannelGateError,
   assertWhatsAppChannelEnabled,
   assertWhatsAppChannelEnabledForAccount,
+  buildChannelStatusCanonical,
+  buildChannelStatusQuery,
   fetchWhatsAppChannelStatus,
   logChannelGateBlock,
 } from './channel-status'
