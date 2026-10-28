@@ -36,10 +36,22 @@ export async function GET(_request: Request, { params }: Params) {
     return NextResponse.json({ error: 'invalid_or_expired' }, { status: 401 })
   }
 
-  // Prefer the durable mirrored object when we have a full https URL.
-  if (payload.u && /^https:\/\//i.test(payload.u)) {
+  // Prefer the durable mirrored object (https URL or private Storage path).
+  if (payload.u) {
     try {
-      const upstream = await fetch(payload.u, {
+      let fetchUrl = payload.u
+      if (!/^https:\/\//i.test(fetchUrl)) {
+        const { resolveMetaMediaLink } = await import(
+          '@/lib/storage/resolve-meta-media'
+        )
+        fetchUrl = await resolveMetaMediaLink(fetchUrl, 'chat-media')
+      } else if (fetchUrl.includes('/storage/v1/object/')) {
+        const { resolveMetaMediaLink } = await import(
+          '@/lib/storage/resolve-meta-media'
+        )
+        fetchUrl = await resolveMetaMediaLink(fetchUrl, 'chat-media')
+      }
+      const upstream = await fetch(fetchUrl, {
         redirect: 'error',
         signal: AbortSignal.timeout(8_000),
       })

@@ -4,6 +4,7 @@ import { useEffect, useRef, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { createClient } from "@/lib/supabase/client";
+import { getSupabaseDbSchema } from "@/lib/supabase/config";
 import type { Message } from "@/types";
 import {
   DEFAULT_NOTIFICATION_LABELS,
@@ -123,7 +124,7 @@ export function useBrowserNotifications(): void {
       .channel("browser-notifications")
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "messages" },
+        { event: "INSERT", schema: getSupabaseDbSchema(), table: "messages" },
         (payload) => {
           // Re-check every time: the user can revoke permission in the
           // browser without the preference flipping.

@@ -30,6 +30,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { SignedMediaImg } from "@/components/ui/signed-media-img";
 
 interface ContactSidebarProps {
   contact: Contact | null;
@@ -192,7 +193,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
           <div className="flex flex-col items-center text-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted text-lg font-semibold text-foreground">
               {contact.avatar_url ? (
-                <img
+                <SignedMediaImg
                   src={contact.avatar_url}
                   alt={displayName}
                   className="h-16 w-16 rounded-full object-cover"

@@ -1,0 +1,20 @@
+644c644
+< CON accounts accounts_owner_user_id_fkey FOREIGN KEY (owner_user_id) REFERENCES auth.users(id) ON DELETE RESTRICT
+---
+> CON accounts accounts_owner_user_id_fkey FOREIGN KEY (owner_user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+877c877
+< FN _bcast_cols_for_status(s text) secdef=false cfg= md5=2b07ad15da9f8f7aeeb819545c4fbd18
+---
+> FN _bcast_cols_for_status(s text) secdef=false cfg=search_path=wacrm, extensions md5=2b07ad15da9f8f7aeeb819545c4fbd18
+882a883
+> FN ensure_chat_profile(p_full_name text) secdef=true cfg=search_path=wacrm, extensions md5=7be4db5a0756de43c7fdc70b16f658c0
+884d884
+< FN handle_new_user() secdef=true cfg=search_path=wacrm, extensions md5=26f4098ce1259c2ae25870c41c8d87a9
+901,903c901,903
+< FN update_ai_configs_updated_at() secdef=false cfg= md5=a3a8dcc15e232b73d3f5c4abfa43f3d8
+< FN update_ai_knowledge_documents_updated_at() secdef=false cfg= md5=a3a8dcc15e232b73d3f5c4abfa43f3d8
+< FN update_updated_at_column() secdef=false cfg= md5=976aa1a9d8a76703090d1a9459f8e6c2
+---
+> FN update_ai_configs_updated_at() secdef=false cfg=search_path=wacrm, extensions md5=a3a8dcc15e232b73d3f5c4abfa43f3d8
+> FN update_ai_knowledge_documents_updated_at() secdef=false cfg=search_path=wacrm, extensions md5=a3a8dcc15e232b73d3f5c4abfa43f3d8
+> FN update_updated_at_column() secdef=false cfg=search_path=wacrm, extensions md5=976aa1a9d8a76703090d1a9459f8e6c2

@@ -1,8 +1,7 @@
 -- =============================================================================
--- Shared Supabase project — pg_cron jobs for Chat (wacrm)
---
--- Migrations 001–058 do not schedule pg_cron jobs. Chat relies on HTTP cron
--- routes (Netlify/Vercel) for sweeps, broadcasts, and automations.
+-- Astra Chat shared project: pg_cron jobs
+-- Migrations 001-058 schedule no pg_cron jobs (verified: grep cron.schedule
+-- supabase/migrations returns nothing).  Chat sweeps run from HTTP cron routes
+-- (/api/*/cron).  Intentionally a no-op; nothing to install.
 -- =============================================================================
-
--- No wacrm_* cron jobs required.
+SELECT 'wacrm: no pg_cron jobs to install' AS note;

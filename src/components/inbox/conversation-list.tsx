@@ -30,6 +30,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { SignedMediaImg } from "@/components/ui/signed-media-img";
 
 interface ConversationListProps {
   activeConversationId: string | null;
@@ -546,7 +547,7 @@ function ConversationItem({
       {/* Avatar */}
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground">
         {contact?.avatar_url ? (
-          <img
+          <SignedMediaImg
             src={contact.avatar_url}
             alt={displayName}
             className="h-10 w-10 rounded-full object-cover"

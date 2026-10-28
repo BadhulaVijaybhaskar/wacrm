@@ -19,6 +19,7 @@ import {
   uploadAccountMedia,
   MEDIA_MAX_BYTES_BY_KIND,
 } from '@/lib/storage/upload-media';
+import { SignedMediaImg } from '@/components/ui/signed-media-img';
 import {
   MEDIA_HEADER_SPECS,
   isMediaHeaderKind,
@@ -548,8 +549,8 @@ export function TemplateManager() {
     }
     setUploadingHeader(true);
     try {
-      const { publicUrl } = await uploadAccountMedia(storageBucket('chat-media'), file);
-      setForm((f) => ({ ...f, header_media_url: publicUrl }));
+      const { path } = await uploadAccountMedia(storageBucket('chat-media'), file);
+      setForm((f) => ({ ...f, header_media_url: path }));
       toast.success(t('toastUploadSuccess'));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('toastUploadFailed'));
@@ -954,10 +955,10 @@ export function TemplateManager() {
                     className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
                   />
                   {form.header_format === 'image' && form.header_media_url && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
+                    <SignedMediaImg
                       src={form.header_media_url}
                       alt="Header sample"
+                      bucket={storageBucket('chat-media')}
                       className="max-h-28 rounded-md border border-border object-contain"
                     />
                   )}

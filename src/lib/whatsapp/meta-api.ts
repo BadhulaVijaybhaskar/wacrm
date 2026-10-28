@@ -518,12 +518,28 @@ export async function sendTemplateMessage(
   }
 
   if (template) {
+    // Private buckets may store header_media_url as a Storage path.
+    // Sign it (and any caller override) before Meta sees the link.
+    let headerMediaUrl = messageParams?.headerMediaUrl ?? template.header_media_url
+    if (headerMediaUrl && !messageParams?.headerMediaId) {
+      const { resolveMetaMediaLink } = await import(
+        '@/lib/storage/resolve-meta-media'
+      )
+      try {
+        headerMediaUrl = await resolveMetaMediaLink(
+          headerMediaUrl,
+          'chat-media',
+        )
+      } catch {
+        // Leave as-is; buildSendComponents / Meta will surface the error.
+      }
+    }
     const components = buildSendComponents(template, {
       // Legacy callers pass body values in `params`; fold them into
       // `messageParams.body` so the new path covers them too.
       body: messageParams?.body ?? params,
       headerText: messageParams?.headerText,
-      headerMediaUrl: messageParams?.headerMediaUrl,
+      headerMediaUrl: headerMediaUrl ?? undefined,
       headerMediaId: messageParams?.headerMediaId,
       buttonParams: messageParams?.buttonParams,
     })

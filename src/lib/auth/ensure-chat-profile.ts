@@ -7,10 +7,9 @@ import type { SupabaseClient } from '@supabase/supabase-js';
  * signups must never create Chat rows). Call this on first Chat login
  * when `profiles` has no row for the signed-in user.
  *
- * Prefers the SECURITY DEFINER RPC `ensure_chat_profile` (defined in
- * the wacrm schema pack / migration 059). Falls back to a best-effort
- * direct insert path for older DBs that still have the signup trigger
- * but somehow missed a row.
+ * Calls the SECURITY DEFINER RPC `ensure_chat_profile` (wacrm schema
+ * pack / migration 059). Direct INSERT into profiles is blocked by RLS
+ * on shared installs — there is no fallback path.
  */
 export async function ensureChatProfile(
   db: SupabaseClient,
@@ -29,33 +28,8 @@ export async function ensureChatProfile(
     return { created: true };
   }
 
-  // RPC missing (legacy public DB that still uses the auth trigger) —
-  // try a direct accounts + profiles insert. RLS may block accounts
-  // insert; treat that as non-fatal so the caller can surface status.
-  const accountName = fullName || user.email || 'My account';
-  const { data: account, error: accountErr } = await db
-    .from('accounts')
-    .insert({ name: accountName, owner_user_id: user.id })
-    .select('id')
-    .maybeSingle();
-
-  if (accountErr || !account?.id) {
-    return {
-      created: false,
-      error: accountErr?.message ?? rpc.error.message,
-    };
-  }
-
-  const { error: profileErr } = await db.from('profiles').insert({
-    user_id: user.id,
-    full_name: fullName,
-    email: user.email ?? null,
-    account_id: account.id,
-    account_role: 'owner',
-  });
-
-  if (profileErr) {
-    return { created: false, error: profileErr.message };
-  }
-  return { created: true };
+  return {
+    created: false,
+    error: rpc.error.message,
+  };
 }

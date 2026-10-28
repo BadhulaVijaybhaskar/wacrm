@@ -14,8 +14,8 @@ import { Label } from '@/components/ui/label';
 import {
   Avatar,
   AvatarFallback,
-  AvatarImage,
 } from '@/components/ui/avatar';
+import { SignedAvatarImage } from '@/components/ui/signed-avatar-image';
 import { Card, CardContent } from '@/components/ui/card';
 import { useTranslations } from 'next-intl';
 import { SettingsPanelHead } from './settings-panel-head';
@@ -136,10 +136,8 @@ export function ProfileForm() {
         if (uploadError) {
           throw new Error(t('uploadFailed', { message: uploadError.message }));
         }
-        const {
-          data: { publicUrl },
-        } = supabase.storage.from(storageBucket('avatars')).getPublicUrl(path);
-        nextAvatarUrl = publicUrl;
+        // Private avatars bucket — store the object path; UI signs at display.
+        nextAvatarUrl = path;
       } else if (removeAvatar) {
         nextAvatarUrl = null;
       }
@@ -233,7 +231,10 @@ export function ProfileForm() {
           <div className="flex flex-wrap items-center gap-5">
             <Avatar size="lg" className="size-16">
               {currentAvatar ? (
-                <AvatarImage src={currentAvatar} alt={fullName || 'Avatar'} />
+                <SignedAvatarImage
+                  src={currentAvatar}
+                  alt={fullName || 'Avatar'}
+                />
               ) : null}
               <AvatarFallback className="bg-primary/10 text-base text-primary">
                 {initial}

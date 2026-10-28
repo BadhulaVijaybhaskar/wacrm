@@ -17,6 +17,7 @@ import {
 } from '@/lib/whatsapp/phone-utils'
 import { resolveContactSendTarget } from '@/lib/whatsapp/wa-identity'
 import { supabaseAdmin } from './admin-client'
+import { resolveMetaMediaLink } from '@/lib/storage/resolve-meta-media'
 
 // ------------------------------------------------------------
 // Flows-side Meta sender (interactive variants).
@@ -247,13 +248,17 @@ export async function engineSendMedia(
     args.accountId,
   )
 
+  // Private flow-media bucket: cfg.media_url is a path; Meta needs a
+  // signed http(s) link.
+  const signedLink = await resolveMetaMediaLink(args.link, 'flow-media')
+
   const attempt = async (phone: string): Promise<string> => {
     const r = await sendMediaMessage({
       phoneNumberId,
       accessToken,
       to: phone,
       kind: args.kind,
-      link: args.link,
+      link: signedLink,
       caption: args.caption,
       filename: args.filename,
     })

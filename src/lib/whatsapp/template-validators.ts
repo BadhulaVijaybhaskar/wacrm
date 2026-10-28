@@ -20,6 +20,7 @@ import type {
   TemplateButton,
   TemplateSampleValues,
 } from '@/types';
+import { isHttpUrl, isStorageObjectPath } from '@/lib/storage/signed-url';
 
 export const TEMPLATE_LIMITS = {
   bodyMaxLength: 1024,
@@ -154,13 +155,24 @@ export function validateHeader(
     );
   }
   if (header_media_url) {
-    try {
-      const u = new URL(header_media_url);
-      if (u.protocol !== 'https:' && u.protocol !== 'http:') {
-        throw new Error('header_media_url must use http(s) scheme.');
+    // Shared-sql-v2 private buckets: uploads store a Storage path;
+    // submit/send mint a signed URL. Absolute http(s) URLs remain valid
+    // for pasted external samples and legacy rows.
+    if (isStorageObjectPath(header_media_url)) {
+      // ok
+    } else {
+      try {
+        const u = new URL(header_media_url);
+        if (u.protocol !== 'https:' && u.protocol !== 'http:') {
+          throw new Error('header_media_url must use http(s) scheme.');
+        }
+      } catch (err) {
+        if (err instanceof Error && err.message.includes('scheme')) throw err;
+        throw new Error('header_media_url must be a valid URL.');
       }
-    } catch {
-      throw new Error('header_media_url must be a valid URL.');
+      if (!isHttpUrl(header_media_url)) {
+        throw new Error('header_media_url must be a valid URL.');
+      }
     }
   }
   return { variableCount: 0 };

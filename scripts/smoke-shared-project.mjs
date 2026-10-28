@@ -611,14 +611,43 @@ async function seedAndReadBack(ctx, session) {
     fail('seed-cleanup', `HTTP ${del.status}`);
   }
 
-  // Best-effort delete smoke auth user
+  // Best-effort delete smoke auth user. shared-sql-v2: owner_user_id is
+  // ON DELETE CASCADE — deleting an owner wipes the Chat tenant. Smoke
+  // accounts are single-member, so transfer is N/A; still refuse the
+  // delete when other profiles share the account (safety net).
   if (session.userId) {
-    await serviceFetch(
+    const owned = await serviceFetch(
       ctx.url,
       ctx.serviceKey,
-      `/auth/v1/admin/users/${session.userId}`,
-      { method: 'DELETE' },
-    ).catch(() => {});
+      `/rest/v1/accounts?select=id&owner_user_id=eq.${session.userId}`,
+      { headers: { Accept: 'application/json' } },
+    );
+    const ownedRows = owned.ok ? await owned.json().catch(() => []) : [];
+    let safeToDelete = true;
+    if (Array.isArray(ownedRows) && ownedRows[0]?.id) {
+      const mates = await serviceFetch(
+        ctx.url,
+        ctx.serviceKey,
+        `/rest/v1/profiles?select=user_id&account_id=eq.${ownedRows[0].id}`,
+        { headers: { Accept: 'application/json' } },
+      );
+      const mateRows = mates.ok ? await mates.json().catch(() => []) : [];
+      if (Array.isArray(mateRows) && mateRows.length > 1) {
+        safeToDelete = false;
+        skip(
+          'seed-auth-cleanup',
+          'owner has teammates — transfer_account_ownership required before auth delete',
+        );
+      }
+    }
+    if (safeToDelete) {
+      await serviceFetch(
+        ctx.url,
+        ctx.serviceKey,
+        `/auth/v1/admin/users/${session.userId}`,
+        { method: 'DELETE' },
+      ).catch(() => {});
+    }
   }
 }
 

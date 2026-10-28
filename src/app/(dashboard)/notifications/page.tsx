@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { getSupabaseDbSchema } from "@/lib/supabase/config";
 import { useAuth } from "@/hooks/use-auth";
 import type { Notification } from "@/types";
 import { Bell, CheckCheck, Loader2, UserPlus } from "lucide-react";
@@ -57,7 +58,7 @@ export default function NotificationsPage() {
       .channel("notifications-page")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "notifications" },
+        { event: "*", schema: getSupabaseDbSchema(), table: "notifications" },
         (payload) => {
           if (payload.eventType === "INSERT") {
             const row = payload.new as Notification;

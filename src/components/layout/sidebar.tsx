@@ -28,7 +28,8 @@ import {
   Zap,
 } from 'lucide-react';
 
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { SignedAvatarImage } from '@/components/ui/signed-avatar-image';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -394,7 +395,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               >
                 <Avatar className="size-8 shrink-0">
                   {profile?.avatar_url ? (
-                    <AvatarImage
+                    <SignedAvatarImage
                       src={profile.avatar_url}
                       alt={profile.full_name ?? t('defaultAvatar')}
                     />

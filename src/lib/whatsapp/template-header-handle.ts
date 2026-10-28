@@ -2,6 +2,8 @@ import { uploadResumableMedia } from '@/lib/whatsapp/meta-api'
 import { MEDIA_HEADER_SPECS, isMediaHeaderKind } from '@/lib/whatsapp/media-header-types'
 import type { TemplatePayload } from '@/lib/whatsapp/template-validators'
 import { isDeliverableUrl } from '@/lib/webhooks/ssrf'
+import { resolveMetaMediaLink } from '@/lib/storage/resolve-meta-media'
+import { isHttpUrl } from '@/lib/storage/signed-url'
 
 /**
  * Meta requires an `example.header_handle` (from the Resumable Upload
@@ -41,21 +43,28 @@ export async function ensureMediaHeaderHandle(
     )
   }
 
+  // Private buckets store a path — mint a Meta-fetchable signed URL.
+  // External absolute URLs pass through unchanged.
+  let fetchUrl = payload.header_media_url
+  if (!isHttpUrl(fetchUrl) || fetchUrl.includes('/storage/v1/object/')) {
+    fetchUrl = await resolveMetaMediaLink(fetchUrl, 'chat-media')
+  }
+
   // SSRF guard: `header_media_url` is caller-supplied (any authenticated
   // member can submit a template) and the fetch below happens server-side,
   // so refuse any destination that resolves to a private / loopback /
   // link-local / reserved address. Same guard as the two other
   // outbound-fetch call sites (see lib/webhooks/ssrf.ts) — matching the
   // unreachable-host message keeps the failure from being an oracle.
-  if (!(await isDeliverableUrl(payload.header_media_url))) {
+  if (!(await isDeliverableUrl(fetchUrl))) {
     throw new Error(UNREACHABLE_MESSAGE)
   }
 
-  // Fetch the sample bytes (works for our uploaded chat-media URL and for
-  // a manually-pasted public link).
+  // Fetch the sample bytes (works for our uploaded chat-media path/URL
+  // and for a manually-pasted public link).
   let res: Response
   try {
-    res = await fetch(payload.header_media_url, {
+    res = await fetch(fetchUrl, {
       // Do NOT follow redirects — a public URL could 3xx-bounce to an
       // internal address, defeating the guard above. Bound the request so
       // a hung host can't tie up the template-submit handler.

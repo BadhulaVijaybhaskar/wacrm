@@ -77,16 +77,23 @@ export function buildMediaPath(
 }
 
 export interface UploadAccountMediaResult {
-  /** Public URL Meta can fetch at send time. */
-  publicUrl: string;
-  /** Storage object path (account-scoped). */
+  /**
+   * Storage object path to persist (private buckets — shared-sql-v2).
+   * Callers mint signed URLs at display / Meta-send time.
+   */
   path: string;
+  /**
+   * @deprecated Alias of `path` for older callers that still read
+   * `publicUrl`. Do not treat as an HTTP URL.
+   */
+  publicUrl: string;
 }
 
 /**
- * Upload a file to an account-scoped Storage bucket and return its public
- * URL. Throws with a user-facing message on auth / account-resolution /
- * upload failure — callers surface it via a toast.
+ * Upload a file to an account-scoped Storage bucket and return its
+ * object **path** (private buckets; no public URL). Throws with a
+ * user-facing message on auth / account-resolution / upload failure —
+ * callers surface it via a toast.
  *
  * Size validation is the caller's responsibility (limits can differ per
  * feature); `MEDIA_MAX_BYTES` is exported for the common case.
@@ -125,11 +132,9 @@ export async function uploadAccountMedia(
   });
   if (upErr) throw new Error(upErr.message);
 
-  const {
-    data: { publicUrl },
-  } = supabase.storage.from(bucket).getPublicUrl(path);
-
-  return { publicUrl, path };
+  // Private buckets: persist the path. `publicUrl` stays as an alias so
+  // older call sites that destructure it keep compiling until updated.
+  return { path, publicUrl: path };
 }
 
 /**

@@ -1,0 +1,231 @@
+
+### 0. regenerate wacrm_schema.sql from the 058 ref dump
+ok 28 functions, 52 tables
+
+### 1. fresh scratch DB v2pack with Voice's stubs
+stubs ok
+
+### 2. clean install
+install v2_schema_test.sql: exit 0
+install shared_storage.sql: exit 0
+install shared_realtime.sql: exit 0
+install shared_cron.sql: exit 0
+
+### 3. install twice (each file must fail cleanly or no-op)
+reinstall v2_schema_test.sql: exit 3 :: ERROR:  schema wacrm already exists; run rollback_wacrm.sql first (nothing was changed)
+reinstall shared_storage.sql: exit 3 :: ERROR:  wacrm_* storage policies already exist; run rollback_wacrm.sql first (nothing was changed)
+reinstall shared_realtime.sql: exit 0 :: 
+reinstall shared_cron.sql: exit 0 :: 
+post-reinstall: tables=52 wacrm_policies=12 buckets=voice-recordings:false,wacrm-avatars:false,wacrm-chat-media:false,wacrm-flow-media:false pub=6
+
+### 4. exploits (exploit.sql from Voice) + extra storage/grant tests
+== T1 voice-only authenticated user (no chat profile) inserts message into B conversation
+psql:/tmp/wacrm-review-pg/exploit.sql:15: ERROR:  new row violates row-level security policy for table "messages"
+== T2 tenant A escalates: move own profile into B account as owner
+psql:/tmp/wacrm-review-pg/exploit.sql:19: ERROR:  account_role and account_id cannot be changed directly; use the account member/invitation RPCs
+         ?column?          | count 
+ T2 A now sees B contacts: |     0
+== T3 authenticated calls service-role-only DEFINER fns
+psql:/tmp/wacrm-review-pg/exploit.sql:22: ERROR:  permission denied for function bump_conversation_on_inbound
+psql:/tmp/wacrm-review-pg/exploit.sql:23: ERROR:  permission denied for function increment_flow_execution_count
+== T4 authenticated TRUNCATE
+psql:/tmp/wacrm-review-pg/exploit.sql:25: ERROR:  permission denied for table notifications
+== T5 anon executes DEFINER fns via PUBLIC
+psql:/tmp/wacrm-review-pg/exploit.sql:28: ERROR:  permission denied for schema wacrm
+psql:/tmp/wacrm-review-pg/exploit.sql:29: ERROR:  permission denied for schema wacrm
+ count 
+== T6 delete voice auth user who owns a Chat account (RESTRICT)
+DELETE 1
+== T7 delete voice-only auth user (no chat rows)
+DELETE 1
+== T8 duplicate profile/account for same user (missing unique)
+psql:/tmp/wacrm-review-pg/exploit.sql:37: ERROR:  duplicate key value violates unique constraint "idx_accounts_one_per_owner"
+      ?column?      | count 
+ messages in B conv |     0
+ T2 A now sees B contacts: |     0
+--
+ messages in B conv |     0
+== S1 tenant A sees only own wacrm objects (expect 1: a.png)
+ S1       | account-40ac63ba-28c7-4d1b-949d-8cf42d8646d5/a.png
+== S2 tenant A writes into B prefix (expect RLS error)
+psql:/workspace/wacrm-staging/v2work/exploit_extra.sql:22: ERROR:  new row violates row-level security policy for table "objects"
+== S3 tenant A writes into own prefix (expect INSERT 0 1)
+INSERT 0 1
+== S4 malformed prefix (expect RLS error, not cast error)
+psql:/workspace/wacrm-staging/v2work/exploit_extra.sql:26: ERROR:  new row violates row-level security policy for table "objects"
+== S5 A uploads avatar into B user folder (expect RLS error)
+psql:/workspace/wacrm-staging/v2work/exploit_extra.sql:28: ERROR:  new row violates row-level security policy for table "objects"
+== S6 A deletes B object (expect DELETE 0)
+DELETE 0
+== S7 voice-only user sees no wacrm objects (expect 0)
+ S7       |     0
+== S8 voice policy untouched: voice user still sees own recording (expect 1)
+ S8       |     1
+== S9 anon sees no wacrm objects (expect 0) and no wacrm tables (expect permission denied)
+ S9       |     0
+psql:/workspace/wacrm-staging/v2work/exploit_extra.sql:40: ERROR:  permission denied for schema wacrm
+psql:/workspace/wacrm-staging/v2work/exploit_extra.sql:41: ERROR:  permission denied for schema wacrm
+== S10 authenticated: merge_duplicate_contacts, create_broadcast (service-only) denied; notifications UPDATE non-read_at denied
+psql:/workspace/wacrm-staging/v2work/exploit_extra.sql:45: ERROR:  permission denied for function merge_duplicate_contacts
+psql:/workspace/wacrm-staging/v2work/exploit_extra.sql:46: ERROR:  permission denied for function claim_ai_reply_slot
+psql:/workspace/wacrm-staging/v2work/exploit_extra.sql:47: ERROR:  permission denied for table notifications
+UPDATE 0
+== S11 user RPCs still callable (expect rows/no permission error)
+ S11      | t
+ S11b     |     0
+== S12 service_role can call service-only fn
+== S13 delete owner B cascades their account (expect 0 accounts for B, 0 B profiles)
+DELETE 1
+ S13      |     0 |     0
+
+### 5. catalog diff vs migrated ref (cat.sql, body md5 normalised for schema qualifier)
+full diff lines: 174
+--- non-privilege diff:
+644c644
+< CON accounts accounts_owner_user_id_fkey FOREIGN KEY (owner_user_id) REFERENCES auth.users(id) ON DELETE RESTRICT
+---
+> CON accounts accounts_owner_user_id_fkey FOREIGN KEY (owner_user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+877c877
+< FN _bcast_cols_for_status(s text) secdef=false cfg= md5=2b07ad15da9f8f7aeeb819545c4fbd18
+---
+> FN _bcast_cols_for_status(s text) secdef=false cfg=search_path=wacrm, extensions md5=2b07ad15da9f8f7aeeb819545c4fbd18
+882a883
+> FN ensure_chat_profile(p_full_name text) secdef=true cfg=search_path=wacrm, extensions md5=7be4db5a0756de43c7fdc70b16f658c0
+884d884
+< FN handle_new_user() secdef=true cfg=search_path=wacrm, extensions md5=26f4098ce1259c2ae25870c41c8d87a9
+901,903c901,903
+< FN update_ai_configs_updated_at() secdef=false cfg= md5=a3a8dcc15e232b73d3f5c4abfa43f3d8
+< FN update_ai_knowledge_documents_updated_at() secdef=false cfg= md5=a3a8dcc15e232b73d3f5c4abfa43f3d8
+< FN update_updated_at_column() secdef=false cfg= md5=976aa1a9d8a76703090d1a9459f8e6c2
+---
+> FN update_ai_configs_updated_at() secdef=false cfg=search_path=wacrm, extensions md5=a3a8dcc15e232b73d3f5c4abfa43f3d8
+> FN update_ai_knowledge_documents_updated_at() secdef=false cfg=search_path=wacrm, extensions md5=a3a8dcc15e232b73d3f5c4abfa43f3d8
+> FN update_updated_at_column() secdef=false cfg=search_path=wacrm, extensions md5=976aa1a9d8a76703090d1a9459f8e6c2
+--- ref storage/realtime (public names) vs pack:
+1,3c1,3
+< BKT avatars public=true lim=2097152 mimes=084fe90f5a5913389365e9cce3826143
+< BKT chat-media public=true lim=16777216 mimes=6e4018084ae60b0f25bc2dc5d9288878
+< BKT flow-media public=true lim=16777216 mimes=97ebcf8b59c82a0053b69ae9f9e67354
+---
+> BKT avatars public=false lim=2097152 mimes=084fe90f5a5913389365e9cce3826143
+> BKT chat-media public=false lim=16777216 mimes=6e4018084ae60b0f25bc2dc5d9288878
+> BKT flow-media public=false lim=16777216 mimes=97ebcf8b59c82a0053b69ae9f9e67354
+(storage/realtime diff exit 1)
+OBJPOL voice_rec_select roles={authenticated}
+OBJPOL wacrm_avatars_delete roles={authenticated}
+OBJPOL wacrm_avatars_insert roles={authenticated}
+OBJPOL wacrm_avatars_select roles={authenticated}
+OBJPOL wacrm_avatars_update roles={authenticated}
+OBJPOL wacrm_chat_media_delete roles={authenticated}
+OBJPOL wacrm_chat_media_insert roles={authenticated}
+OBJPOL wacrm_chat_media_select roles={authenticated}
+OBJPOL wacrm_chat_media_update roles={authenticated}
+OBJPOL wacrm_flow_media_delete roles={authenticated}
+OBJPOL wacrm_flow_media_insert roles={authenticated}
+OBJPOL wacrm_flow_media_select roles={authenticated}
+OBJPOL wacrm_flow_media_update roles={authenticated}
+
+### 6. rollback pre-checks
+rollback with non-empty bucket: exit 3 :: ERROR:  aborting: wacrm-* buckets are not empty; empty them via the Storage API first
+rollback with foreign dependent view: exit 3 :: ERROR:  aborting: objects outside wacrm depend on wacrm: rule _RETURN on view public.foreign_dep
+wacrm still present: true
+
+### 7. rollback
+rollback: exit 0
+psql:/workspace/wacrm-staging/shared-sql-v2/rollback_wacrm.sql:103: NOTICE:  drop cascades to 81 other objects
+DETAIL:  drop cascades to type account_role_enum
+drop cascades to function _bcast_bump(uuid,text,integer)
+drop cascades to function _bcast_cols_for_status(text)
+drop cascades to function broadcast_recipient_aggregate_trigger()
+drop cascades to function bump_conversation_on_inbound(uuid,text)
+drop cascades to function claim_ai_reply_slot(uuid,integer)
+drop cascades to function create_broadcast_with_recipients(uuid,uuid,text,text,text,integer,uuid[],jsonb[])
+drop cascades to function enforce_profile_privilege_columns()
+drop cascades to table contacts
+drop cascades to function filter_contacts_by_tags(uuid[],text,integer,integer)
+drop cascades to function increment_automation_execution_count(uuid)
+drop cascades to function increment_flow_execution_count(uuid)
+drop cascades to function is_account_member(uuid,account_role_enum)
+drop cascades to function match_ai_knowledge_fts(uuid,text,integer)
+drop cascades to function match_ai_knowledge_semantic(uuid,text,integer)
+drop cascades to function merge_duplicate_contacts()
+drop cascades to function merge_duplicate_conversations()
+drop cascades to function notify_conversation_assigned()
+drop cascades to function peek_invitation(text)
+drop cascades to function recompute_broadcast_counts(uuid)
+drop cascades to function record_webhook_failure(uuid,integer)
+drop cascades to function redeem_invitation(text)
+drop cascades to function remove_account_member(uuid)
+drop cascades to function set_member_role(uuid,account_role_enum)
+drop cascades to function touch_presence(text)
+drop cascades to function transfer_account_ownership(uuid)
+drop cascades to function update_ai_configs_updated_at()
+drop cascades to function update_ai_knowledge_documents_updated_at()
+drop cascades to function update_updated_at_column()
+drop cascades to table account_invitations
+drop cascades to table accounts
+drop cascades to table ad_attributions
+drop cascades to table ai_configs
+drop cascades to table ai_knowledge_chunks
+drop cascades to table ai_knowledge_documents
+drop cascades to table ai_usage_log
+drop cascades to table api_keys
+drop cascades to table astra_connect_handoff_audit
+drop cascades to table astra_usage_daily
+drop cascades to table automation_logs
+drop cascades to table automation_pending_executions
+drop cascades to table automation_steps
+drop cascades to table automations
+drop cascades to table broadcast_recipients
+drop cascades to table broadcasts
+drop cascades to table consent_events
+drop cascades to table contact_custom_values
+drop cascades to table contact_notes
+drop cascades to table contact_tags
+drop cascades to table conversations
+drop cascades to table crm_push_log
+drop cascades to table custom_fields
+drop cascades to table deals
+drop cascades to table ecommerce_notify_queue
+drop cascades to table ecommerce_orders
+drop cascades to table flow_nodes
+drop cascades to table flow_run_events
+drop cascades to table flow_runs
+drop cascades to table flows
+drop cascades to table integration_connections
+drop cascades to table integration_event_log
+drop cascades to table intent_entities
+drop cascades to table intent_training_phrases
+drop cascades to table intents
+drop cascades to table member_presence
+drop cascades to table message_reactions
+drop cascades to table message_templates
+drop cascades to table messages
+drop cascades to table notifications
+drop cascades to table payment_links
+drop cascades to table pipeline_stages
+drop cascades to table pipelines
+drop cascades to table product_catalog_items
+drop cascades to table profiles
+drop cascades to table quick_replies
+drop cascades to table sheets_sync_runs
+drop cascades to table tags
+drop cascades to table webhook_delivery_queue
+drop cascades to table webhook_endpoints
+drop cascades to table whatsapp_config
+drop cascades to function ensure_chat_profile(text)
+wacrm left=false
+objects policies left=voice_rec_select
+buckets left=voice-recordings
+voice objects left (expect 1)=1
+pub tables left=0
+uuid-ossp still=1
+rollback twice: exit 0 
+
+### 8. reinstall after rollback
+reinstall v2_schema_test.sql: exit 0
+reinstall shared_storage.sql: exit 0
+reinstall shared_realtime.sql: exit 0
+
+### 9. Voice reference DB untouched
+ref db wacrm tables=0

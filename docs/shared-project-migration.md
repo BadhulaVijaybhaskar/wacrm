@@ -6,11 +6,14 @@ This document lists every **non-`wacrm`** surface touched when installing or run
 
 ## Install order
 
-1. [`supabase/shared-project/wacrm_schema.sql`](../supabase/shared-project/wacrm_schema.sql) — schema `wacrm` (tables, RLS, functions, grants)
-2. [`supabase/shared-project/shared_storage.sql`](../supabase/shared-project/shared_storage.sql) — buckets + `storage.objects` policies
-3. [`supabase/shared-project/shared_realtime.sql`](../supabase/shared-project/shared_realtime.sql) — `supabase_realtime` publication
-4. [`supabase/shared-project/shared_cron.sql`](../supabase/shared-project/shared_cron.sql) — no-op (HTTP cron only)
-5. [`supabase/shared-project/shared_postgrest.md`](../supabase/shared-project/shared_postgrest.md) — expose `wacrm` in API settings
+Pack: shared-sql-v2 under [`supabase/shared-project/`](../supabase/shared-project/) (`SHA256SUMS`, `VERIFY.md`, `CODE-CHANGES.md`, `verify/`).
+
+1. [`live-precheck.sql`](../supabase/shared-project/live-precheck.sql) — read-only preflight (ends in `ROLLBACK`)
+2. [`wacrm_schema.sql`](../supabase/shared-project/wacrm_schema.sql) — schema `wacrm` (tables, RLS, functions, grants)
+3. [`shared_storage.sql`](../supabase/shared-project/shared_storage.sql) — private buckets + `storage.objects` policies
+4. [`shared_realtime.sql`](../supabase/shared-project/shared_realtime.sql) — `supabase_realtime` publication
+5. [`shared_cron.sql`](../supabase/shared-project/shared_cron.sql) — no-op (HTTP cron only)
+6. [`shared_postgrest.md`](../supabase/shared-project/shared_postgrest.md) — expose `wacrm` in API settings
 
 ## App env (Chat)
 
@@ -65,23 +68,32 @@ Installed as `CREATE EXTENSION ... WITH SCHEMA extensions;` — shared cluster e
 
 | Bucket ID | Purpose |
 |-----------|---------|
-| `wacrm-avatars` | Profile avatars (2 MB, images) |
-| `wacrm-flow-media` | Flow builder media (16 MB) |
-| `wacrm-chat-media` | Inbox / inbound mirrored media (16 MB, extended MIME list) |
+| `wacrm-avatars` | Profile avatars (2 MB, images) — **private** |
+| `wacrm-flow-media` | Flow builder media (16 MB) — **private** |
+| `wacrm-chat-media` | Inbox / inbound mirrored media (16 MB, extended MIME list) — **private** |
 
-Policies in `shared_storage.sql` are scoped to `bucket_id = 'wacrm-*'` and read `wacrm.profiles` for account folder checks.
+Policies in `shared_storage.sql` are scoped to `bucket_id = 'wacrm-*'` and read `wacrm.profiles` for account folder checks. Buckets are `public = false` (shared-sql-v2). The app persists **Storage object paths** (not public URLs) and mints signed URLs at display time (short TTL) and Meta-send time (longer TTL). See [`CODE-CHANGES.md`](../supabase/shared-project/CODE-CHANGES.md).
 
 ## `supabase_realtime` publication
 
 Adds (if missing): `wacrm.messages`, `wacrm.conversations`, `wacrm.message_reactions`, `wacrm.flow_runs`, `wacrm.member_presence`, `wacrm.notifications`.
 
+App realtime subscriptions use `schema: getSupabaseDbSchema()` (so `SUPABASE_DB_SCHEMA=wacrm` on the shared project).
+
 ## PostgREST / API configuration
 
 Dashboard: add **`wacrm`** to exposed schemas (`db-schemas`). Does not modify Voice schemas.
 
+## Auth / ownership notes (shared-sql-v2)
+
+- **No `auth.users` trigger.** First Chat login calls `ensure_chat_profile` (no direct `profiles` insert fallback).
+- **Invitation peek** (`GET /api/invitations/[token]/peek`) uses the service-role client — `anon` has no `wacrm` USAGE.
+- **`accounts.owner_user_id` is ON DELETE CASCADE.** Any admin auth-user delete for an owner must call `transfer_account_ownership` first (see `src/lib/auth/safe-delete-auth-user.ts`).
+- **Rollback:** [`rollback_wacrm.sql`](../supabase/shared-project/rollback_wacrm.sql) (empty buckets first). Pre-install: [`live-precheck.sql`](../supabase/shared-project/live-precheck.sql). Verification notes: [`VERIFY.md`](../supabase/shared-project/VERIFY.md).
+
 ## pg_cron
 
-None in migrations 001–058. Chat uses application HTTP cron routes.
+None in migrations 001–058. Chat uses application HTTP cron routes. [`shared_cron.sql`](../supabase/shared-project/shared_cron.sql) is a no-op.
 
 ## What is intentionally **not** touched
 

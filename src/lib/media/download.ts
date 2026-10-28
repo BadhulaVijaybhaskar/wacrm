@@ -1,6 +1,13 @@
 import type { Message } from "@/types";
-import { loadMediaBlob, MediaResponseError } from "./blob-cache";
+import { loadMediaBlob, MediaResponseError, isProxiedMediaUrl } from "./blob-cache";
 import { mediaFilename } from "./filename";
+import { createClient } from "@/lib/supabase/client";
+import { storageBucket } from "@/lib/supabase/config";
+import {
+  DISPLAY_SIGNED_URL_TTL_SEC,
+  isStorageObjectPath,
+  resolveSignedMediaUrl,
+} from "@/lib/storage/signed-url";
 
 /**
  * Save a chat attachment to the agent's machine.
@@ -20,9 +27,23 @@ export async function downloadMediaMessage(message: Message): Promise<void> {
   const url = message.media_url;
   if (!url) throw new Error("This message has no attachment.");
 
+  let fetchUrl = url;
+  if (
+    !isProxiedMediaUrl(url) &&
+    (isStorageObjectPath(url) || url.includes("/storage/v1/object/"))
+  ) {
+    const supabase = createClient();
+    fetchUrl = await resolveSignedMediaUrl(
+      supabase.storage,
+      storageBucket("chat-media"),
+      url,
+      DISPLAY_SIGNED_URL_TTL_SEC,
+    );
+  }
+
   let blob: Blob;
   try {
-    blob = await loadMediaBlob(url);
+    blob = await loadMediaBlob(fetchUrl);
   } catch (error) {
     // A refused *response* is a real failure — inbound media Meta has
     // expired 401s here, and quietly opening a tab onto that error would

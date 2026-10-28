@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { LogOut, Menu, Settings as SettingsIcon, User } from 'lucide-react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { SignedAvatarImage } from '@/components/ui/signed-avatar-image';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -94,7 +95,7 @@ export function Header({ onOpenSidebar, titleOverride }: HeaderProps) {
           >
             <Avatar className="size-8">
               {profile?.avatar_url ? (
-                <AvatarImage
+                <SignedAvatarImage
                   src={profile.avatar_url}
                   alt={profile.full_name ?? t('defaultAvatar')}
                 />

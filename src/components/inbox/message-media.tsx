@@ -15,6 +15,8 @@ import { cn } from "@/lib/utils";
 import type { Message } from "@/types";
 import { downloadMediaMessage } from "@/lib/media/download";
 import { useMediaBlobUrl } from "@/hooks/use-media-blob-url";
+import { useSignedStorageUrl } from "@/hooks/use-signed-storage-url";
+import { storageBucket } from "@/lib/supabase/config";
 
 /**
  * The media renderers behind `<MessageBubble>`'s image / video / audio /
@@ -190,13 +192,17 @@ export function MediaVideoBubble({
   t: Translator;
 }) {
   const { downloading, download } = useMediaDownload(message, t);
+  const src = useSignedStorageUrl(
+    message.media_url,
+    storageBucket("chat-media"),
+  );
 
   return (
     <div className="relative w-fit">
-      {/* Plain URL, not a blob: the element should stream rather than wait
-          for up to 16 MB to land. */}
+      {/* Signed/plain URL, not a blob: the element should stream rather
+          than wait for up to 16 MB to land. */}
       <video
-        src={message.media_url}
+        src={src ?? undefined}
         controls
         preload="metadata"
         className={cn(MEDIA_BOX, "rounded-lg")}
@@ -231,10 +237,14 @@ export function MediaAudioBubble({
   t: Translator;
 }) {
   const { downloading, download } = useMediaDownload(message, t);
+  const src = useSignedStorageUrl(
+    message.media_url,
+    storageBucket("chat-media"),
+  );
 
   return (
     <div className="flex items-center gap-2">
-      <audio src={message.media_url} controls className="max-w-60" />
+      <audio src={src ?? undefined} controls className="max-w-60" />
       <MediaActionButton
         icon={Download}
         label={t("download")}
@@ -253,11 +263,15 @@ export function MediaDocumentBubble({
   t: Translator;
 }) {
   const { downloading, download } = useMediaDownload(message, t);
+  const href = useSignedStorageUrl(
+    message.media_url,
+    storageBucket("chat-media"),
+  );
 
   return (
     <div className="flex items-center gap-2">
       <a
-        href={message.media_url}
+        href={href ?? undefined}
         target="_blank"
         rel="noopener noreferrer"
         className="flex min-w-0 flex-1 items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-sm hover:bg-muted"

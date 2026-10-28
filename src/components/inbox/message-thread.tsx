@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { getSupabaseDbSchema } from "@/lib/supabase/config";
 import { useAuth } from "@/hooks/use-auth";
 import { usePresence } from "@/hooks/use-presence";
 import { PresenceDot } from "@/components/presence/presence-dot";
@@ -374,7 +375,7 @@ export function MessageThread({
         "postgres_changes",
         {
           event: "INSERT",
-          schema: "public",
+          schema: getSupabaseDbSchema(),
           table: "message_reactions",
           filter: `conversation_id=eq.${conversationId}`,
         },
@@ -404,7 +405,7 @@ export function MessageThread({
         "postgres_changes",
         {
           event: "UPDATE",
-          schema: "public",
+          schema: getSupabaseDbSchema(),
           table: "message_reactions",
           filter: `conversation_id=eq.${conversationId}`,
         },
@@ -417,7 +418,7 @@ export function MessageThread({
         "postgres_changes",
         {
           event: "DELETE",
-          schema: "public",
+          schema: getSupabaseDbSchema(),
           table: "message_reactions",
           filter: `conversation_id=eq.${conversationId}`,
         },

@@ -538,7 +538,7 @@ describe('inbound webhook: inbound media is mirrored (#466)', () => {
     image: { id: '1234567890123456', mime_type: 'image/jpeg', caption: 'hi' },
   }
 
-  it('stores a durable bucket URL instead of the expiring proxy path', async () => {
+  it('stores a durable storage path instead of the expiring proxy path', async () => {
     await runWebhook(IMAGE_MESSAGE)
 
     expect(h.state.storageUploads).toHaveLength(1)
@@ -549,7 +549,9 @@ describe('inbound webhook: inbound media is mirrored (#466)', () => {
       'account-acc-1/inbound/1234567890123456-image-1700000000.jpg',
     )
     expect(h.state.upsertCalls[0].row).toMatchObject({
-      media_url: `https://cdn.test/${bucket}/account-acc-1/inbound/1234567890123456-image-1700000000.jpg`,
+      // Private buckets: persist the object path; UI/Meta mint signed URLs.
+      media_url:
+        'account-acc-1/inbound/1234567890123456-image-1700000000.jpg',
       // Meta's MIME type used to be discarded outright (`void mediaType`).
       media_type: 'image/jpeg',
     })

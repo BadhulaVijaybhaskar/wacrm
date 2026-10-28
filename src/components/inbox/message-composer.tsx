@@ -47,6 +47,7 @@ import {
   deleteAccountMedia,
   MEDIA_MAX_BYTES_BY_KIND,
 } from "@/lib/storage/upload-media";
+import { useSignedStorageUrl } from "@/hooks/use-signed-storage-url";
 import { ReplyQuote } from "./reply-quote";
 import { useTranslations } from "next-intl";
 import {
@@ -74,7 +75,7 @@ const MAX_RECORDING_SECONDS = 5 * 60;
 
 export interface SendMediaPayload {
   kind: ComposerMediaKind;
-  /** Public chat-media URL Meta fetches at send time. */
+  /** Storage object path (or legacy absolute URL) persisted on the message. */
   mediaUrl: string;
   /** Storage object path — lets the caller GC the object if the send fails. */
   path: string;
@@ -402,10 +403,12 @@ export function MessageComposer({
       }
       setBusy(true);
       try {
-        const { publicUrl, path } = await uploadAccountMedia(CHAT_MEDIA_BUCKET, file);
+        const { path } = await uploadAccountMedia(CHAT_MEDIA_BUCKET, file);
         // Replacing an existing draft? GC the previous object first.
+        // Private buckets: mediaUrl stores the object path (signed at
+        // display / Meta-send time).
         removeStaged(draftRef.current?.path);
-        setDraft({ kind, mediaUrl: publicUrl, path, filename: file.name, caption: "" });
+        setDraft({ kind, mediaUrl: path, path, filename: file.name, caption: "" });
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Upload failed.");
       } finally {
@@ -440,9 +443,9 @@ export function MessageComposer({
       }
       setBusy(true);
       try {
-        const { publicUrl, path } = await uploadAccountMedia(CHAT_MEDIA_BUCKET, file);
+        const { path } = await uploadAccountMedia(CHAT_MEDIA_BUCKET, file);
         removeStaged(draftRef.current?.path);
-        setDraft({ kind: "audio", mediaUrl: publicUrl, path, filename: file.name, caption: "" });
+        setDraft({ kind: "audio", mediaUrl: path, path, filename: file.name, caption: "" });
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Upload failed.");
       } finally {
@@ -855,23 +858,24 @@ function MediaDraftPreview({
   onSend: () => void;
   t: ReturnType<typeof useTranslations>;
 }) {
+  const previewSrc = useSignedStorageUrl(draft.mediaUrl, CHAT_MEDIA_BUCKET);
   return (
     <div className="rounded-xl border border-border bg-muted/40 p-3">
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
-          {draft.kind === "image" && (
+          {draft.kind === "image" && previewSrc && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={draft.mediaUrl}
+              src={previewSrc}
               alt={draft.filename}
               className="max-h-40 rounded-lg object-cover"
             />
           )}
-          {draft.kind === "video" && (
-            <video src={draft.mediaUrl} controls className="max-h-40 rounded-lg" />
+          {draft.kind === "video" && previewSrc && (
+            <video src={previewSrc} controls className="max-h-40 rounded-lg" />
           )}
-          {draft.kind === "audio" && (
-            <audio src={draft.mediaUrl} controls className="w-full" />
+          {draft.kind === "audio" && previewSrc && (
+            <audio src={previewSrc} controls className="w-full" />
           )}
           {draft.kind === "document" && (
             <div className="flex items-center gap-2 text-sm text-foreground">

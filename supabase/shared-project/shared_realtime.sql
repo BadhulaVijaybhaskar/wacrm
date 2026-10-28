@@ -1,8 +1,21 @@
 -- =============================================================================
--- Shared Supabase project — add wacrm tables to supabase_realtime publication
---
--- Run after `wacrm_schema.sql`. Idempotent: skips tables already published.
+-- Astra Chat shared project: add wacrm tables to the supabase_realtime
+-- publication.  Run after wacrm_schema.sql.  Guarded / idempotent: each table
+-- is added only if not already published.  Same 6 tables as the 058 end state.
+-- Aborts if the publication is FOR ALL TABLES (ADD TABLE would error anyway).
 -- =============================================================================
+BEGIN;
+SET LOCAL search_path = wacrm, extensions;
+DO $pre$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    RAISE EXCEPTION 'publication supabase_realtime not found';
+  END IF;
+  IF (SELECT puballtables FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    RAISE EXCEPTION 'supabase_realtime is FOR ALL TABLES; wacrm tables are already published, do not run this file';
+  END IF;
+END
+$pre$;
 
 DO $$
 BEGIN
@@ -60,3 +73,5 @@ BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE wacrm.notifications;
   END IF;
 END $$;
+
+COMMIT;

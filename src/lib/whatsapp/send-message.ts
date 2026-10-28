@@ -48,6 +48,7 @@ import {
   STUB_ACCESS_TOKEN,
   STUB_PHONE_NUMBER_ID,
 } from '@/lib/whatsapp/embedded-signup';
+import { resolveMetaMediaLink } from '@/lib/storage/resolve-meta-media';
 import type { MessageTemplate } from '@/types';
 import {
   resolveTemplateRow,
@@ -377,12 +378,14 @@ export async function sendMessageToConversation(
       return result.messageId;
     }
     if (isMediaKind) {
+      // Private buckets store paths; Meta needs a signed http(s) link.
+      const link = await resolveMetaMediaLink(mediaUrl!, 'chat-media');
       const result = await sendMediaMessage({
         phoneNumberId: config.phone_number_id,
         accessToken,
         to: phone,
         kind: messageType as MediaKind,
-        link: mediaUrl!,
+        link,
         caption: contentText || undefined,
         filename: filename || undefined,
         contextMessageId,

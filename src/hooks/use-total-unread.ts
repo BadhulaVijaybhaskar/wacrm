@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { getSupabaseDbSchema } from "@/lib/supabase/config";
 import type { Conversation } from "@/types";
 
 /**
@@ -46,7 +47,7 @@ export function useTotalUnread(): number {
       .channel("total-unread-realtime")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "conversations" },
+        { event: "*", schema: getSupabaseDbSchema(), table: "conversations" },
         (payload) => {
           const map = countsRef.current;
           if (payload.eventType === "DELETE") {

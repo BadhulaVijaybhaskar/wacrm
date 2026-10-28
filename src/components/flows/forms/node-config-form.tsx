@@ -1032,11 +1032,12 @@ function SendMediaForm({
       try {
         // Account-scoped upload (path `account-<id>/...`) — see
         // uploadAccountMedia + migration 020's flow-media RLS policy.
-        const { publicUrl } = await uploadAccountMedia(FLOW_MEDIA_BUCKET, file);
+        // Private buckets: persist the object path; Meta-send signs it.
+        const { path } = await uploadAccountMedia(FLOW_MEDIA_BUCKET, file);
         // Patch all fields in one call so the form doesn't re-render
         // with a half-uploaded state.
         onUpdateConfig({
-          media_url: publicUrl,
+          media_url: path,
           filename: file.name,
         });
         toast.success(t("fileUploaded"));
@@ -1089,15 +1090,12 @@ function SendMediaForm({
         {cfg.media_url ? (
           <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2 text-xs">
             <Paperclip className="h-3.5 w-3.5 shrink-0 text-cyan-400" />
-            <a
-              href={cfg.media_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="min-w-0 flex-1 truncate text-foreground hover:text-cyan-300"
+            <span
+              className="min-w-0 flex-1 truncate text-foreground"
               title={displayName || cfg.media_url}
             >
               {displayName || cfg.media_url}
-            </a>
+            </span>
             <button
               type="button"
               onClick={handleClear}

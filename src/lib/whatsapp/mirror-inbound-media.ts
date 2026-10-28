@@ -32,7 +32,8 @@ export interface MirrorStorage {
       body: Uint8Array | Buffer,
       options: { contentType: string; cacheControl: string; upsert: boolean },
     ): Promise<{ error: { message: string } | null }>;
-    getPublicUrl(path: string): { data: { publicUrl: string } };
+    /** @deprecated Private buckets — mirror returns the object path. */
+    getPublicUrl?(path: string): { data: { publicUrl: string } };
   };
 }
 
@@ -227,10 +228,10 @@ export async function mirrorInboundMedia(
       return null;
     }
 
-    const {
-      data: { publicUrl },
-    } = storage.from(MIRROR_BUCKET).getPublicUrl(path);
-    return publicUrl || null;
+    // Private buckets (shared-sql-v2): persist the object path; display
+    // and Meta-send mint signed URLs. Legacy public URL rows still work
+    // via resolveSignedMediaUrl.
+    return path;
   } catch (error) {
     console.warn(
       `[mirror-media] could not mirror ${mediaId}:`,

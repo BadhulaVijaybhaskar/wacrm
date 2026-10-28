@@ -115,6 +115,14 @@ describe('validateHeader', () => {
       }),
     ).toThrow(/valid URL/);
   });
+  it('image header accepts a private-bucket storage path', () => {
+    expect(() =>
+      validateHeader({
+        header_type: 'image',
+        header_media_url: 'account-abc/header.png',
+      }),
+    ).not.toThrow();
+  });
 });
 
 describe('validateButtons', () => {

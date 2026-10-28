@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 import { createClient } from "@/lib/supabase/client";
+import { getSupabaseDbSchema } from "@/lib/supabase/config";
 import { useAuth } from "@/hooks/use-auth";
 import {
   derivePresence,
@@ -86,7 +87,7 @@ export function usePresence(enabled = true): UsePresenceResult {
         "postgres_changes",
         {
           event: "*",
-          schema: "public",
+          schema: getSupabaseDbSchema(),
           table: "member_presence",
           filter: `account_id=eq.${accountId}`,
         },

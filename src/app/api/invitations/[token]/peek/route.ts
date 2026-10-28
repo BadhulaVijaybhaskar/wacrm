@@ -29,7 +29,7 @@ import {
   rateLimitResponse,
   RATE_LIMITS,
 } from "@/lib/rate-limit";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/admin";
 
 /**
  * Best-effort client IP. The `x-forwarded-for` header is what
@@ -68,7 +68,10 @@ export async function GET(
     );
   }
 
-  const supabase = await createClient();
+  // Shared-sql-v2: anon has no USAGE on schema wacrm / EXECUTE on
+  // peek_invitation. This route is public + rate-limited; call the
+  // RPC with the service-role client. Redeem stays on the user client.
+  const supabase = createServiceClient();
   const { data, error } = await supabase.rpc("peek_invitation", {
     p_token_hash: hashInviteToken(token),
   });

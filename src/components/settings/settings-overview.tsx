@@ -9,7 +9,8 @@ import { useAuth } from '@/hooks/use-auth';
 import { useTheme } from '@/hooks/use-theme';
 import { THEMES } from '@/lib/themes';
 import { CURRENCIES } from '@/lib/currency';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { SignedAvatarImage } from '@/components/ui/signed-avatar-image';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
@@ -230,7 +231,7 @@ export function SettingsOverview({
       <Card className="flex-row items-center gap-4 px-5 py-5">
         <Avatar size="lg" className="size-14">
           {profile?.avatar_url ? (
-            <AvatarImage src={profile.avatar_url} alt={displayName} />
+            <SignedAvatarImage src={profile.avatar_url} alt={displayName} />
           ) : null}
           <AvatarFallback className="bg-primary/10 text-xl text-primary">
             {initial}

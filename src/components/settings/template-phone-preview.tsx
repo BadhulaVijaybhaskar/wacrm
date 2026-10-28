@@ -5,6 +5,8 @@ import { ExternalLink, Phone, Reply } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { substituteTemplateVariables } from '@/lib/whatsapp/template-preview';
 import type { TemplateButton } from '@/types';
+import { SignedMediaImg } from '@/components/ui/signed-media-img';
+import { storageBucket } from '@/lib/supabase/config';
 
 export interface TemplatePhonePreviewProps {
   headerFormat: 'none' | 'text' | 'image' | 'video' | 'document';
@@ -76,10 +78,10 @@ export function TemplatePhonePreview({
             <div className="ml-auto w-[92%] overflow-hidden rounded-lg rounded-tr-sm bg-[#005c4b] text-white shadow-sm">
               {showMedia ? (
                 headerFormat === 'image' ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                  <SignedMediaImg
                     src={headerMediaUrl}
                     alt=""
+                    bucket={storageBucket('chat-media')}
                     className="aspect-video w-full object-cover"
                   />
                 ) : (

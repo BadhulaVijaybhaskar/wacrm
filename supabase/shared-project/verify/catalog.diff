@@ -1,0 +1,174 @@
+645c645
+< CON accounts accounts_owner_user_id_fkey FOREIGN KEY (owner_user_id) REFERENCES auth.users(id) ON DELETE RESTRICT
+---
+> CON accounts accounts_owner_user_id_fkey FOREIGN KEY (owner_user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+878c878
+< FN _bcast_cols_for_status(s text) secdef=false cfg= md5=2b07ad15da9f8f7aeeb819545c4fbd18
+---
+> FN _bcast_cols_for_status(s text) secdef=false cfg=search_path=wacrm, extensions md5=2b07ad15da9f8f7aeeb819545c4fbd18
+883a884
+> FN ensure_chat_profile(p_full_name text) secdef=true cfg=search_path=wacrm, extensions md5=7be4db5a0756de43c7fdc70b16f658c0
+885d885
+< FN handle_new_user() secdef=true cfg=search_path=wacrm, extensions md5=26f4098ce1259c2ae25870c41c8d87a9
+902,907c902,907
+< FN update_ai_configs_updated_at() secdef=false cfg= md5=a3a8dcc15e232b73d3f5c4abfa43f3d8
+< FN update_ai_knowledge_documents_updated_at() secdef=false cfg= md5=a3a8dcc15e232b73d3f5c4abfa43f3d8
+< FN update_updated_at_column() secdef=false cfg= md5=976aa1a9d8a76703090d1a9459f8e6c2
+< FNACL _bcast_bump(bid uuid, col text, delta integer) DEFAULT(PUBLIC)
+< FNACL _bcast_cols_for_status(s text) DEFAULT(PUBLIC)
+< FNACL broadcast_recipient_aggregate_trigger() DEFAULT(PUBLIC)
+---
+> FN update_ai_configs_updated_at() secdef=false cfg=search_path=wacrm, extensions md5=a3a8dcc15e232b73d3f5c4abfa43f3d8
+> FN update_ai_knowledge_documents_updated_at() secdef=false cfg=search_path=wacrm, extensions md5=a3a8dcc15e232b73d3f5c4abfa43f3d8
+> FN update_updated_at_column() secdef=false cfg=search_path=wacrm, extensions md5=976aa1a9d8a76703090d1a9459f8e6c2
+> FNACL _bcast_bump(bid uuid, col text, delta integer) {postgres=X/postgres,service_role=X/postgres}
+> FNACL _bcast_cols_for_status(s text) {postgres=X/postgres}
+> FNACL broadcast_recipient_aggregate_trigger() {postgres=X/postgres}
+909c909
+< FNACL claim_ai_reply_slot(conversation_id uuid, max_replies integer) {=X/postgres,postgres=X/postgres,service_role=X/postgres}
+---
+> FNACL claim_ai_reply_slot(conversation_id uuid, max_replies integer) {postgres=X/postgres,service_role=X/postgres}
+911,913c911,913
+< FNACL enforce_profile_privilege_columns() DEFAULT(PUBLIC)
+< FNACL filter_contacts_by_tags(p_tag_ids uuid[], p_search text, p_limit integer, p_offset integer) {postgres=X/postgres,authenticated=X/postgres}
+< FNACL handle_new_user() DEFAULT(PUBLIC)
+---
+> FNACL enforce_profile_privilege_columns() {postgres=X/postgres}
+> FNACL ensure_chat_profile(p_full_name text) {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+> FNACL filter_contacts_by_tags(p_tag_ids uuid[], p_search text, p_limit integer, p_offset integer) {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+916c916
+< FNACL is_account_member(target_account_id uuid, min_role account_role_enum) {=X/postgres,postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+---
+> FNACL is_account_member(target_account_id uuid, min_role account_role_enum) {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+921,932c921,932
+< FNACL notify_conversation_assigned() DEFAULT(PUBLIC)
+< FNACL peek_invitation(p_token_hash text) {postgres=X/postgres,anon=X/postgres,authenticated=X/postgres}
+< FNACL recompute_broadcast_counts(bid uuid) DEFAULT(PUBLIC)
+< FNACL record_webhook_failure(endpoint_id uuid, max_failures integer) DEFAULT(PUBLIC)
+< FNACL redeem_invitation(p_token_hash text) {postgres=X/postgres,authenticated=X/postgres}
+< FNACL remove_account_member(p_user_id uuid) {postgres=X/postgres,authenticated=X/postgres}
+< FNACL set_member_role(p_user_id uuid, p_new_role account_role_enum) {postgres=X/postgres,authenticated=X/postgres}
+< FNACL touch_presence(p_status text) DEFAULT(PUBLIC)
+< FNACL transfer_account_ownership(p_new_owner_user_id uuid) {postgres=X/postgres,authenticated=X/postgres}
+< FNACL update_ai_configs_updated_at() DEFAULT(PUBLIC)
+< FNACL update_ai_knowledge_documents_updated_at() DEFAULT(PUBLIC)
+< FNACL update_updated_at_column() DEFAULT(PUBLIC)
+---
+> FNACL notify_conversation_assigned() {postgres=X/postgres}
+> FNACL peek_invitation(p_token_hash text) {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+> FNACL recompute_broadcast_counts(bid uuid) {postgres=X/postgres,service_role=X/postgres}
+> FNACL record_webhook_failure(endpoint_id uuid, max_failures integer) {postgres=X/postgres,service_role=X/postgres}
+> FNACL redeem_invitation(p_token_hash text) {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+> FNACL remove_account_member(p_user_id uuid) {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+> FNACL set_member_role(p_user_id uuid, p_new_role account_role_enum) {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+> FNACL touch_presence(p_status text) {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+> FNACL transfer_account_ownership(p_new_owner_user_id uuid) {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+> FNACL update_ai_configs_updated_at() {postgres=X/postgres}
+> FNACL update_ai_knowledge_documents_updated_at() {postgres=X/postgres}
+> FNACL update_updated_at_column() {postgres=X/postgres}
+1233,1284c1233,1284
+< TACL account_invitations  rls=true ri=d
+< TACL accounts  rls=true ri=d
+< TACL ad_attributions  rls=true ri=d
+< TACL ai_configs  rls=true ri=d
+< TACL ai_knowledge_chunks  rls=true ri=d
+< TACL ai_knowledge_documents  rls=true ri=d
+< TACL ai_usage_log  rls=true ri=d
+< TACL api_keys  rls=true ri=d
+< TACL astra_connect_handoff_audit  rls=true ri=d
+< TACL astra_usage_daily  rls=true ri=d
+< TACL automation_logs  rls=true ri=d
+< TACL automation_pending_executions  rls=true ri=d
+< TACL automation_steps  rls=true ri=d
+< TACL automations  rls=true ri=d
+< TACL broadcast_recipients  rls=true ri=d
+< TACL broadcasts  rls=true ri=d
+< TACL consent_events  rls=true ri=d
+< TACL contact_custom_values  rls=true ri=d
+< TACL contact_notes  rls=true ri=d
+< TACL contact_tags  rls=true ri=d
+< TACL contacts  rls=true ri=d
+< TACL conversations  rls=true ri=d
+< TACL crm_push_log  rls=true ri=d
+< TACL custom_fields  rls=true ri=d
+< TACL deals  rls=true ri=d
+< TACL ecommerce_notify_queue  rls=true ri=d
+< TACL ecommerce_orders  rls=true ri=d
+< TACL flow_nodes  rls=true ri=d
+< TACL flow_run_events  rls=true ri=d
+< TACL flow_runs  rls=true ri=d
+< TACL flows  rls=true ri=d
+< TACL integration_connections  rls=true ri=d
+< TACL integration_event_log  rls=true ri=d
+< TACL intent_entities  rls=true ri=d
+< TACL intent_training_phrases  rls=true ri=d
+< TACL intents  rls=true ri=d
+< TACL member_presence  rls=true ri=d
+< TACL message_reactions  rls=true ri=d
+< TACL message_templates  rls=true ri=d
+< TACL messages  rls=true ri=d
+< TACL notifications {postgres=arwdDxtm/postgres} rls=true ri=f
+< TACL payment_links  rls=true ri=d
+< TACL pipeline_stages  rls=true ri=d
+< TACL pipelines  rls=true ri=d
+< TACL product_catalog_items  rls=true ri=d
+< TACL profiles  rls=true ri=d
+< TACL quick_replies  rls=true ri=d
+< TACL sheets_sync_runs  rls=true ri=d
+< TACL tags  rls=true ri=d
+< TACL webhook_delivery_queue  rls=true ri=d
+< TACL webhook_endpoints  rls=true ri=d
+< TACL whatsapp_config  rls=true ri=d
+---
+> TACL account_invitations {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL accounts {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL ad_attributions {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL ai_configs {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL ai_knowledge_chunks {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL ai_knowledge_documents {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL ai_usage_log {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL api_keys {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL astra_connect_handoff_audit {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL astra_usage_daily {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL automation_logs {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL automation_pending_executions {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL automation_steps {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL automations {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL broadcast_recipients {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL broadcasts {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL consent_events {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL contact_custom_values {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL contact_notes {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL contact_tags {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL contacts {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL conversations {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL crm_push_log {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL custom_fields {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL deals {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL ecommerce_notify_queue {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL ecommerce_orders {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL flow_nodes {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL flow_run_events {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL flow_runs {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL flows {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL integration_connections {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL integration_event_log {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL intent_entities {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL intent_training_phrases {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL intents {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL member_presence {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL message_reactions {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL message_templates {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL messages {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL notifications {postgres=arwdDxtm/postgres,authenticated=ard/postgres,service_role=arwdDxtm/postgres} rls=true ri=f
+> TACL payment_links {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL pipeline_stages {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL pipelines {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL product_catalog_items {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL profiles {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL quick_replies {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL sheets_sync_runs {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL tags {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL webhook_delivery_queue {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL webhook_endpoints {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d
+> TACL whatsapp_config {postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres} rls=true ri=d

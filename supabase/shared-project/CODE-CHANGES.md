@@ -1,0 +1,34 @@
+# Astra Chat app code changes required by shared-sql-v2
+
+These go with the shared-project install. Branch `cursor/astra-connect-adapter-f6ad`.
+
+## 1. Private buckets: stop using getPublicUrl (REQUIRED, otherwise media breaks)
+All three `wacrm-*` buckets are now `public = false`, so public object URLs return 400/404.
+- Store the **storage path**, not a public URL, wherever one is saved today:
+  - `upload-media.ts:130` (`uploadAccountMedia` returns `publicUrl`) and its callers: message-composer and node-config-form (flow media)
+  - `template-manager.tsx:551` (template header media)
+  - `profile-form.tsx:141` (avatars)
+  - `mirror-inbound-media.ts:232` (mirrored inbound WhatsApp media)
+- **Render time:** resolve the path with `createSignedUrl(path, ttl)` (short TTL, cacheable). Covers use-media-blob-url / blob-cache, message-media, and the header and sidebar avatars.
+- **Meta send time:** Meta fetches outbound media by URL. Mint a signed URL server-side (service client) with a TTL long enough for Meta to fetch it (for example 1 h). Covers the flows engine media nodes, broadcasts, and template header handles.
+- Existing rows holding public URLs: none on the shared project (fresh install). Staging/dev rows need a path backfill or a URL-to-path fallback in the resolver.
+
+## 2. Invitation peek route runs logged-out
+`/api/invitations/` is public in middleware, and the peek route uses `createClient()`, which is anon for logged-out users. `anon` no longer has USAGE on schema wacrm or EXECUTE on `peek_invitation`.
+Change the peek route to call `peek_invitation` through `supabaseAdmin()` (service role). The route is server-only and already rate-limited. The redeem route stays on the user client (`authenticated`).
+
+## 3. Configuration
+- `STORAGE_BUCKET_PREFIX=wacrm-` and `NEXT_PUBLIC_STORAGE_BUCKET_PREFIX=wacrm-`
+- The Supabase clients must use DB schema `wacrm`: `db: { schema: 'wacrm' }` on browser, server and admin clients. `wacrm` must also be added to the project's exposed API schemas (Data API settings), which is a dashboard change.
+- Realtime subscriptions: `schema: 'wacrm'` in every `postgres_changes` filter.
+
+## 4. Signup profile creation
+There is no trigger on auth.users. The app must call `rpc('ensure_chat_profile', { p_full_name })` after sign-up / first login (the d202a03 behaviour). The old fallback direct INSERT into profiles is now blocked by RLS. That is expected, so remove it or ignore its error.
+
+## 5. Owner deletion semantics
+`accounts.owner_user_id` is now ON DELETE CASCADE. Deleting an owner's auth user deletes the whole tenant, including teammates' profiles. Any admin "delete user" path must call `transfer_account_ownership` first. See VERIFY.md.
+
+## 6. Service-only RPCs
+These are now service_role only. I checked the callers on c678ea9: webhook route (`supabaseAdmin().rpc('bump_conversation_on_inbound')`), auto-reply (`supabaseAdmin`), the v1 broadcasts API (`ctx.supabase` = `supabaseAdmin()`), the flows and automations engines, and webhooks/deliver (db passed in by server-side workers). **No change is expected.** If a user-scoped client ever calls one of these, it gets `permission denied`:
+`_bcast_bump`, `recompute_broadcast_counts`, `bump_conversation_on_inbound`, `increment_flow_execution_count`, `increment_automation_execution_count`, `claim_ai_reply_slot`, `record_webhook_failure`, `create_broadcast_with_recipients`.
+`merge_duplicate_contacts` and `merge_duplicate_conversations` have no grants (owner only).

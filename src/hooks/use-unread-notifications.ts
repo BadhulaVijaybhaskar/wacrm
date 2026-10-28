@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { getSupabaseDbSchema } from "@/lib/supabase/config";
 import type { Notification } from "@/types";
 
 /**
@@ -34,7 +35,7 @@ export function useUnreadNotifications(): number {
       .channel("notifications-unread-count")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "notifications" },
+        { event: "*", schema: getSupabaseDbSchema(), table: "notifications" },
         (payload) => {
           if (payload.eventType === "INSERT") {
             const row = payload.new as Notification;

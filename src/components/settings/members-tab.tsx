@@ -39,8 +39,8 @@ import {
   Avatar,
   AvatarBadge,
   AvatarFallback,
-  AvatarImage,
 } from '@/components/ui/avatar';
+import { SignedAvatarImage } from '@/components/ui/signed-avatar-image';
 import { Badge } from '@/components/ui/badge';
 import {
   Tooltip,
@@ -351,7 +351,7 @@ export function MembersTab() {
                         render={
                           <Avatar className="size-9 shrink-0">
                             {member.avatar_url ? (
-                              <AvatarImage
+                              <SignedAvatarImage
                                 src={member.avatar_url}
                                 alt={member.full_name || t('memberAlt')}
                               />
