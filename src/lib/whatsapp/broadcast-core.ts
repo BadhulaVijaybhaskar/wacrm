@@ -331,7 +331,9 @@ export async function deliverBroadcast(
             : null;
         const message = error instanceof Error ? error.message : 'Unknown error';
         lastError =
-          code === 'channel_disabled' || code === 'channel_status_unavailable'
+          code === 'channel_disabled' ||
+          code === 'channel_not_linked' ||
+          code === 'channel_status_unavailable'
             ? `${code}: ${message}`
             : message;
         // Only a "recipient not allowed" error is worth another variant.

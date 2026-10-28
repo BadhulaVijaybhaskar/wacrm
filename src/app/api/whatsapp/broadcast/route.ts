@@ -240,6 +240,7 @@ export async function POST(request: Request) {
             error instanceof Error ? error.message : 'Unknown error'
           const labeled =
             code === 'channel_disabled' ||
+            code === 'channel_not_linked' ||
             code === 'channel_status_unavailable'
               ? `${code}: ${errorMessage}`
               : errorMessage

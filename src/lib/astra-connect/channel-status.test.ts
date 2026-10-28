@@ -119,6 +119,22 @@ describe('fetchWhatsAppChannelStatus', () => {
     expect(second.enabled).toBe(false)
   })
 
+  it('throws channel_not_linked on Connect 404 (no employee owns the number)', async () => {
+    await expect(
+      fetchWhatsAppChannelStatus({
+        tenantId: TENANT,
+        phoneNumberId: PHONE,
+        secret: SECRET,
+        baseUrl: BASE,
+        fetchFn: (async () => jsonResponse(404, { error: 'not_found' })) as typeof fetch,
+        bypassCache: true,
+      }),
+    ).rejects.toMatchObject({
+      name: 'ChannelGateError',
+      code: 'channel_not_linked',
+    })
+  })
+
   it('throws channel_status_unavailable on Connect HTTP/network errors', async () => {
     await expect(
       fetchWhatsAppChannelStatus({
@@ -257,5 +273,18 @@ describe('assertWhatsAppChannelEnabledForAccount', () => {
         loadConfig: async () => activeAccount(),
       }),
     ).rejects.toMatchObject({ code: 'channel_status_unavailable' })
+  })
+
+  it('blocks as channel_not_linked when Connect returns 404', async () => {
+    await expect(
+      assertWhatsAppChannelEnabledForAccount({
+        accountId: 'acct-1',
+        phoneNumberId: PHONE,
+        db: { from: () => ({}) },
+        fetchFn: (async () => jsonResponse(404, {})) as typeof fetch,
+        bypassCache: true,
+        loadConfig: async () => activeAccount(),
+      }),
+    ).rejects.toMatchObject({ code: 'channel_not_linked' })
   })
 })

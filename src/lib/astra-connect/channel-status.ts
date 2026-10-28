@@ -30,6 +30,7 @@ export const CHANNEL_STATUS_CACHE_TTL_MS = 30_000
 
 export type ChannelGateCode =
   | 'channel_disabled'
+  | 'channel_not_linked'
   | 'channel_status_unavailable'
 
 export class ChannelGateError extends Error {
@@ -165,6 +166,15 @@ export async function fetchWhatsAppChannelStatus(
     clearTimeout(timer)
   }
 
+  if (response.status === 404) {
+    // Confirmed Connect contract: 404 = no employee owns this
+    // phone_number_id in the tenant → treat as blocked.
+    throw new ChannelGateError(
+      'channel_not_linked',
+      'No Connect employee is linked to this WhatsApp number',
+    )
+  }
+
   if (!response.ok) {
     throw new ChannelGateError(
       'channel_status_unavailable',
@@ -273,6 +283,7 @@ export interface AssertForAccountOptions {
  *
  * - Connect integration off (4a) → no-op (standalone behaviour).
  * - Connect on + enabled:false → channel_disabled.
+ * - Connect on + 404 → channel_not_linked (no employee owns the number).
  * - Connect on + error/timeout → channel_status_unavailable (fail closed).
  */
 export async function assertWhatsAppChannelEnabledForAccount(

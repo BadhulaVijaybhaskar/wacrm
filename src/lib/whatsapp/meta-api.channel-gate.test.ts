@@ -80,6 +80,27 @@ describe('postCloudApiMessages — Connect channel gate choke point', () => {
     expect(fetchFn).not.toHaveBeenCalled()
   })
 
+  it('blocks Meta POST when the number is not linked (404 → channel_not_linked)', async () => {
+    assertForAccount.mockRejectedValue(
+      new ChannelGateError(
+        'channel_not_linked',
+        'No Connect employee is linked to this WhatsApp number',
+      ),
+    )
+    const fetchFn = vi.fn(async () => okMeta())
+
+    await expect(
+      postCloudApiMessages({
+        phoneNumberId: 'pn-1',
+        accessToken: 'tok',
+        accountId: 'acct-1',
+        body: { messaging_product: 'whatsapp', type: 'text' },
+        fetchFn: fetchFn as unknown as typeof fetch,
+      }),
+    ).rejects.toMatchObject({ code: 'channel_not_linked' })
+    expect(fetchFn).not.toHaveBeenCalled()
+  })
+
   it('allows Meta POST when channel is enabled', async () => {
     const fetchFn = vi.fn(async () => okMeta())
     const result = await postCloudApiMessages({
