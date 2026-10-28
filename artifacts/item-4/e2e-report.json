@@ -1,0 +1,22 @@
+{
+  "screenshots": [
+    "artifacts/item-4/4a-astra-connect-switch.png",
+    "artifacts/item-4/4b-secret-generate-rotate.png",
+    "artifacts/item-4/4c-usage-billing.png",
+    "artifacts/item-5/5a-templates.png",
+    "artifacts/item-5/5b-inbox-upgrades.png",
+    "artifacts/item-5/5c-contacts-csv-import.png",
+    "artifacts/item-5/5d-consent-opt-out.png"
+  ],
+  "failures": [],
+  "notes": [
+    "signed in as demo@astraconnect.io",
+    "4a: Connect switch visible",
+    "4b: rotate clicked (secret already existed)",
+    "4c: Usage panel loaded",
+    "5a: new template dialog opened",
+    "5b: assign control not on this thread (filters/search still shown)",
+    "5c: import dialog opened",
+    "5d: Consent / opt-out panel loaded"
+  ]
+}
