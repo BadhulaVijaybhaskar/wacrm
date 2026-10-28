@@ -40,4 +40,6 @@ Evidence / docs commit SHA is recorded at the bottom after the final push.
 - 5a New Message Template dialog (stub submit CTA)  
 - 5b Inbox thread: search, filters, assignee, notes, tags, quick-reply control  
 - 5c Import Contacts modal (CSV choose + preview copy)  
-- 5d Consent list with opted-out contact + Opt back in  
+- 5d Consent list with opted-out contact + Opt back in
+
+Evidence commit: `bdcb314` · 4c service-read fix: `dd9a85d`
