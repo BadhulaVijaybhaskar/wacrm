@@ -4,6 +4,7 @@ import {
   OFFLINE_AFTER_MS,
   derivePresence,
   formatLastSeen,
+  isSilentPresenceHeartbeatFailure,
   presenceLabel,
   summarize,
 } from "./presence";
@@ -83,5 +84,67 @@ describe("summarize", () => {
 
   it("returns zeroes for an empty roster", () => {
     expect(summarize([])).toEqual({ online: 0, away: 0, offline: 0 });
+  });
+});
+
+describe("isSilentPresenceHeartbeatFailure", () => {
+  const live = { aborted: false, cancelled: false };
+  const tornDown = { aborted: true, cancelled: true };
+
+  it("always silences AbortError", () => {
+    const err = Object.assign(new Error("The operation was aborted"), {
+      name: "AbortError",
+    });
+    expect(isSilentPresenceHeartbeatFailure(err, live)).toBe(true);
+    expect(isSilentPresenceHeartbeatFailure(err, tornDown)).toBe(true);
+  });
+
+  it("silences navigation-aborted Failed to fetch after unmount/abort", () => {
+    const fetchFail = new TypeError("Failed to fetch");
+    expect(isSilentPresenceHeartbeatFailure(fetchFail, tornDown)).toBe(true);
+    expect(
+      isSilentPresenceHeartbeatFailure(fetchFail, {
+        aborted: false,
+        cancelled: true,
+      }),
+    ).toBe(true);
+    expect(
+      isSilentPresenceHeartbeatFailure(fetchFail, {
+        aborted: true,
+        cancelled: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("still logs real Failed to fetch when the heartbeat is live", () => {
+    expect(
+      isSilentPresenceHeartbeatFailure(new TypeError("Failed to fetch"), live),
+    ).toBe(false);
+  });
+
+  it("still logs genuine RPC failures even after cancel", () => {
+    expect(
+      isSilentPresenceHeartbeatFailure(
+        { message: "No account for caller" },
+        tornDown,
+      ),
+    ).toBe(false);
+    expect(
+      isSilentPresenceHeartbeatFailure(
+        { message: "permission denied for function touch_presence" },
+        live,
+      ),
+    ).toBe(false);
+  });
+
+  it("silences supabase abort-local messages when aborted", () => {
+    expect(
+      isSilentPresenceHeartbeatFailure(
+        {
+          message: "The request was aborted locally via the provided AbortSignal.",
+        },
+        tornDown,
+      ),
+    ).toBe(true);
   });
 });

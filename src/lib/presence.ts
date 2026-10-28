@@ -119,3 +119,50 @@ export function summarize(statuses: PresenceStatus[]): {
   for (const s of statuses) counts[s] += 1;
   return counts;
 }
+
+/**
+ * True when a presence heartbeat failure should stay silent.
+ *
+ * In-flight `touch_presence` calls are aborted on unmount / navigation;
+ * browsers surface that as `AbortError` or as `TypeError: Failed to fetch`.
+ * Those are expected — only unexpected RPC/network failures should log.
+ */
+export function isSilentPresenceHeartbeatFailure(
+  error: unknown,
+  context: { aborted: boolean; cancelled: boolean },
+): boolean {
+  if (isAbortErrorName(error)) return true
+  if (!(context.aborted || context.cancelled)) return false
+  return isNavigationAbortedFetchError(error)
+}
+
+function errorName(error: unknown): string {
+  if (error && typeof error === 'object' && 'name' in error) {
+    return String((error as { name: unknown }).name)
+  }
+  return ''
+}
+
+function errorMessage(error: unknown): string {
+  if (error && typeof error === 'object' && 'message' in error) {
+    return String((error as { message: unknown }).message)
+  }
+  return error == null ? '' : String(error)
+}
+
+function isAbortErrorName(error: unknown): boolean {
+  return errorName(error) === 'AbortError'
+}
+
+function isNavigationAbortedFetchError(error: unknown): boolean {
+  const name = errorName(error)
+  const message = errorMessage(error)
+  if (/abort/i.test(message)) return true
+  // Chromium / undici: TypeError: Failed to fetch when the document
+  // navigates away mid-request (or AbortSignal fires under the hood).
+  if (name === 'TypeError' && /failed to fetch/i.test(message)) return true
+  if (/failed to fetch|networkerror when attempting to fetch|aborted locally/i.test(message)) {
+    return true
+  }
+  return false
+}

@@ -4,7 +4,12 @@ import { useEffect, useRef } from "react";
 
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { HEARTBEAT_MS, IDLE_AFTER_MS, type StoredPresence } from "@/lib/presence";
+import {
+  HEARTBEAT_MS,
+  IDLE_AFTER_MS,
+  isSilentPresenceHeartbeatFailure,
+  type StoredPresence,
+} from "@/lib/presence";
 
 /**
  * PresenceHeartbeat — headless. Mount ONCE per signed-in dashboard tab
@@ -18,6 +23,9 @@ import { HEARTBEAT_MS, IDLE_AFTER_MS, type StoredPresence } from "@/lib/presence
  * It keeps heartbeating while away (so the row stays fresh, i.e. not
  * offline). When the tab closes the beats simply stop and viewers derive
  * 'offline' from staleness — no unreliable unload write needed.
+ *
+ * In-flight RPCs are aborted on unmount so a Next.js client navigation
+ * does not leave a `TypeError: Failed to fetch` in the console.
  */
 export function PresenceHeartbeat() {
   const { accountId } = useAuth();
@@ -36,6 +44,7 @@ export function PresenceHeartbeat() {
     const supabase = createClient();
     let cancelled = false;
     let lastBeatAt = 0;
+    const controller = new AbortController();
     lastActivityRef.current = Date.now();
 
     const markActive = () => {
@@ -49,20 +58,41 @@ export function PresenceHeartbeat() {
     };
 
     const beat = async () => {
-      if (cancelled) return;
+      if (cancelled || controller.signal.aborted) return;
       // Coalesce bursts: a tab refocus fires visibilitychange AND focus
       // together, so skip a beat within 1s of the last to avoid two RPCs
       // in the same frame. The 30s interval is never affected.
       const t = Date.now();
       if (t - lastBeatAt < 1_000) return;
       lastBeatAt = t;
-      const { error } = await supabase.rpc("touch_presence", {
-        p_status: currentStatus(),
+
+      const silenceCtx = () => ({
+        aborted: controller.signal.aborted,
+        cancelled,
       });
-      if (error && !cancelled) {
-        // Non-fatal: presence is best-effort. Log once per failure so a
-        // misconfigured RPC is visible without spamming.
-        console.error("[PresenceHeartbeat] touch_presence failed:", error.message);
+
+      try {
+        const { error } = await supabase
+          .rpc("touch_presence", {
+            p_status: currentStatus(),
+          })
+          .abortSignal(controller.signal);
+        if (
+          error &&
+          !isSilentPresenceHeartbeatFailure(error, silenceCtx())
+        ) {
+          // Non-fatal: presence is best-effort. Log real failures only.
+          console.error(
+            "[PresenceHeartbeat] touch_presence failed:",
+            error.message,
+          );
+        }
+      } catch (err) {
+        if (isSilentPresenceHeartbeatFailure(err, silenceCtx())) return;
+        console.error(
+          "[PresenceHeartbeat] touch_presence failed:",
+          err instanceof Error ? err.message : err,
+        );
       }
     };
 
@@ -92,6 +122,7 @@ export function PresenceHeartbeat() {
 
     return () => {
       cancelled = true;
+      controller.abort();
       clearInterval(interval);
       activityEvents.forEach((e) =>
         document.removeEventListener(e, markActive),
