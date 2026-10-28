@@ -3,6 +3,7 @@ import {
   Blocks,
   Coins,
   FileText,
+  BarChart3,
   KeyRound,
   LayoutGrid,
   Palette,
@@ -12,6 +13,7 @@ import {
   User,
   UsersRound,
   Zap,
+  Ban,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -30,6 +32,8 @@ export const SETTINGS_SECTIONS = [
   'appearance',
   'whatsapp',
   'astra-connect',
+  'usage',
+  'consent',
   'templates',
   'quick-replies',
   'fields',
@@ -63,6 +67,8 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
     icon: Bot,
     group: 'workspace',
   },
+  usage: { id: 'usage', label: 'Usage & billing', icon: BarChart3, group: 'workspace' },
+  consent: { id: 'consent', label: 'Consent', icon: Ban, group: 'workspace' },
   templates: { id: 'templates', label: 'Templates', icon: FileText, group: 'workspace' },
   'quick-replies': { id: 'quick-replies', label: 'Quick replies', icon: Zap, group: 'workspace' },
   fields: { id: 'fields', label: 'Fields & tags', icon: Tags, group: 'workspace' },

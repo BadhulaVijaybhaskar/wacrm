@@ -13,6 +13,8 @@ import { SecurityPanel } from '@/components/settings/security-panel';
 import { AppearancePanel } from '@/components/settings/appearance-panel';
 import { WhatsAppConfig } from '@/components/settings/whatsapp-config';
 import { AstraConnectSettings } from '@/components/settings/astra-connect-settings';
+import { UsageSettings } from '@/components/settings/usage-settings';
+import { ConsentSettings } from '@/components/settings/consent-settings';
 import { TemplateManager } from '@/components/settings/template-manager';
 import { QuickRepliesManager } from '@/components/settings/quick-replies-manager';
 import { FieldsAndTagsPanel } from '@/components/settings/fields-and-tags-panel';
@@ -79,6 +81,8 @@ function SettingsPageInner() {
     appearance: <AppearancePanel />,
     whatsapp: <WhatsAppConfig />,
     'astra-connect': <AstraConnectSettings />,
+    usage: <UsageSettings />,
+    consent: <ConsentSettings />,
     templates: <TemplateManager />,
     'quick-replies': <QuickRepliesManager />,
     fields: <FieldsAndTagsPanel />,
