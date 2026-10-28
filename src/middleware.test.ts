@@ -154,6 +154,7 @@ describe("middleware — /api auth gate", () => {
   it("allows public API and Connect routes without a session", async () => {
     mockUser = null;
     for (const path of [
+      "/api/health",
       "/api/v1/me",
       "/api/astra-connect/v1/conversations",
       "/api/invitations/tok/peek",

@@ -30,6 +30,8 @@ const AUTH_PATTERNS = [
  *  or are middleware-gated public surfaces documented in the security review. */
 const ALLOWLIST_RELATIVE: string[] = [
   // Cron routes authenticate via shared secret header inside the file.
+  // Liveness probe — middleware-public, returns only {status, version}.
+  'src/app/api/health/route.ts',
 ];
 
 function walk(dir: string): string[] {

@@ -9,6 +9,11 @@
  *
  * Also fails the build if residual upstream brand tokens remain in
  * the surfaces the owner asked us to verify.
+ *
+ * Allowed exceptions (shared-project bake-in only):
+ *   - exact quoted schema value `"wacrm"` / `'wacrm'`
+ *   - exact quoted bucket prefix `"wacrm-"` / `'wacrm-'`
+ * Any other `wacrm` hit (unquoted, in prose, hostnames, …) still fails.
  */
 
 import { readdir, readFile, writeFile, stat } from "node:fs/promises";
@@ -54,6 +59,44 @@ const brandParts = [
   "wac" + "rm" + String.raw`\.tech`,
 ];
 const BRAND_RE = new RegExp(brandParts.join("|"), "gi");
+
+/**
+ * Mask the only allowed baked NEXT_PUBLIC values before brand scan.
+ * Order: prefix forms before schema (`"wacrm"`).
+ *
+ * Next/Turbopack may inline the bucket prefix as:
+ *   - a quoted string `"wacrm-"` / `'wacrm-'`
+ *   - a template head `` `wacrm-${…}` `` when folded into storageBucket()
+ * Schema is inlined as `"wacrm"` / `'wacrm'`.
+ * Exported for unit tests.
+ */
+export function maskAllowedBakedBrandValues(text) {
+  return text
+    .replaceAll('"wacrm-"', '"__BAKED_STORAGE_PREFIX__"')
+    .replaceAll("'wacrm-'", "'__BAKED_STORAGE_PREFIX__'")
+    // Minified `return \`wacrm-${e}\`` from storageBucket(prefix + name).
+    .replace(/`wacrm-\$\{/g, '`__BAKED_STORAGE_PREFIX__${')
+    .replaceAll('"wacrm"', '"__BAKED_DB_SCHEMA__"')
+    .replaceAll("'wacrm'", "'__BAKED_DB_SCHEMA__'");
+}
+
+/** Find brand hits after allowlisting baked schema/prefix strings. */
+export function findBrandHits(text, { max = 50 } = {}) {
+  const scanned = maskAllowedBakedBrandValues(text);
+  const hits = [];
+  BRAND_RE.lastIndex = 0;
+  let m;
+  while ((m = BRAND_RE.exec(scanned)) !== null) {
+    const start = Math.max(0, m.index - 40);
+    const end = Math.min(scanned.length, m.index + m[0].length + 40);
+    hits.push({
+      match: m[0],
+      snippet: scanned.slice(start, end).replace(/\s+/g, " "),
+    });
+    if (hits.length >= max) break;
+  }
+  return hits;
+}
 
 async function* walk(dir) {
   let entries;
@@ -113,20 +156,16 @@ async function main() {
         }
       }
 
-      // Re-scan after URL scrub for brand leftovers
-      let m;
-      BRAND_RE.lastIndex = 0;
-      while ((m = BRAND_RE.exec(text)) !== null) {
-        const start = Math.max(0, m.index - 40);
-        const end = Math.min(text.length, m.index + m[0].length + 40);
+      for (const hit of findBrandHits(text)) {
         brandHits.push({
           file: path.relative(ROOT, file),
-          match: m[0],
-          snippet: text.slice(start, end).replace(/\s+/g, " "),
+          ...hit,
         });
         if (brandHits.length >= 50) break;
       }
+      if (brandHits.length >= 50) break;
     }
+    if (brandHits.length >= 50) break;
   }
 
   console.log(
@@ -146,7 +185,13 @@ async function main() {
   console.log("[scrub-client-bundles] brand grep: zero hits");
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+const isDirectRun =
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname);
+
+if (isDirectRun) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

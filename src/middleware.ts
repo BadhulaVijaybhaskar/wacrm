@@ -109,6 +109,7 @@ export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname
   if (!user && path.startsWith('/api/')) {
     const publicApiPrefixes = [
+      '/api/health',
       '/api/whatsapp/webhook',
       '/api/v1/',
       '/api/astra-connect/',

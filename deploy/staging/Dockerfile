@@ -38,12 +38,14 @@ ARG NEXT_PUBLIC_APP_LOCALE=en
 # the browser bundle defaults to Voice's `public` schema / unprefixed buckets.
 ARG NEXT_PUBLIC_SUPABASE_DB_SCHEMA
 ARG NEXT_PUBLIC_STORAGE_BUCKET_PREFIX
+ARG GIT_COMMIT=unknown
 ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL \
     NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY \
     NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL \
     NEXT_PUBLIC_APP_LOCALE=$NEXT_PUBLIC_APP_LOCALE \
     NEXT_PUBLIC_SUPABASE_DB_SCHEMA=$NEXT_PUBLIC_SUPABASE_DB_SCHEMA \
     NEXT_PUBLIC_STORAGE_BUCKET_PREFIX=$NEXT_PUBLIC_STORAGE_BUCKET_PREFIX \
+    GIT_COMMIT=$GIT_COMMIT \
     NEXT_TELEMETRY_DISABLED=1
 
 RUN npm run build
@@ -53,10 +55,12 @@ RUN npm run build
 # ---------------------------------------------------------------
 FROM node:20-alpine AS runner
 WORKDIR /app
+ARG GIT_COMMIT=unknown
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000 \
-    HOSTNAME=0.0.0.0
+    HOSTNAME=0.0.0.0 \
+    GIT_COMMIT=$GIT_COMMIT
 
 RUN addgroup -S nextjs && adduser -S nextjs -G nextjs
 
@@ -67,5 +71,5 @@ COPY --from=builder --chown=nextjs:nextjs /app/public ./public
 USER nextjs
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)).then(r=>process.exit(r.ok||r.status<500?0:1)).catch(()=>process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["node", "server.js"]

@@ -21,10 +21,12 @@ services:
         # into the client bundle at build time.
         NEXT_PUBLIC_SUPABASE_DB_SCHEMA: ${NEXT_PUBLIC_SUPABASE_DB_SCHEMA:?set NEXT_PUBLIC_SUPABASE_DB_SCHEMA}
         NEXT_PUBLIC_STORAGE_BUCKET_PREFIX: ${NEXT_PUBLIC_STORAGE_BUCKET_PREFIX:?set NEXT_PUBLIC_STORAGE_BUCKET_PREFIX}
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
     env_file:
       - .env.staging
     environment:
       PORT: "3000"
+      GIT_COMMIT: ${GIT_COMMIT:-unknown}
       # Default: talk to the local Connect stub, never live Connect.
       CONNECT_ADAPTER_URL: ${CONNECT_ADAPTER_URL:-http://connect-stub:8090}
       # Server-side schema/prefix (runtime). Fail closed if unset so the
@@ -51,7 +53,7 @@ services:
           "CMD",
           "node",
           "-e",
-          "fetch('http://127.0.0.1:3000').then((r)=>process.exit(r.ok||r.status<500?0:1)).catch(()=>process.exit(1))",
+          "fetch('http://127.0.0.1:3000/api/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
         ]
       interval: 30s
       timeout: 5s

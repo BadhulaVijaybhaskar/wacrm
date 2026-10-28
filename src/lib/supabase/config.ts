@@ -6,7 +6,15 @@
  * historical default `public`.
  *
  * Storage bucket ids are similarly prefixable so Chat buckets never
- * collide with Voice (`STORAGE_BUCKET_PREFIX=wacrm-` → `wacrm-avatars`).
+ * collide with Voice (`NEXT_PUBLIC_STORAGE_BUCKET_PREFIX=wacrm-` →
+ * `wacrm-avatars`).
+ *
+ * IMPORTANT: this module is imported by Client Components. It must ONLY
+ * read `NEXT_PUBLIC_*` env vars. Referencing `SUPABASE_DB_SCHEMA` /
+ * `STORAGE_BUCKET_PREFIX` here leaves those identifiers in the browser
+ * chunk next to the inlined NEXT_PUBLIC values, which fails the brand
+ * scrubber. Server runtime still sets the non-public names for
+ * fail-closed compose checks; bake `NEXT_PUBLIC_*` at `next build`.
  */
 
 export const DEFAULT_DB_SCHEMA = 'public';
@@ -22,21 +30,12 @@ export const CHAT_STORAGE_BUCKETS = [
 export type ChatStorageBucket = (typeof CHAT_STORAGE_BUCKETS)[number];
 
 export function getSupabaseDbSchema(): string {
-  // Prefer server-only name; fall back to NEXT_PUBLIC_ so the browser
-  // client (createBrowserClient) can target `wacrm` on shared projects.
-  const raw = (
-    process.env.SUPABASE_DB_SCHEMA ??
-    process.env.NEXT_PUBLIC_SUPABASE_DB_SCHEMA
-  )?.trim();
+  const raw = process.env.NEXT_PUBLIC_SUPABASE_DB_SCHEMA?.trim();
   return raw && raw.length > 0 ? raw : DEFAULT_DB_SCHEMA;
 }
 
 export function getStorageBucketPrefix(): string {
-  // Explicit empty string is allowed (and is the default). Browser
-  // uploads need NEXT_PUBLIC_STORAGE_BUCKET_PREFIX when set.
-  if (process.env.STORAGE_BUCKET_PREFIX !== undefined) {
-    return process.env.STORAGE_BUCKET_PREFIX;
-  }
+  // Explicit empty string is allowed (and is the default).
   if (process.env.NEXT_PUBLIC_STORAGE_BUCKET_PREFIX !== undefined) {
     return process.env.NEXT_PUBLIC_STORAGE_BUCKET_PREFIX;
   }
