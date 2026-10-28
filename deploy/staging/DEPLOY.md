@@ -33,6 +33,8 @@ Required at minimum:
 
 - `NEXT_PUBLIC_SITE_URL=https://wa.astraconnect.io`
 - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `NEXT_PUBLIC_SUPABASE_DB_SCHEMA=wacrm`, `NEXT_PUBLIC_STORAGE_BUCKET_PREFIX=wacrm-` (build-time; inlined into the browser bundle)
+- `SUPABASE_DB_SCHEMA=wacrm`, `STORAGE_BUCKET_PREFIX=wacrm-` (runtime; compose fails closed if unset)
 - `SUPABASE_SERVICE_ROLE_KEY`, `ENCRYPTION_KEY`
 - `META_APP_SECRET` (staging-only secret is fine — see META_STUB below)
 - `WACRM_ADAPTER_SECRET` (≥16 chars; shared with `connect-stub`)

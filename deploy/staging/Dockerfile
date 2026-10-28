@@ -6,9 +6,12 @@
 #     --build-arg NEXT_PUBLIC_SUPABASE_URL=... \
 #     --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=... \
 #     --build-arg NEXT_PUBLIC_SITE_URL=https://wa.astraconnect.io \
+#     --build-arg NEXT_PUBLIC_SUPABASE_DB_SCHEMA=wacrm \
+#     --build-arg NEXT_PUBLIC_STORAGE_BUCKET_PREFIX=wacrm- \
 #     -t wacrm-staging .
 #
-# NEXT_PUBLIC_* values are inlined at build time. Server secrets are
+# NEXT_PUBLIC_* values are inlined at build time (including schema +
+# bucket prefix for the shared Voice project). Server secrets are
 # runtime-only — never bake them into the image.
 
 # ---------------------------------------------------------------
@@ -31,10 +34,16 @@ ARG NEXT_PUBLIC_SUPABASE_URL
 ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
 ARG NEXT_PUBLIC_SITE_URL=https://wa.astraconnect.io
 ARG NEXT_PUBLIC_APP_LOCALE=en
+# Shared-project schema isolation — must be present at `next build` or
+# the browser bundle defaults to Voice's `public` schema / unprefixed buckets.
+ARG NEXT_PUBLIC_SUPABASE_DB_SCHEMA
+ARG NEXT_PUBLIC_STORAGE_BUCKET_PREFIX
 ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL \
     NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY \
     NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL \
     NEXT_PUBLIC_APP_LOCALE=$NEXT_PUBLIC_APP_LOCALE \
+    NEXT_PUBLIC_SUPABASE_DB_SCHEMA=$NEXT_PUBLIC_SUPABASE_DB_SCHEMA \
+    NEXT_PUBLIC_STORAGE_BUCKET_PREFIX=$NEXT_PUBLIC_STORAGE_BUCKET_PREFIX \
     NEXT_TELEMETRY_DISABLED=1
 
 RUN npm run build

@@ -13,16 +13,24 @@ services:
       context: ../..
       dockerfile: deploy/staging/Dockerfile
       args:
-        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:?set NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:?set NEXT_PUBLIC_SUPABASE_ANON_KEY}
         NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://wa.astraconnect.io}
         NEXT_PUBLIC_APP_LOCALE: ${NEXT_PUBLIC_APP_LOCALE:-en}
+        # Fail closed: shared Voice project must pin schema + bucket prefix
+        # into the client bundle at build time.
+        NEXT_PUBLIC_SUPABASE_DB_SCHEMA: ${NEXT_PUBLIC_SUPABASE_DB_SCHEMA:?set NEXT_PUBLIC_SUPABASE_DB_SCHEMA}
+        NEXT_PUBLIC_STORAGE_BUCKET_PREFIX: ${NEXT_PUBLIC_STORAGE_BUCKET_PREFIX:?set NEXT_PUBLIC_STORAGE_BUCKET_PREFIX}
     env_file:
       - .env.staging
     environment:
       PORT: "3000"
       # Default: talk to the local Connect stub, never live Connect.
       CONNECT_ADAPTER_URL: ${CONNECT_ADAPTER_URL:-http://connect-stub:8090}
+      # Server-side schema/prefix (runtime). Fail closed if unset so the
+      # container never silently talks to Voice's public schema.
+      SUPABASE_DB_SCHEMA: ${SUPABASE_DB_SCHEMA:?set SUPABASE_DB_SCHEMA}
+      STORAGE_BUCKET_PREFIX: ${STORAGE_BUCKET_PREFIX:?set STORAGE_BUCKET_PREFIX}
     ports:
       - "127.0.0.1:3101:3000"
     mem_limit: 1g
