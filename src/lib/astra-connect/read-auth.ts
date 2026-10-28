@@ -24,12 +24,12 @@
  */
 
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import {
   isAstraTimestampInWindow,
   verifyAstraHmac,
   verifyAstraSignature,
 } from './sign'
+import { createServiceClient, __resetServiceClientForTests } from '@/lib/supabase/admin'
 import {
   resolveAdapterSecrets,
   type StoredAdapterSecrets,
@@ -90,25 +90,18 @@ function globalAdapterSecret(): string | null {
   return null
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let _admin: any = null
-
 export function __resetConnectReadAdminForTests() {
-  _admin = null
+  __resetServiceClientForTests()
 }
 
 export function connectReadAdmin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
-  if (!url || !key) {
+  try {
+    return createServiceClient()
+  } catch {
     throw new UpstreamUnavailableError(
       'Supabase admin credentials not configured',
     )
   }
-  if (!_admin) {
-    _admin = createClient(url, key)
-  }
-  return _admin
 }
 
 export type ConnectTenantContext = {

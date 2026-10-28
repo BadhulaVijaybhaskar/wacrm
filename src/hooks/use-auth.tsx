@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { ensureChatProfile } from "@/lib/auth/ensure-chat-profile";
 import type { User } from "@supabase/supabase-js";
 import { DEFAULT_CURRENCY } from "@/lib/currency";
 import {
@@ -220,6 +221,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         lastFetchedUserIdRef.current = null;
         setStatusDetail(error.message);
         return;
+      }
+
+      // Shared-project installs have no auth.users trigger — Voice
+      // signups must never create Chat rows. Lazily bootstrap on first
+      // Chat login when the profiles row is missing.
+      if (!data) {
+        const {
+          data: { user: authUser },
+        } = await supabase.auth.getUser();
+        if (authUser && authUser.id === userId) {
+          const ensured = await ensureChatProfile(supabase, authUser);
+          if (ensured.created) {
+            const retry = await supabase
+              .from("profiles")
+              .select(
+                "id, full_name, email, avatar_url, role, beta_features, account_id, account_role",
+              )
+              .eq("user_id", userId)
+              .maybeSingle();
+            if (!retry.error && retry.data) {
+              data = retry.data;
+            } else if (ensured.error) {
+              lastFetchedUserIdRef.current = null;
+              setStatusDetail(ensured.error);
+              return;
+            }
+          } else {
+            lastFetchedUserIdRef.current = null;
+            setStatusDetail(
+              ensured.error ?? "no profiles row for the signed-in user",
+            );
+            return;
+          }
+        }
       }
 
       if (data) {

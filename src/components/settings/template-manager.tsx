@@ -14,6 +14,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { storageBucket } from '@/lib/supabase/config';
 import {
   uploadAccountMedia,
   MEDIA_MAX_BYTES_BY_KIND,
@@ -547,7 +548,7 @@ export function TemplateManager() {
     }
     setUploadingHeader(true);
     try {
-      const { publicUrl } = await uploadAccountMedia('chat-media', file);
+      const { publicUrl } = await uploadAccountMedia(storageBucket('chat-media'), file);
       setForm((f) => ({ ...f, header_media_url: publicUrl }));
       toast.success(t('toastUploadSuccess'));
     } catch (err) {

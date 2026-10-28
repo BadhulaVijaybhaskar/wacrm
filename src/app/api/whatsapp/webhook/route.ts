@@ -1,5 +1,5 @@
 import { NextResponse, after } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createServiceClient } from '@/lib/supabase/admin'
 import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption'
 import { getMediaUrl, downloadMedia } from '@/lib/whatsapp/meta-api'
 import { mirrorInboundMedia } from '@/lib/whatsapp/mirror-inbound-media'
@@ -48,17 +48,8 @@ import { dispatchLocalIntentTriggers } from '@/lib/intents/dispatch'
 // plan's ceiling). Tune as needed.
 export const maxDuration = 60
 
-// Lazy-initialized to avoid build-time crash when env vars are missing
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let _adminClient: any = null
 function supabaseAdmin() {
-  if (!_adminClient) {
-    _adminClient = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
-  }
-  return _adminClient
+  return createServiceClient()
 }
 
 interface WhatsAppMessage {
@@ -560,7 +551,9 @@ async function handleStatusUpdate(status: {
     .maybeSingle()
 
   if (msgRow) {
-    const conv = msgRow.conversations as { account_id: string } | null
+    const conv = msgRow.conversations as unknown as {
+      account_id: string
+    } | null
     const accountId = conv?.account_id
     if (accountId) {
       await dispatchWebhookEvent(

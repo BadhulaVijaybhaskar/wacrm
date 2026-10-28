@@ -47,6 +47,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { uploadAccountMedia, MEDIA_MAX_BYTES } from "@/lib/storage/upload-media";
+import { storageBucket } from "@/lib/supabase/config";
 import { slugify, type BuilderNode } from "../shared";
 import { NextNodeRow, NodeKeySelect, TextRow } from "./fields";
 
@@ -995,7 +996,7 @@ const MEDIA_ACCEPT: Record<NonNullable<SendMediaCfg["media_type"]>, string> = {
     "application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain",
 };
 
-const FLOW_MEDIA_BUCKET = "flow-media";
+const FLOW_MEDIA_BUCKET = storageBucket("flow-media");
 
 function SendMediaForm({
   cfg,

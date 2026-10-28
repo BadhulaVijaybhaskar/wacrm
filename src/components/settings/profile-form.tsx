@@ -6,6 +6,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { Copy, Loader2, Upload, Trash2, Mail, CircleAlert } from 'lucide-react';
 
 import { createClient } from '@/lib/supabase/client';
+import { storageBucket } from '@/lib/supabase/config';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -126,7 +127,7 @@ export function ProfileForm() {
           pendingAvatar.name.split('.').pop()?.toLowerCase() || 'png';
         const path = `${user.id}/avatar-${Date.now()}.${ext}`;
         const { error: uploadError } = await supabase.storage
-          .from('avatars')
+          .from(storageBucket('avatars'))
           .upload(path, pendingAvatar, {
             cacheControl: '3600',
             upsert: true,
@@ -137,7 +138,7 @@ export function ProfileForm() {
         }
         const {
           data: { publicUrl },
-        } = supabase.storage.from('avatars').getPublicUrl(path);
+        } = supabase.storage.from(storageBucket('avatars')).getPublicUrl(path);
         nextAvatarUrl = publicUrl;
       } else if (removeAvatar) {
         nextAvatarUrl = null;

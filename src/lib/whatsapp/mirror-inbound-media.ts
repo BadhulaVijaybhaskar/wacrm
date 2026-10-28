@@ -1,6 +1,7 @@
 import { downloadMedia } from "./meta-api";
 import { extensionForMime } from "@/lib/media/filename";
 import { buildMediaPath, MEDIA_MAX_BYTES } from "@/lib/storage/upload-media";
+import { storageBucket } from "@/lib/supabase/config";
 
 /**
  * Copies inbound WhatsApp media into the `chat-media` bucket so it
@@ -35,8 +36,8 @@ export interface MirrorStorage {
   };
 }
 
-/** Bucket the composer already writes to; inbound joins it. */
-export const MIRROR_BUCKET = "chat-media";
+/** Logical name `chat-media`; prefix via STORAGE_BUCKET_PREFIX. */
+export const MIRROR_BUCKET = storageBucket("chat-media");
 
 /**
  * Second path segment for mirrored inbound objects, so a bucket listing

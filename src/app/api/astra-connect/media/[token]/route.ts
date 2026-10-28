@@ -1,24 +1,16 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import { getMediaUrl, downloadMedia } from '@/lib/whatsapp/meta-api'
 import {
   mediaSigningSecret,
   verifyMediaToken,
 } from '@/lib/astra-connect/media'
+import { createServiceClient } from '@/lib/supabase/admin'
 
 export const maxDuration = 30
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let _admin: any = null
 function supabaseAdmin() {
-  if (!_admin) {
-    _admin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
-  }
-  return _admin
+  return createServiceClient()
 }
 
 type Params = { params: Promise<{ token: string }> }

@@ -80,7 +80,9 @@ export function toErrorResponse(err: unknown): NextResponse {
 
 export interface AccountContext {
   /** Supabase SSR client, RLS scoped to the calling user. */
-  supabase: SupabaseClient;
+  // Schema name is runtime-configurable (public | wacrm).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: SupabaseClient<any, any, any>;
   /** `auth.uid()` for the caller. Always defined when this resolves. */
   userId: string;
   /** Caller's account_id from their profile row. */
