@@ -109,6 +109,8 @@ export type ConnectTenantContext = {
   tenantId: string
   phoneNumberId: string | null
   employeeId: string | null
+  /** Per-account Connect adapter switch (Settings → Astra Connect). */
+  enabled: boolean
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   db: any
 }
@@ -208,7 +210,7 @@ export async function loadTenantByConnectId(
   const { data, error } = await db
     .from('whatsapp_config')
     .select(
-      'account_id, phone_number_id, astra_connect_tenant_id, astra_employee_id, astra_connect_secret_encrypted, astra_connect_secret_previous_encrypted, astra_connect_secret_previous_expires_at',
+      'account_id, phone_number_id, astra_connect_tenant_id, astra_employee_id, astra_connect_enabled, astra_connect_secret_encrypted, astra_connect_secret_previous_encrypted, astra_connect_secret_previous_expires_at',
     )
     .eq('astra_connect_tenant_id', trimmed)
     .maybeSingle()
@@ -229,6 +231,7 @@ export async function loadTenantByConnectId(
       typeof data.astra_employee_id === 'string' && data.astra_employee_id.trim()
         ? data.astra_employee_id.trim()
         : null,
+    enabled: data.astra_connect_enabled === true,
     db,
   }
 }
@@ -431,6 +434,18 @@ export async function authenticateConnectRequest(args: {
     return {
       ok: false,
       response: NextResponse.json({ error: 'Not found' }, { status: 404 }),
+    }
+  }
+
+  // Per-account off switch (Settings → Astra Connect). Auth succeeded and
+  // the tenant exists, but Chat must not serve Connect reads/handoffs.
+  if (!ctx.enabled) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: 'Connect disabled for tenant', code: 'connect_disabled' },
+        { status: 403 },
+      ),
     }
   }
 

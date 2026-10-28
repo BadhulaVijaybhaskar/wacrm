@@ -39,6 +39,7 @@ function mockTenantRow() {
       phone_number_id: '1065',
       astra_connect_tenant_id: TENANT,
       astra_employee_id: 'emp_1',
+      astra_connect_enabled: true,
       // Secrets resolved via resolveAdapterSecrets — use plaintext path
       // by stubbing accepted secrets through env fallback.
       astra_connect_secret_encrypted: null,
@@ -174,6 +175,34 @@ describe('authenticateConnectRequest — X-Astra-Tenant', () => {
     })
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.response.status).toBe(401)
+  })
+
+  it('returns 403 when Connect is disabled for the tenant (item 4a)', async () => {
+    h.maybeSingle.mockResolvedValue({
+      data: {
+        account_id: 'acct-1',
+        phone_number_id: '1065',
+        astra_connect_tenant_id: TENANT,
+        astra_employee_id: 'emp_1',
+        astra_connect_enabled: false,
+        astra_connect_secret_encrypted: null,
+        astra_connect_secret_previous_encrypted: null,
+        astra_connect_secret_previous_expires_at: null,
+      },
+      error: null,
+    })
+    const path = `/api/astra-connect/v1/conversations?tenant_id=${TENANT}`
+    const result = await authenticateConnectRequest({
+      request: signedGet(path),
+      tenantId: TENANT,
+      rateLimit: 'none',
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.response.status).toBe(403)
+      const body = await result.response.json()
+      expect(body.code).toBe('connect_disabled')
+    }
   })
 })
 
