@@ -1296,6 +1296,13 @@ CREATE POLICY astra_connect_handoff_audit_deny_all
   FOR ALL
   USING (false)
   WITH CHECK (false);
+-- Service-role / cron only (mirrors migration 017 comment). Explicit
+-- deny-all so every wacrm table has ≥1 policy under RLS.
+CREATE POLICY automation_pending_executions_deny_all
+  ON wacrm.automation_pending_executions
+  FOR ALL
+  USING (false)
+  WITH CHECK (false);
 CREATE POLICY consent_events_select ON wacrm.consent_events
   FOR SELECT USING (is_account_member(account_id));
 CREATE POLICY consent_events_insert ON wacrm.consent_events

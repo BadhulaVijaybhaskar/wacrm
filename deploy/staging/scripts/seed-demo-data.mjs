@@ -8,6 +8,10 @@
  *   NEXT_PUBLIC_SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… \
  *   node deploy/staging/scripts/seed-demo-data.mjs
  *
+ * Shared-project (schema wacrm) — also honour:
+ *   SUPABASE_DB_SCHEMA / NEXT_PUBLIC_SUPABASE_DB_SCHEMA   (default public)
+ *   STORAGE_BUCKET_PREFIX / NEXT_PUBLIC_STORAGE_BUCKET_PREFIX  (default '')
+ *
  * Optionally renames the profile (and auth email when possible) to the
  * demo agent identity below so screens show "Demo Agent" / demo@….
  *
@@ -22,6 +26,30 @@
 
 import { pathToFileURL } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
+
+/** Resolve Chat DB schema for the Supabase JS client (`db.schema`). */
+export function resolveSeedDbSchema(env = process.env) {
+  const raw = (
+    env.SUPABASE_DB_SCHEMA ?? env.NEXT_PUBLIC_SUPABASE_DB_SCHEMA
+  )?.trim();
+  return raw && raw.length > 0 ? raw : 'public';
+}
+
+/** Resolve storage bucket id prefix (`wacrm-` on shared projects). */
+export function resolveSeedStorageBucketPrefix(env = process.env) {
+  if (env.STORAGE_BUCKET_PREFIX !== undefined) {
+    return env.STORAGE_BUCKET_PREFIX;
+  }
+  if (env.NEXT_PUBLIC_STORAGE_BUCKET_PREFIX !== undefined) {
+    return env.NEXT_PUBLIC_STORAGE_BUCKET_PREFIX;
+  }
+  return '';
+}
+
+/** Logical Chat bucket → deployed Storage id. */
+export function resolveSeedStorageBucket(logicalName, env = process.env) {
+  return `${resolveSeedStorageBucketPrefix(env)}${logicalName}`;
+}
 
 export const DEMO_AGENT = Object.freeze({
   fullName: 'Demo Agent',
@@ -217,6 +245,7 @@ function usage() {
   console.log(`Usage:
   SEED_ACCOUNT_ID=<uuid> SEED_USER_ID=<uuid> \\
   NEXT_PUBLIC_SUPABASE_URL=<url> SUPABASE_SERVICE_ROLE_KEY=<key> \\
+  [SUPABASE_DB_SCHEMA=wacrm] [STORAGE_BUCKET_PREFIX=wacrm-] \\
   node deploy/staging/scripts/seed-demo-data.mjs [--dry-run]
 `);
 }
@@ -495,12 +524,34 @@ async function main(argv = process.argv.slice(2)) {
   const dryRun = argv.includes('--dry-run');
   const accountId = process.env.SEED_ACCOUNT_ID?.trim();
   const userId = process.env.SEED_USER_ID?.trim();
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const url = (
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    process.env.SUPABASE_URL ||
+    ''
+  ).trim();
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  const dbSchema = resolveSeedDbSchema();
+  const storageBucketPrefix = resolveSeedStorageBucketPrefix();
 
   const plan = buildSeedPlan({ accountId, userId });
   if (dryRun) {
-    console.log(JSON.stringify({ dry_run: true, plan }, null, 2));
+    console.log(
+      JSON.stringify(
+        {
+          dry_run: true,
+          db_schema: dbSchema,
+          storage_bucket_prefix: storageBucketPrefix,
+          storage_buckets: {
+            avatars: resolveSeedStorageBucket('avatars'),
+            'chat-media': resolveSeedStorageBucket('chat-media'),
+            'flow-media': resolveSeedStorageBucket('flow-media'),
+          },
+          plan,
+        },
+        null,
+        2,
+      ),
+    );
     return 0;
   }
 
@@ -513,6 +564,7 @@ async function main(argv = process.argv.slice(2)) {
   }
 
   const db = createClient(url, key, {
+    db: { schema: dbSchema },
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
@@ -545,6 +597,8 @@ async function main(argv = process.argv.slice(2)) {
         contact_ids: contactIds,
         conversations: conversationCount,
         broadcast_id: broadcastId,
+        db_schema: dbSchema,
+        storage_bucket_prefix: storageBucketPrefix,
       },
       null,
       2,

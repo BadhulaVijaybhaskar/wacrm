@@ -731,6 +731,21 @@ function emitSchema() {
   for (const [, pol] of state.policies) {
     lines.push(pol.endsWith(';') ? pol : `${pol};`);
   }
+
+  // Service-role-only tables enable RLS with zero client policies in
+  // migrations (e.g. automation_pending_executions). Emit an explicit
+  // deny-all so every wacrm table has ≥1 policy for shared-project review.
+  const tablesWithPolicy = new Set();
+  for (const [, pol] of state.policies) {
+    const m = pol.match(/\sON\s+wacrm\.(\w+)/i);
+    if (m) tablesWithPolicy.add(m[1].toLowerCase());
+  }
+  for (const t of [...state.rlsTables].sort()) {
+    if (tablesWithPolicy.has(t.toLowerCase())) continue;
+    lines.push(
+      `CREATE POLICY ${t}_deny_all\n  ON wacrm.${t}\n  FOR ALL\n  USING (false)\n  WITH CHECK (false);`,
+    );
+  }
   lines.push('');
 
   for (const [, fn] of state.functions) {

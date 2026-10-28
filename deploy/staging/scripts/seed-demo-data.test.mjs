@@ -11,6 +11,9 @@ import {
   DEMO_NOTE,
   DEMO_TAG,
   SEED_STEP_MS,
+  resolveSeedDbSchema,
+  resolveSeedStorageBucket,
+  resolveSeedStorageBucketPrefix,
 } from './seed-demo-data.mjs';
 
 test('buildSeedPlan uses Demo Agent identity and realistic copy', () => {
@@ -76,5 +79,28 @@ test('buildSeedPlan timelines keep list + bubbles + note on one clock', () => {
   assert.equal(
     Date.parse(plan.contacts[1].timeline.lastMessageAt),
     Date.parse(priya.timeline.lastMessageAt) - SEED_STEP_MS,
+  );
+});
+
+test('resolveSeedDbSchema / STORAGE_BUCKET_PREFIX honour shared-project env', () => {
+  assert.equal(resolveSeedDbSchema({}), 'public');
+  assert.equal(
+    resolveSeedDbSchema({ SUPABASE_DB_SCHEMA: 'wacrm' }),
+    'wacrm',
+  );
+  assert.equal(
+    resolveSeedDbSchema({ NEXT_PUBLIC_SUPABASE_DB_SCHEMA: 'wacrm' }),
+    'wacrm',
+  );
+  assert.equal(resolveSeedStorageBucketPrefix({}), '');
+  assert.equal(
+    resolveSeedStorageBucketPrefix({ STORAGE_BUCKET_PREFIX: 'wacrm-' }),
+    'wacrm-',
+  );
+  assert.equal(
+    resolveSeedStorageBucket('chat-media', {
+      STORAGE_BUCKET_PREFIX: 'wacrm-',
+    }),
+    'wacrm-chat-media',
   );
 });
