@@ -240,8 +240,23 @@ function rawSignature(message: string): Signature {
   return { args: [...new Set(curly)].sort(), tags: [...new Set(html)].sort() };
 }
 
-/** Does next-intl's own parser accept this string? Mirrors icu-safety.test.ts. */
+/**
+ * Catalogue strings we never feed to plain `t()`, regardless of whether
+ * the installed next-intl quietly accepts them.
+ */
+function isDeliberatelyHostile(message: string): boolean {
+  if (/\{\{/.test(message)) return true; // WhatsApp {{1}} syntax
+  if (/<[A-Za-z][\w-]*\s/.test(message)) return true; // HTML with attributes
+  // JSON example placeholders (must not match ICU `{count, plural, …}`).
+  if (/^\s*\{\s*"/.test(message)) return true;
+  return false;
+}
+
+/**
+ * True when a string is safe to feed to plain `t()`.
+ */
 function nextIntlParses(message: string): boolean {
+  if (isDeliberatelyHostile(message)) return false;
   let code = '';
   const t = createTranslator({
     locale: 'en',

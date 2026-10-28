@@ -16,7 +16,9 @@ export function isIntegrationsStubMode(): boolean {
   return (
     envFlagOn('INTEGRATIONS_STUB') ||
     envFlagOn('META_STUB') ||
-    process.env.NODE_ENV === 'test'
+    process.env.NODE_ENV === 'test' ||
+    // Vitest sets VITEST=true; cloud/CI shells often keep NODE_ENV=production.
+    process.env.VITEST === 'true'
   );
 }
 

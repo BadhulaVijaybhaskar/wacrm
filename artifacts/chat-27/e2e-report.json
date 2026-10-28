@@ -1,0 +1,147 @@
+{
+  "areas": {
+    "auth": {
+      "pass": true,
+      "notes": [
+        "signed in as demo@astraconnect.io"
+      ]
+    },
+    "nav": {
+      "pass": true,
+      "notes": [
+        "dashboard ok",
+        "inbox ok",
+        "notifications ok",
+        "contacts ok",
+        "pipelines ok",
+        "broadcasts ok",
+        "ads ok",
+        "automations ok",
+        "flows ok",
+        "agents ok",
+        "settings ok"
+      ]
+    },
+    "inbox": {
+      "pass": true,
+      "notes": [
+        "no AI takeover banner (ok)",
+        "send via Enter"
+      ]
+    },
+    "contacts": {
+      "pass": true,
+      "notes": [
+        "create contact submitted",
+        "import dialog opened",
+        "contact detail opened"
+      ]
+    },
+    "broadcasts": {
+      "pass": true,
+      "notes": [
+        "wizard advanced"
+      ]
+    },
+    "templates": {
+      "pass": true,
+      "notes": [
+        "new template opened",
+        "no pending stub template (ok)"
+      ]
+    },
+    "flows": {
+      "pass": true,
+      "notes": [
+        "flow editor opened",
+        "simulator step + reset clicked"
+      ]
+    },
+    "integrations": {
+      "pass": true,
+      "notes": [
+        "connected via dialog \"Connect Shopify\"",
+        "connected via dialog \"Connect Instagram DM\"",
+        "test connection clicked"
+      ]
+    },
+    "settings": {
+      "pass": true,
+      "notes": [
+        "tab overview",
+        "tab profile",
+        "tab security",
+        "tab appearance",
+        "tab whatsapp",
+        "tab astra-connect",
+        "tab templates",
+        "tab quick-replies",
+        "tab fields",
+        "tab deals",
+        "tab members",
+        "tab api",
+        "tab integrations"
+      ]
+    },
+    "api-keys": {
+      "pass": true,
+      "notes": [
+        "API key created",
+        "developers/api ok"
+      ]
+    },
+    "ads": {
+      "pass": true,
+      "notes": [
+        "ads page loaded (empty OK)"
+      ]
+    }
+  },
+  "failures": [],
+  "screenshots": [
+    "artifacts/chat-27/01-login-success.png",
+    "artifacts/chat-27/nav-dashboard.png",
+    "artifacts/chat-27/nav-inbox.png",
+    "artifacts/chat-27/nav-notifications.png",
+    "artifacts/chat-27/nav-contacts.png",
+    "artifacts/chat-27/nav-pipelines.png",
+    "artifacts/chat-27/nav-broadcasts.png",
+    "artifacts/chat-27/nav-ads.png",
+    "artifacts/chat-27/nav-automations.png",
+    "artifacts/chat-27/nav-flows.png",
+    "artifacts/chat-27/nav-agents.png",
+    "artifacts/chat-27/nav-settings.png",
+    "artifacts/chat-27/inbox-thread.png",
+    "artifacts/chat-27/contacts-create.png",
+    "artifacts/chat-27/contacts-import.png",
+    "artifacts/chat-27/contacts-edit.png",
+    "artifacts/chat-27/broadcasts-list.png",
+    "artifacts/chat-27/broadcasts-new.png",
+    "artifacts/chat-27/broadcasts-wizard.png",
+    "artifacts/chat-27/settings-templates.png",
+    "artifacts/chat-27/templates-new.png",
+    "artifacts/chat-27/flows-list.png",
+    "artifacts/chat-27/flows-editor.png",
+    "artifacts/chat-27/flows-simulate.png",
+    "artifacts/chat-27/settings-integrations.png",
+    "artifacts/chat-27/integrations-connected.png",
+    "artifacts/chat-27/settings-overview.png",
+    "artifacts/chat-27/settings-profile.png",
+    "artifacts/chat-27/settings-security.png",
+    "artifacts/chat-27/settings-appearance.png",
+    "artifacts/chat-27/settings-whatsapp.png",
+    "artifacts/chat-27/settings-astra-connect.png",
+    "artifacts/chat-27/settings-templates.png",
+    "artifacts/chat-27/settings-quick-replies.png",
+    "artifacts/chat-27/settings-fields.png",
+    "artifacts/chat-27/settings-deals.png",
+    "artifacts/chat-27/settings-members.png",
+    "artifacts/chat-27/settings-api.png",
+    "artifacts/chat-27/settings-integrations.png",
+    "artifacts/chat-27/settings-api-keys.png",
+    "artifacts/chat-27/developers-api.png",
+    "artifacts/chat-27/ads.png"
+  ],
+  "consoleErrors": [],
+  "networkErrors": []
+}

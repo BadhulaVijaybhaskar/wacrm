@@ -195,8 +195,10 @@ export function ConversationList({
   useEffect(() => {
     const q = search.trim();
     if (q.length < 2) {
-      setMessageHitIds(null);
-      return;
+      // Defer so we don't setState synchronously inside the effect body
+      // (react-hooks cascading-renders rule).
+      const clear = window.setTimeout(() => setMessageHitIds(null), 0);
+      return () => window.clearTimeout(clear);
     }
     let cancelled = false;
     const handle = window.setTimeout(async () => {

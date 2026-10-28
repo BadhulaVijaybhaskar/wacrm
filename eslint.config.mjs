@@ -14,6 +14,10 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Vendored minified opus-recorder encoder worker (served statically).
     "public/opus/**",
+    // Vendored Connect UI kit (not part of the Next app graph).
+    "astra-connect/**",
+    // Staging Connect stub (CommonJS Node server, not app source).
+    "deploy/staging/connect-stub/**",
   ]),
 ]);
 

@@ -21,36 +21,42 @@ import { createTranslator } from 'next-intl';
 const MESSAGES = join(process.cwd(), 'messages', 'en.json');
 const SRC = join(process.cwd(), 'src');
 
-/** Leaf keypaths whose value next-intl cannot parse as an ICU message. */
+/**
+ * Leaf keypaths that must not be fed to plain `t()`.
+ * Includes WhatsApp `{{n}}` / attribute-bearing HTML (always hostile for
+ * our catalogue) plus anything next-intl still flags as INVALID_MESSAGE.
+ */
 function icuHostileKeys(): string[] {
   const catalogue = JSON.parse(readFileSync(MESSAGES, 'utf8'));
-  const leaves: string[] = [];
+  const leaves: { key: string; value: string }[] = [];
   const walk = (node: unknown, path: string) => {
     if (node && typeof node === 'object' && !Array.isArray(node)) {
       for (const [k, v] of Object.entries(node)) walk(v, path ? `${path}.${k}` : k);
       return;
     }
-    if (typeof node === 'string') leaves.push(path);
+    if (typeof node === 'string') leaves.push({ key: path, value: node });
   };
   walk(catalogue, '');
 
-  return leaves.filter((key) => {
-    let code = '';
-    const t = createTranslator({
-      locale: 'en',
-      messages: catalogue,
-      onError: (err) => {
-        code = err.code;
-      },
-    });
-    t(key as never);
-    // INVALID_MESSAGE only — the parser could not read the string at all,
-    // so no call site can rescue it. Deliberately excludes FORMATTING_ERROR,
-    // which a well-formed message raises merely because this probe passes no
-    // values and no tag handlers; those are `t.rich()` / interpolation sites
-    // and are correct as written.
-    return code === 'INVALID_MESSAGE';
-  });
+  return leaves
+    .filter(({ key, value }) => {
+      if (/\{\{/.test(value)) return true;
+      if (/<[A-Za-z][\w-]*\s/.test(value)) return true;
+      if (/^\s*\{\s*"/.test(value)) return true;
+      let code = '';
+      const t = createTranslator({
+        locale: 'en',
+        messages: catalogue,
+        onError: (err) => {
+          code = err.code;
+        },
+      });
+      t(key as never);
+      // INVALID_MESSAGE only — excludes FORMATTING_ERROR (missing values /
+      // tag handlers on otherwise well-formed ICU).
+      return code === 'INVALID_MESSAGE';
+    })
+    .map(({ key }) => key);
 }
 
 function tsxFiles(dir: string): string[] {

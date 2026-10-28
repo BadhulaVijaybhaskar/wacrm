@@ -13,10 +13,20 @@ describe('integrations stub', () => {
     else process.env.INTEGRATIONS_STUB = prevInt;
   });
 
-  it('treats NODE_ENV=test as stub mode', () => {
+  it('treats NODE_ENV=test / VITEST as stub mode', () => {
     delete process.env.META_STUB;
     delete process.env.INTEGRATIONS_STUB;
+    // Prefer explicit NODE_ENV=test; also accept VITEST when the shell
+    // keeps NODE_ENV=production (cloud agents, some CI images).
+    const env = process.env as { NODE_ENV?: string };
+    const prevNode = env.NODE_ENV;
+    env.NODE_ENV = 'test';
     expect(isIntegrationsStubMode()).toBe(true);
+    if (prevNode === undefined) delete env.NODE_ENV;
+    else env.NODE_ENV = prevNode;
+    if (process.env.VITEST === 'true') {
+      expect(isIntegrationsStubMode()).toBe(true);
+    }
   });
 
   it('passes shopify stub when required fields present', () => {

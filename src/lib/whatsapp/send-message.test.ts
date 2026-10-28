@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import {
@@ -215,17 +215,21 @@ interface CapturedWrites {
 function sendPathDb(
   templateRows: unknown[],
   captured: CapturedWrites,
-  contact: Record<string, unknown> = { id: 'ct-1', phone: '+15551234567' }
+  contact: Record<string, unknown> = { id: 'ct-1', phone: '+15551234567' },
+  options: { whatsappConfig?: Record<string, unknown> | null } = {},
 ): SupabaseClient {
   const conversation = {
     id: 'cv-1',
     contact,
   };
-  const config = {
-    id: 'cfg-1',
-    phone_number_id: 'pn-1',
-    access_token: 'token',
-  };
+  const config =
+    options.whatsappConfig === undefined
+      ? {
+          id: 'cfg-1',
+          phone_number_id: 'pn-1',
+          access_token: 'token',
+        }
+      : options.whatsappConfig;
 
   return {
     from(table: string) {
@@ -240,7 +244,14 @@ function sendPathDb(
           if (table === 'conversations') captured.conversation = row;
           return builder;
         },
-        maybeSingle: async () => ({ data: null, error: null }),
+        maybeSingle: async () => {
+          // send-message loads whatsapp_config via maybeSingle so a missing
+          // row can fall through to META_STUB synthetic config.
+          if (table === 'whatsapp_config') {
+            return { data: config, error: null };
+          }
+          return { data: null, error: null };
+        },
         single: async () => {
           if (table === 'conversations') {
             return { data: conversation, error: null };
@@ -451,5 +462,52 @@ describe('sendMessageToConversation — BSUID recipients (#519)', () => {
         { conversationId: 'cv-1', messageType: 'text', contentText: 'hi' }
       )
     ).rejects.toThrow(/no phone number or WhatsApp user ID/);
+  });
+});
+
+// ============================================================
+// META_STUB — inbox send without a live WABA (CHAT-27 golden rule).
+// ============================================================
+
+describe('sendMessageToConversation — META_STUB without whatsapp_config', () => {
+  afterEach(() => {
+    delete process.env.META_STUB;
+  });
+
+  it('persists with stub-wamid and never calls Meta when META_STUB=1', async () => {
+    process.env.META_STUB = '1';
+    const captured: CapturedWrites = {};
+    const { sendTextMessage } = await import('@/lib/whatsapp/meta-api');
+    vi.mocked(sendTextMessage).mockClear();
+
+    const result = await sendMessageToConversation(
+      sendPathDb([], captured, { id: 'ct-1', phone: '+15551234567' }, {
+        whatsappConfig: null,
+      }),
+      'acct-1',
+      { conversationId: 'cv-1', messageType: 'text', contentText: 'stub hi' },
+    );
+
+    expect(result.whatsappMessageId).toMatch(/^stub-wamid\./);
+    expect(captured.message?.content_text).toBe('stub hi');
+    expect(captured.message?.message_id).toMatch(/^stub-wamid\./);
+    expect(vi.mocked(sendTextMessage)).not.toHaveBeenCalled();
+  });
+
+  it('still 400s without config when META_STUB is off', async () => {
+    delete process.env.META_STUB;
+    const captured: CapturedWrites = {};
+    await expect(
+      sendMessageToConversation(
+        sendPathDb([], captured, { id: 'ct-1', phone: '+15551234567' }, {
+          whatsappConfig: null,
+        }),
+        'acct-1',
+        { conversationId: 'cv-1', messageType: 'text', contentText: 'hi' },
+      ),
+    ).rejects.toMatchObject({
+      code: 'whatsapp_not_configured',
+      status: 400,
+    });
   });
 });

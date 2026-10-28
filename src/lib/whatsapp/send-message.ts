@@ -43,6 +43,11 @@ import {
   isRecipientNotAllowedError,
 } from '@/lib/whatsapp/phone-utils';
 import { resolveContactSendTarget } from '@/lib/whatsapp/wa-identity';
+import {
+  isMetaStubMode,
+  STUB_ACCESS_TOKEN,
+  STUB_PHONE_NUMBER_ID,
+} from '@/lib/whatsapp/embedded-signup';
 import type { MessageTemplate } from '@/types';
 import {
   resolveTemplateRow,
@@ -257,24 +262,39 @@ export async function sendMessageToConversation(
   const sanitizedPhone = hasValidPhone ? sendTarget : '';
 
   // WhatsApp config, account-scoped.
-  const { data: config, error: configError } = await db
+  const { data: loadedConfig } = await db
     .from('whatsapp_config')
     .select('*')
     .eq('account_id', accountId)
-    .single();
+    .maybeSingle();
 
-  if (configError || !config) {
+  // META_STUB: allow inbox send without a live WABA so every selectable
+  // composer control works end-to-end in stub demos / E2E.
+  const stubMode = isMetaStubMode();
+  const config =
+    loadedConfig ??
+    (stubMode
+      ? {
+          id: 'meta-stub-config',
+          phone_number_id: STUB_PHONE_NUMBER_ID,
+          access_token: STUB_ACCESS_TOKEN,
+        }
+      : null);
+
+  if (!config) {
     throw new SendMessageError(
       'whatsapp_not_configured',
       'WhatsApp not configured. Please set up your WhatsApp integration first.',
-      400
+      400,
     );
   }
 
-  const accessToken = decrypt(config.access_token);
+  const accessToken = stubMode
+    ? STUB_ACCESS_TOKEN
+    : decrypt(config.access_token);
 
   // Self-heal legacy CBC ciphertexts. Fire-and-forget; idempotent.
-  if (isLegacyFormat(config.access_token)) {
+  if (!stubMode && isLegacyFormat(config.access_token)) {
     void db
       .from('whatsapp_config')
       .update({ access_token: encrypt(accessToken) })
@@ -410,38 +430,52 @@ export async function sendMessageToConversation(
   // Send via Meta — retry across phone-number variants if Meta rejects
   // with "recipient not in allowed list"; persist a working variant
   // back to the contact so the next send goes straight through.
+  // META_STUB never dials Graph; mint a stable-looking wamid instead.
   let waMessageId = '';
   let workingPhone = sendTarget;
-  try {
-    // Variants only make sense for a phone number — a BSUID is opaque
-    // and has exactly one correct form, so it gets a single attempt.
-    const variants = hasValidPhone ? phoneVariants(sanitizedPhone) : [sendTarget];
-    let lastError: unknown = null;
+  if (stubMode) {
+    waMessageId = `stub-wamid.${Date.now()}`;
+  } else {
+    try {
+      // Variants only make sense for a phone number — a BSUID is opaque
+      // and has exactly one correct form, so it gets a single attempt.
+      const variants = hasValidPhone
+        ? phoneVariants(sanitizedPhone)
+        : [sendTarget];
+      let lastError: unknown = null;
 
-    for (const variant of variants) {
-      try {
-        waMessageId = await attempt(variant);
-        workingPhone = variant;
-        lastError = null;
-        break;
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        if (!isRecipientNotAllowedError(message)) {
-          throw err;
+      for (const variant of variants) {
+        try {
+          waMessageId = await attempt(variant);
+          workingPhone = variant;
+          lastError = null;
+          break;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          if (!isRecipientNotAllowedError(message)) {
+            throw err;
+          }
+          lastError = err;
+          console.warn(
+            `[send-message] variant "${variant}" rejected by Meta, trying next…`,
+          );
         }
-        lastError = err;
-        console.warn(
-          `[send-message] variant "${variant}" rejected by Meta, trying next…`
-        );
       }
-    }
 
-    if (lastError) throw lastError;
-  } catch (err) {
-    const message =
-      err instanceof Error ? err.message : 'Unknown Meta API error';
-    console.error('[send-message] Meta send failed for all variants:', message);
-    throw new SendMessageError('meta_error', `Meta API error: ${message}`, 502);
+      if (lastError) throw lastError;
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Unknown Meta API error';
+      console.error(
+        '[send-message] Meta send failed for all variants:',
+        message,
+      );
+      throw new SendMessageError(
+        'meta_error',
+        `Meta API error: ${message}`,
+        502,
+      );
+    }
   }
 
   if (hasValidPhone && workingPhone !== sanitizedPhone) {
