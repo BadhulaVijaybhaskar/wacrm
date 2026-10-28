@@ -2,15 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const h = vi.hoisted(() => ({
   createClient: vi.fn(),
-  createServiceClient: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: h.createClient,
-}))
-
-vi.mock('@/lib/supabase/admin', () => ({
-  createServiceClient: h.createServiceClient,
 }))
 
 import { GET } from './route'
@@ -21,33 +16,9 @@ describe('GET /api/auth/signup-access', () => {
 
   beforeEach(() => {
     h.createClient.mockReset()
-    h.createServiceClient.mockReset()
     h.createClient.mockResolvedValue({
       auth: {
         getUser: async () => ({ data: { user: null } }),
-      },
-    })
-    h.createServiceClient.mockReturnValue({
-      from() {
-        return {
-          select() {
-            return {
-              is() {
-                return {
-                  gt() {
-                    return {
-                      ilike() {
-                        return {
-                          limit: async () => ({ data: [], error: null }),
-                        }
-                      },
-                    }
-                  },
-                }
-              },
-            }
-          },
-        }
       },
     })
   })

@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { createServiceClient } from '@/lib/supabase/admin'
 import {
   getSignupMode,
   isEmailAllowlisted,
@@ -42,32 +41,12 @@ export async function GET(request: Request) {
     email = user.email.trim().toLowerCase()
   }
 
-  let hasPendingInviteLabel = false
-  if (email && mode === 'invite') {
-    try {
-      const admin = createServiceClient()
-      const { data } = await admin
-        .from('account_invitations')
-        .select('id')
-        .is('accepted_at', null)
-        .gt('expires_at', new Date().toISOString())
-        .ilike('label', email)
-        .limit(1)
-      hasPendingInviteLabel = Boolean(data && data.length > 0)
-    } catch {
-      // Admin client may be unavailable in some test envs — treat as no match.
-      hasPendingInviteLabel = false
-    }
-  }
-
   const provision = mayProvisionChatProfile({
     email,
     hasInviteToken,
-    hasPendingInviteLabel,
   })
   const owner = mayAutoCreateOwnerAccount({
     email,
-    hasPendingInviteLabel,
     hasInviteToken,
   })
 
@@ -75,7 +54,6 @@ export async function GET(request: Request) {
     mode,
     email: email ? email.replace(/(^.).*(@.*$)/, '$1***$2') : null,
     allowlisted: email ? isEmailAllowlisted(email) : false,
-    has_pending_invite_label: hasPendingInviteLabel,
     has_invite_token: hasInviteToken,
     may_signup: provision.allowed,
     may_auto_create_owner: owner.allowed,

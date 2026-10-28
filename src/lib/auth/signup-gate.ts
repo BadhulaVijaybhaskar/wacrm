@@ -5,9 +5,11 @@
  * When `invite`, a user only gets a Chat profile/account if:
  *   - their email is on WACRM_SIGNUP_ALLOWLIST (comma-separated emails
  *     or @domains), or
- *   - they carry a pending invite token (signup?invite= / /join/<token>), or
- *   - a pending account_invitations.label matches their email
- *     (optional soft match — invites are token-based and label is free text).
+ *   - they carry a platform invite token (signup?invite= / /join/<token>).
+ *
+ * Label-match admission is removed — invites must be token-based.
+ * DB pack (wacrm_signup_invite_gate.sql) additionally requires
+ * minted_by_platform_admin and redeems atomically with no personal account.
  */
 
 export type SignupMode = 'open' | 'invite'
@@ -35,12 +37,8 @@ export function parseSignupAllowlist(
     }
     if (item.includes('@')) {
       emails.add(item)
-      const domain = item.split('@')[1]
-      // bare email only — do not also add its domain unless listed as @domain
-      void domain
       continue
     }
-    // treat as domain without leading @
     domains.add(item)
   }
   return { emails, domains }
@@ -62,16 +60,11 @@ export function isEmailAllowlisted(
 
 /**
  * Whether this identity may receive a Chat profile via ensure_chat_profile.
- * Invite tokens alone do not create an owner account — redeem_invitation
- * does — but they mark the signup as intentional so we do not show the
- * dead-end "invitation only" page mid-join.
  */
 export function mayProvisionChatProfile(args: {
   email?: string | null
   /** Present when the user is on an invite / join flow. */
   hasInviteToken?: boolean
-  /** True when a pending invitation label matches this email. */
-  hasPendingInviteLabel?: boolean
   env?: NodeJS.ProcessEnv
 }): { allowed: boolean; mode: SignupMode; reason?: string } {
   const env = args.env ?? process.env
@@ -82,9 +75,6 @@ export function mayProvisionChatProfile(args: {
 
   if (args.hasInviteToken) {
     return { allowed: true, mode, reason: 'invite_token' }
-  }
-  if (args.hasPendingInviteLabel) {
-    return { allowed: true, mode, reason: 'pending_invite' }
   }
   if (isEmailAllowlisted(args.email, env)) {
     return { allowed: true, mode, reason: 'allowlist' }
@@ -98,18 +88,13 @@ export function mayProvisionChatProfile(args: {
 }
 
 /**
- * Owner auto-provision via ensure_chat_profile.
- *
- * In invite mode:
- * - allowlisted emails may create a personal owner account
- * - users with a real invite token may bootstrap a fresh personal
- *   account so redeem_invitation can move them (RPC requires a profile)
- * - pending invite-label match alone still points them at /join
+ * Owner auto-provision / ensure_chat_profile may run when:
+ * - open mode
+ * - allowlisted (personal owner account)
+ * - invite token present (DB joins inviting account; no personal account)
  */
 export function mayAutoCreateOwnerAccount(args: {
   email?: string | null
-  hasPendingInviteLabel?: boolean
-  /** Plaintext invite token present on /join or ?invite= */
   hasInviteToken?: boolean
   env?: NodeJS.ProcessEnv
 }): { allowed: boolean; mode: SignupMode; reason?: string } {
@@ -123,9 +108,6 @@ export function mayAutoCreateOwnerAccount(args: {
   }
   if (args.hasInviteToken) {
     return { allowed: true, mode, reason: 'invite_token_bootstrap' }
-  }
-  if (args.hasPendingInviteLabel) {
-    return { allowed: false, mode, reason: 'use_invite_link' }
   }
   return { allowed: false, mode, reason: 'invite_only' }
 }

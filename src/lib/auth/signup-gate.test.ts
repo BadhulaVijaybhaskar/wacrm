@@ -67,7 +67,7 @@ describe('mayProvisionChatProfile / mayAutoCreateOwnerAccount', () => {
     ).toBe(true)
   })
 
-  it('invite token allows signup UI and owner bootstrap for /join', () => {
+  it('invite token allows signup UI and ensure bootstrap', () => {
     expect(
       mayProvisionChatProfile({
         email: 'stranger@x.com',
@@ -78,12 +78,6 @@ describe('mayProvisionChatProfile / mayAutoCreateOwnerAccount', () => {
     expect(
       mayAutoCreateOwnerAccount({
         email: 'stranger@x.com',
-        env: inviteEnv,
-      }).allowed,
-    ).toBe(false)
-    expect(
-      mayAutoCreateOwnerAccount({
-        email: 'stranger@x.com',
         hasInviteToken: true,
         env: inviteEnv,
       }),
@@ -91,5 +85,21 @@ describe('mayProvisionChatProfile / mayAutoCreateOwnerAccount', () => {
       allowed: true,
       reason: 'invite_token_bootstrap',
     })
+  })
+
+  it('label-match path is gone — pending label alone does not admit', () => {
+    // mayProvision / mayAutoCreate no longer accept hasPendingInviteLabel.
+    expect(
+      mayProvisionChatProfile({
+        email: 'label-only@x.com',
+        env: inviteEnv,
+      }).allowed,
+    ).toBe(false)
+    expect(
+      mayAutoCreateOwnerAccount({
+        email: 'label-only@x.com',
+        env: inviteEnv,
+      }).allowed,
+    ).toBe(false)
   })
 })
