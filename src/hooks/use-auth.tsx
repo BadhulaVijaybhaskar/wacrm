@@ -62,6 +62,8 @@ export type AccountStatus =
   | "ready"
   /** Signed in, but no profile row / no account / no role on it. */
   | "unlinked"
+  /** Invite-only mode: this user may not auto-provision a Chat account. */
+  | "invite_only"
   /** The profile lookup itself failed after retrying. */
   | "error";
 
@@ -168,6 +170,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Why the account/role couldn't be established, when it couldn't.
   // Null on the happy path.
   const [statusDetail, setStatusDetail] = useState<string | null>(null);
+  /** Set when invite-only mode refused ensure_chat_profile. */
+  const [inviteOnlyBlocked, setInviteOnlyBlocked] = useState(false);
   // Tracked separately from `loading`. The session settles fast (one
   // local cookie read); the profile fetch crosses the network and
   // settles later. Callers that gate on `profile.*` need to know which
@@ -186,6 +190,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const supabase = createClient();
     setProfileLoading(true);
     setStatusDetail(null);
+    setInviteOnlyBlocked(false);
     lastFetchedUserIdRef.current = userId;
     try {
       let data: ProfileRow | null = null;
@@ -225,12 +230,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Shared-project installs have no auth.users trigger — Voice
       // signups must never create Chat rows. Lazily bootstrap on first
-      // Chat login when the profiles row is missing.
+      // Chat login when the profiles row is missing — but only when
+      // WACRM_SIGNUP_MODE allows owner auto-create (open, or allowlisted).
       if (!data) {
         const {
           data: { user: authUser },
         } = await supabase.auth.getUser();
         if (authUser && authUser.id === userId) {
+          let mayCreate = true;
+          try {
+            const accessRes = await fetch("/api/auth/signup-access", {
+              credentials: "same-origin",
+            });
+            if (accessRes.ok) {
+              const access = (await accessRes.json()) as {
+                may_auto_create_owner?: boolean;
+                mode?: string;
+              };
+              mayCreate = access.may_auto_create_owner !== false;
+              if (!mayCreate && access.mode === "invite") {
+                lastFetchedUserIdRef.current = null;
+                setStatusDetail("access by invitation only");
+                setInviteOnlyBlocked(true);
+                setProfile(null);
+                setAccount(null);
+                return;
+              }
+            }
+          } catch {
+            // If the gate endpoint fails, fall through to existing ensure
+            // behaviour (open default) rather than locking everyone out.
+          }
+
+          if (!mayCreate) {
+            lastFetchedUserIdRef.current = null;
+            setStatusDetail("access by invitation only");
+            setInviteOnlyBlocked(true);
+            setProfile(null);
+            setAccount(null);
+            return;
+          }
+
           const ensured = await ensureChatProfile(supabase, authUser);
           if (ensured.created) {
             const retry = await supabase
@@ -454,11 +494,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ? "loading"
     : profileLoading
       ? "loading"
-      : !profile
-        ? "error"
-        : derived.accountId && derived.accountRole
-          ? "ready"
-          : "unlinked";
+      : inviteOnlyBlocked
+        ? "invite_only"
+        : !profile
+          ? "error"
+          : derived.accountId && derived.accountRole
+            ? "ready"
+            : "unlinked";
 
   return (
     <AuthContext.Provider

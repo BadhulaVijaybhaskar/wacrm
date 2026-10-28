@@ -70,9 +70,16 @@
   "AccountAccess": {
     "unlinkedTitle": "This user is not linked to an account",
     "unlinkedBody": "Nothing you change will be saved while this is unresolved — the database rejects every write from a user with no account or role. If you were invited to a team, ask the owner to re-send the invitation. On a self-hosted install, check that the account-bootstrap migration ran for this user.",
+    "inviteOnlyTitle": "Access by invitation only",
+    "inviteOnlyBody": "This Astra Chat workspace is invite-only. Ask an admin for an invitation link, or use an allowlisted email. No Chat account was created for this sign-in.",
     "errorTitle": "Could not load your permissions",
     "errorBody": "Your account role did not load, so every action is treated as read-only and changes will not save. Check your connection and try again.",
     "retry": "Retry"
+  },
+  "AccessByInvitation": {
+    "title": "Access by invitation only",
+    "body": "New accounts on this Astra Chat workspace require an invitation link or an allowlisted email. If you were invited, open the link from your admin. If you already have an account, sign in instead.",
+    "backToSignIn": "Back to sign in"
   },
   "Dashboard": {
     "page": {

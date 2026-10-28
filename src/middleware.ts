@@ -113,6 +113,7 @@ export async function middleware(request: NextRequest) {
       '/api/whatsapp/webhook',
       '/api/v1/',
       '/api/astra-connect/',
+      '/api/auth/signup-access',
       '/api/invitations/',
       '/api/automations/cron',
       '/api/flows/cron',
