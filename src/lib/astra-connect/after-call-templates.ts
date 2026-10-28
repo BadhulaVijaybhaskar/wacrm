@@ -39,8 +39,11 @@ export type AfterCallDb = {
   from: (table: string) => any
 }
 
+/** Accepts `process.env` or plain test fixtures without required NODE_ENV. */
+export type EnvLike = NodeJS.ProcessEnv | Record<string, string | undefined>
+
 export function isAfterCallTemplatesEnabled(
-  env: NodeJS.ProcessEnv = process.env,
+  env: EnvLike = process.env,
 ): boolean {
   const raw = env.WACRM_AFTER_CALL_TEMPLATES?.trim().toLowerCase()
   return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
@@ -490,13 +493,32 @@ export async function reserveAfterCallIdempotency(args: {
       }
     }
 
-    // Stale pending: delete and retry reserve once.
-    await args.db
+    // Stale pending: CAS delete on created_at so two takeovers
+    // cannot both win, then retry reserve once.
+    if (!prior.created_at) {
+      return {
+        ok: false,
+        status: 409,
+        body: { error: 'in_progress' },
+      }
+    }
+    const { data: deleted } = await args.db
       .from('astra_after_call_sends')
       .delete()
       .eq('account_id', args.accountId)
       .eq('idempotency_key', args.idempotencyKey)
       .eq('state', 'pending')
+      .eq('created_at', prior.created_at)
+      .select('idempotency_key')
+
+    if (!Array.isArray(deleted) || deleted.length === 0) {
+      // Lost the race to another takeover (or row already finalized).
+      return {
+        ok: false,
+        status: 409,
+        body: { error: 'in_progress' },
+      }
+    }
 
     return { retry: true }
   }

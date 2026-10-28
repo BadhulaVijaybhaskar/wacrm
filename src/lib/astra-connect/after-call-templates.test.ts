@@ -9,9 +9,11 @@ import {
   parseAfterCallIdempotencyKey,
   parseAfterCallSendBody,
   PENDING_STALE_MS,
+  reserveAfterCallIdempotency,
   sendAfterCallMessage,
 } from './after-call-templates'
 import { MetaApiError } from '@/lib/whatsapp/meta-api'
+import type { MetaSendResult } from '@/lib/whatsapp/meta-api'
 
 const TENANT = 'tenant_abc'
 const PHONE = '106540352242922'
@@ -247,6 +249,9 @@ function makeDb(opts: {
                 filters[k] = v
                 return chain
               },
+              select() {
+                return chain
+              },
               then(
                 resolve: (v: unknown) => unknown,
                 reject?: (e: unknown) => unknown,
@@ -254,6 +259,7 @@ function makeDb(opts: {
                 return Promise.resolve(chain._run()).then(resolve, reject)
               },
               async _run() {
+                const removed: Row[] = []
                 for (let i = idem.length - 1; i >= 0; i--) {
                   const r = idem[i]
                   if (
@@ -261,10 +267,10 @@ function makeDb(opts: {
                       ([k, v]) => String(r[k]) === String(v),
                     )
                   ) {
-                    idem.splice(i, 1)
+                    removed.push(idem.splice(i, 1)[0])
                   }
                 }
-                return { data: null, error: null }
+                return { data: removed, error: null }
               },
             }
             return new Proxy(chain, {
@@ -459,13 +465,15 @@ describe('sendAfterCallMessage', () => {
 
   it('does not durable-store 429; releases pending so Meta can retry', async () => {
     const db = makeDb({ config: goodConfig })
-    const sendTemplateFn = vi.fn(async () => {
-      throw new MetaApiError('rate limited', {
-        code: 4,
-        httpStatus: 429,
-        details: 'too many',
-      })
-    })
+    const sendTemplateFn = vi.fn(
+      async (): Promise<MetaSendResult> => {
+        throw new MetaApiError('rate limited', {
+          code: 4,
+          httpStatus: 429,
+          details: 'too many',
+        })
+      },
+    )
     const parsed = parseAfterCallSendBody(baseBody())
     if (!parsed.ok) return
     const r = await sendAfterCallMessage({
@@ -634,7 +642,9 @@ describe('sendAfterCallMessage', () => {
         },
       ],
     })
-    const sendTemplateFn = vi.fn(async () => ({ messageId: 'wamid.stale' }))
+    const sendTemplateFn = vi.fn(
+      async (): Promise<MetaSendResult> => ({ messageId: 'wamid.stale' }),
+    )
     const parsed = parseAfterCallSendBody(baseBody())
     if (!parsed.ok) return
     const r = await sendAfterCallMessage({
@@ -650,6 +660,59 @@ describe('sendAfterCallMessage', () => {
       body: { ok: true, message_id: 'wamid.stale' },
     })
     expect(sendTemplateFn).toHaveBeenCalledTimes(1)
+  })
+
+  it('CAS stale takeover: only one of two concurrent deletes wins', async () => {
+    const staleAt = new Date(Date.now() - PENDING_STALE_MS - 5000).toISOString()
+    const row: Row = {
+      account_id: ACCOUNT,
+      idempotency_key: IDEM,
+      tenant_id: TENANT,
+      call_id: CALL,
+      send_id: 'wac_old',
+      state: 'pending',
+      status_code: 0,
+      response_body: {},
+      message_id: null,
+      dry_run: false,
+      created_at: staleAt,
+    }
+    // Shared backing store — both callers race the same pending row.
+    const shared = makeDb({ idempotency: [row] })
+    const now = Date.now()
+
+    const [a, b] = await Promise.all([
+      reserveAfterCallIdempotency({
+        db: shared,
+        accountId: ACCOUNT,
+        tenantId: TENANT,
+        callId: CALL,
+        sendId: 'wac_a',
+        idempotencyKey: IDEM,
+        now,
+      }),
+      reserveAfterCallIdempotency({
+        db: shared,
+        accountId: ACCOUNT,
+        tenantId: TENANT,
+        callId: CALL,
+        sendId: 'wac_b',
+        idempotencyKey: IDEM,
+        now,
+      }),
+    ])
+
+    const outcomes = [a, b]
+    const winners = outcomes.filter((o) => 'reserved' in o && o.reserved)
+    const losers = outcomes.filter(
+      (o) => !('reserved' in o) && o.status === 409,
+    )
+    expect(winners).toHaveLength(1)
+    expect(losers).toHaveLength(1)
+    // Exactly one pending (or final) row remains for the key.
+    expect(
+      shared._idem.filter((r) => String(r.idempotency_key) === IDEM),
+    ).toHaveLength(1)
   })
 })
 

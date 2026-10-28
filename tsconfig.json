@@ -30,5 +30,12 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "astra-connect"]
+  "exclude": [
+    "node_modules",
+    "astra-connect",
+    "wa-aftercall",
+    "test",
+    "**/*.test.ts",
+    "**/*.test.tsx"
+  ]
 }

@@ -115,6 +115,7 @@ export async function middleware(request: NextRequest) {
       '/api/astra-connect/',
       '/api/auth/signup-access',
       '/api/invitations/',
+      '/api/platform/invitations',
       '/api/automations/cron',
       '/api/flows/cron',
       '/api/webhooks/cron',

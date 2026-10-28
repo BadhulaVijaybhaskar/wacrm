@@ -99,9 +99,9 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION wacrm.redeem_invitation(p_token_hash text) RETURNS uuid
-LANGUAGE plpgsql SECURITY DEFINER
-SET search_path TO 'wacrm', 'extensions'
-AS $$
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'wacrm', 'extensions'
+    AS $$
 DECLARE
   v_caller_id UUID := auth.uid();
   v_inv account_invitations%ROWTYPE;
@@ -126,10 +126,10 @@ BEGIN
       USING ERRCODE = '22023';
   END IF;
   IF v_inv.expires_at <= NOW() THEN
-    RAISE EXCEPTION 'Invitation has expired'
-      USING ERRCODE = '22023';
+    RAISE EXCEPTION 'Invitation has expired' USING ERRCODE = '22023';
   END IF;
 
+  -- Caller's current account + its owner.
   SELECT p.account_id, a.owner_user_id
   INTO v_old_account_id, v_old_account_owner
   FROM profiles p
@@ -137,19 +137,33 @@ BEGIN
   WHERE p.user_id = v_caller_id;
 
   IF v_old_account_id IS NULL THEN
+    -- Defensive — every authenticated user has a profile post-017.
     RAISE EXCEPTION 'Caller has no profile' USING ERRCODE = '42501';
   END IF;
 
+  -- Edge case: the inviter sent themselves a link, or the
+  -- caller is somehow already in the inviter's account.
   IF v_old_account_id = v_inv.account_id THEN
     RAISE EXCEPTION 'You are already a member of this account'
       USING ERRCODE = '23505';
   END IF;
 
+  -- Safety: the caller must be the SOLE OWNER of their current
+  -- account (i.e. their fresh personal account from signup or a
+  -- prior removal). Any other state means they're either:
+  --   - a member of another shared account (joining a second
+  --     would silently orphan their access to the first), or
+  --   - the owner of an account with teammates (they'd abandon
+  --     their team to join the inviter's).
+  -- Either way, the safe answer is "make a different login".
   IF v_old_account_owner <> v_caller_id THEN
     RAISE EXCEPTION 'You are already in a shared account; sign up with a different email to join this one'
       USING ERRCODE = '23505';
   END IF;
 
+  -- Belt: even if they own their account, refuse if it has any
+  -- domain data — joining would orphan their contacts, deals,
+  -- broadcasts, automations, flows, templates, etc.
   SELECT EXISTS (
     SELECT 1 FROM contacts WHERE account_id = v_old_account_id
     UNION ALL SELECT 1 FROM conversations WHERE account_id = v_old_account_id
@@ -170,6 +184,8 @@ BEGIN
       USING ERRCODE = '23505';
   END IF;
 
+  -- Move the profile first so the cascade-on-delete of the old
+  -- account doesn't try to nuke this user's profile too.
   UPDATE profiles
   SET account_id = v_inv.account_id,
       account_role = v_inv.role
@@ -180,6 +196,9 @@ BEGIN
       accepted_by_user_id = v_caller_id
   WHERE id = v_inv.id;
 
+  -- Clean up the orphan personal account. Empty by the checks
+  -- above, so this is purely housekeeping — no cascades fire
+  -- because no other rows reference it.
   DELETE FROM accounts WHERE id = v_old_account_id;
 
   RETURN v_inv.account_id;

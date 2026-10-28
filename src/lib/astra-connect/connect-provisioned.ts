@@ -59,8 +59,11 @@ export type ApplyProvisionResult =
       code?: string
     }
 
+/** Accepts `process.env` or plain test fixtures without required NODE_ENV. */
+export type EnvLike = NodeJS.ProcessEnv | Record<string, string | undefined>
+
 export function isConnectProvisionedEnabled(
-  env: NodeJS.ProcessEnv = process.env,
+  env: EnvLike = process.env,
 ): boolean {
   const raw = env.WACRM_CONNECT_PROVISIONED?.trim().toLowerCase()
   return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'

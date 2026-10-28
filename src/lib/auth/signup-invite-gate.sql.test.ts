@@ -15,10 +15,20 @@ const rollbackPath = resolve(
   process.cwd(),
   'supabase/shared-project/rollback_wacrm_signup_invite_gate.sql',
 )
+const followupPath = resolve(
+  process.cwd(),
+  'supabase/shared-project/wacrm_invite_gate_followup.sql',
+)
+const followupRollbackPath = resolve(
+  process.cwd(),
+  'supabase/shared-project/rollback_wacrm_invite_gate_followup.sql',
+)
 
 describe('wacrm_signup_invite_gate.sql contract', () => {
   const sql = readFileSync(sqlPath, 'utf8')
   const rollback = readFileSync(rollbackPath, 'utf8')
+  const followup = readFileSync(followupPath, 'utf8')
+  const followupRollback = readFileSync(followupRollbackPath, 'utf8')
 
   it('requires NOTIFY pgrst reload schema on apply and rollback', () => {
     expect(sql).toMatch(/NOTIFY pgrst,\s*'reload schema'/i)
@@ -62,5 +72,25 @@ describe('wacrm_signup_invite_gate.sql contract', () => {
     expect(rollback).toMatch(
       /ensure_chat_profile\(p_full_name text DEFAULT ''\)/,
     )
+  })
+
+  it('rollback redeem_invitation matches exact live comments from wacrm_schema', () => {
+    expect(rollback).toMatch(
+      /Defensive — every authenticated user has a profile post-017/,
+    )
+    expect(rollback).toMatch(/Clean up the orphan personal account/)
+  })
+
+  it('followup pins search_path on mint guard; followup rollback unpins only', () => {
+    expect(followup).toMatch(
+      /tg_account_invitations_platform_mint_guard[\s\S]*SET search_path TO 'wacrm', 'extensions'/,
+    )
+    expect(followup).toMatch(/NOTIFY pgrst,\s*'reload schema'/i)
+    expect(followupRollback).toMatch(
+      /tg_account_invitations_platform_mint_guard/,
+    )
+    expect(followupRollback).toMatch(/NOTIFY pgrst,\s*'reload schema'/i)
+    // Must not wipe invite-gate redeem on followup rollback.
+    expect(followupRollback).not.toMatch(/redeem_invitation/)
   })
 })

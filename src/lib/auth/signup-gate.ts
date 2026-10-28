@@ -14,9 +14,10 @@
 
 export type SignupMode = 'open' | 'invite'
 
-export function getSignupMode(
-  env: NodeJS.ProcessEnv = process.env,
-): SignupMode {
+/** Accepts `process.env` or plain test fixtures without required NODE_ENV. */
+export type EnvLike = NodeJS.ProcessEnv | Record<string, string | undefined>
+
+export function getSignupMode(env: EnvLike = process.env): SignupMode {
   const raw = env.WACRM_SIGNUP_MODE?.trim().toLowerCase()
   return raw === 'invite' ? 'invite' : 'open'
 }
@@ -46,7 +47,7 @@ export function parseSignupAllowlist(
 
 export function isEmailAllowlisted(
   email: string | null | undefined,
-  env: NodeJS.ProcessEnv = process.env,
+  env: EnvLike = process.env,
 ): boolean {
   const trimmed = (email ?? '').trim().toLowerCase()
   if (!trimmed || !trimmed.includes('@')) return false
@@ -65,7 +66,7 @@ export function mayProvisionChatProfile(args: {
   email?: string | null
   /** Present when the user is on an invite / join flow. */
   hasInviteToken?: boolean
-  env?: NodeJS.ProcessEnv
+  env?: EnvLike
 }): { allowed: boolean; mode: SignupMode; reason?: string } {
   const env = args.env ?? process.env
   const mode = getSignupMode(env)
@@ -96,7 +97,7 @@ export function mayProvisionChatProfile(args: {
 export function mayAutoCreateOwnerAccount(args: {
   email?: string | null
   hasInviteToken?: boolean
-  env?: NodeJS.ProcessEnv
+  env?: EnvLike
 }): { allowed: boolean; mode: SignupMode; reason?: string } {
   const env = args.env ?? process.env
   const mode = getSignupMode(env)

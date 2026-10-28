@@ -16,15 +16,50 @@ Chat ships the draft flag-gated route
 on the shared project without Voice sign-off.** Run order: after
 `wacrm_schema.sql`.
 
-## Voice review — invite-only signup gate (do not apply yet)
+## Voice review — invite-only signup gate (applied; followup not applied)
 
-- `wacrm_signup_invite_gate.sql` — `app_runtime_config`, 
+- `wacrm_signup_invite_gate.sql` — `app_runtime_config`,
   `account_invitations.minted_by_platform_admin`, replaced
   `ensure_chat_profile(p_full_name, p_invite_token_hash)` (atomic
   platform-invite redeem, no personal account; allowlist unchanged;
   label-match removed), idempotent `peek_invitation` /
-  `redeem_invitation` for the accepter.
-- `rollback_wacrm_signup_invite_gate.sql` — exact inverse.
+  `redeem_invitation` for the accepter. **Already applied — do not
+  re-edit this file.**
+- `rollback_wacrm_signup_invite_gate.sql` — exact inverse. Its
+  `redeem_invitation` body matches the live definition from
+  `wacrm_schema.sql` bit-for-bit (comments included).
+
+### Followup (do not apply yet)
+
+- `wacrm_invite_gate_followup.sql` — pins `search_path` on
+  `tg_account_invitations_platform_mint_guard` (the applied trigger
+  function had none).
+- `rollback_wacrm_invite_gate_followup.sql` — restores the unpinned
+  guard only (leaves invite-gate `redeem_invitation` in place).
+
+### Minting platform invites (Chat app)
+
+Owner/admin console invites (`POST /api/account/invitations`) always
+store `minted_by_platform_admin = false` (DB trigger clears the flag
+for non-`service_role` inserts). **Those links cannot onboard new
+users when `signup_mode=invite`.**
+
+To mint an invite that *does* admit a new user in invite mode, call
+the service-role route:
+
+```http
+POST /api/platform/invitations
+Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY>
+# or: Authorization: Bearer <PLATFORM_ADMIN_SECRET>
+# or: x-platform-admin-secret: <PLATFORM_ADMIN_SECRET>
+
+{ "account_id": "<uuid>", "role": "agent", "label": "optional", "expiresInDays": 7 }
+```
+
+The route inserts via the service client with
+`minted_by_platform_admin = true` and returns the plaintext token
+once (same shape as the account invitations API). Library:
+`src/lib/auth/platform-invite.ts`.
 
 **After apply (and after rollback), reload PostgREST:**
 
@@ -34,7 +69,7 @@ NOTIFY pgrst, 'reload schema';
 
 (The apply SQL already ends with this `NOTIFY`; re-run if the API still
 404s the new function signature.) Default `signup_mode` stays `open`.
-**Do not apply without Voice sign-off.**
+**Do not apply the followup without Voice sign-off.**
 
 ## 1. Private buckets: stop using getPublicUrl (REQUIRED, otherwise media breaks)
 All three `wacrm-*` buckets are now `public = false`, so public object URLs return 400/404.
