@@ -28,6 +28,10 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { RequireRole } from '@/components/auth/require-role';
 import { useAuth } from '@/hooks/use-auth';
+import {
+  astraConnectAdapterStatusMessageKey,
+  resolveAstraConnectAdapterStatus,
+} from '@/lib/astra-connect/adapter-status';
 import { SettingsPanelHead } from './settings-panel-head';
 import { SettingsChip, StatusDot } from './settings-chip';
 
@@ -207,8 +211,20 @@ export function AstraConnectSettings() {
   }
 
   const envOk = state?.env_configured === true;
-  const active =
-    envOk && state?.enabled === true && Boolean(state?.tenant_id);
+  // Prefer the live toggle (may differ from last saved state until Save).
+  const adapterStatus = resolveAstraConnectAdapterStatus({
+    enabled,
+    envConfigured: envOk,
+    tenantId,
+  });
+  const adapterStatusKey = astraConnectAdapterStatusMessageKey(adapterStatus);
+  const adapterChipVariant =
+    adapterStatus === 'active'
+      ? 'ok'
+      : adapterStatus === 'inactive'
+        ? 'muted'
+        : 'warn';
+  const adapterDotTone = adapterStatus === 'active' ? 'ok' : 'muted';
 
   return (
     <div>
@@ -220,9 +236,9 @@ export function AstraConnectSettings() {
             <StatusDot tone={envOk ? 'ok' : 'muted'} />
             {envOk ? t('statusEnvReady') : t('statusEnvMissing')}
           </SettingsChip>
-          <SettingsChip variant={active ? 'ok' : 'muted'}>
-            <StatusDot tone={active ? 'ok' : 'muted'} />
-            {active ? t('statusActive') : t('statusInactive')}
+          <SettingsChip variant={adapterChipVariant}>
+            <StatusDot tone={adapterDotTone} />
+            {t(adapterStatusKey)}
           </SettingsChip>
         </div>
 
@@ -250,7 +266,7 @@ export function AstraConnectSettings() {
               <div className="min-w-0">
                 <Label htmlFor="astra-connect-enabled">{t('enabledLabel')}</Label>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {t('enabledHint')}
+                  {!envOk ? t('enabledHintEnvMissing') : t('enabledHint')}
                 </p>
               </div>
               <Switch
@@ -258,8 +274,21 @@ export function AstraConnectSettings() {
                 checked={enabled}
                 onCheckedChange={setEnabled}
                 disabled={!canEditSettings || saving}
+                aria-describedby={
+                  !envOk && enabled
+                    ? 'astra-connect-enabled-hint'
+                    : undefined
+                }
               />
             </div>
+            {!envOk && enabled ? (
+              <p
+                id="astra-connect-enabled-hint"
+                className="text-xs text-amber-600 dark:text-amber-400"
+              >
+                {t('enabledWaitingServerHint')}
+              </p>
+            ) : null}
 
             <div className="flex flex-col gap-2">
               <Label htmlFor="astra-connect-tenant">{t('tenantLabel')}</Label>
