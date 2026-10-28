@@ -53,8 +53,9 @@ export function AstraConnectSettings() {
   const [enabled, setEnabled] = useState(false);
   const [tenantId, setTenantId] = useState('');
   const [employeeId, setEmployeeId] = useState('');
-  const [secret, setSecret] = useState('');
   const [clearSecret, setClearSecret] = useState(false);
+  const [revealedSecret, setRevealedSecret] = useState<string | null>(null);
+  const [secretBusy, setSecretBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -73,7 +74,6 @@ export function AstraConnectSettings() {
       setEnabled(data.enabled);
       setTenantId(data.tenant_id ?? '');
       setEmployeeId(data.employee_id ?? '');
-      setSecret('');
       setClearSecret(false);
     } catch (err) {
       console.error('[AstraConnectSettings] load error:', err);
@@ -87,6 +87,52 @@ export function AstraConnectSettings() {
     void load();
   }, [load]);
 
+  const mintSecret = async (action: 'generate' | 'rotate') => {
+    if (!canEditSettings) return;
+    setSecretBusy(true);
+    try {
+      const res = await fetch('/api/whatsapp/config/astra-connect/secret', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(
+          typeof payload.error === 'string'
+            ? payload.error
+            : t('secretMintFailed'),
+        );
+        return;
+      }
+      const secret =
+        typeof payload.secret === 'string' ? payload.secret : null;
+      setRevealedSecret(secret);
+      setClearSecret(false);
+      setState((prev) =>
+        prev
+          ? {
+              ...prev,
+              has_secret: Boolean(payload.has_secret),
+              rotation_active: Boolean(payload.rotation_active),
+              previous_expires_at:
+                typeof payload.previous_expires_at === 'string'
+                  ? payload.previous_expires_at
+                  : null,
+            }
+          : prev,
+      );
+      toast.success(
+        action === 'generate' ? t('secretGenerated') : t('secretRotated'),
+      );
+    } catch (err) {
+      console.error('[AstraConnectSettings] mintSecret error:', err);
+      toast.error(t('networkError'));
+    } finally {
+      setSecretBusy(false);
+    }
+  };
+
   const save = async () => {
     if (!canEditSettings) return;
     setSaving(true);
@@ -98,8 +144,6 @@ export function AstraConnectSettings() {
       };
       if (clearSecret) {
         body.secret = null;
-      } else if (secret.trim()) {
-        body.secret = secret.trim();
       }
       const res = await fetch('/api/whatsapp/config/astra-connect', {
         method: 'PATCH',
@@ -142,8 +186,8 @@ export function AstraConnectSettings() {
       setEnabled(next.enabled);
       setTenantId(next.tenant_id ?? '');
       setEmployeeId(next.employee_id ?? '');
-      setSecret('');
       setClearSecret(false);
+      if (clearSecret) setRevealedSecret(null);
       toast.success(t('saved'));
     } catch (err) {
       console.error('[AstraConnectSettings] save error:', err);
@@ -244,38 +288,78 @@ export function AstraConnectSettings() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <Label htmlFor="astra-connect-secret">{t('secretLabel')}</Label>
-              <Input
-                id="astra-connect-secret"
-                type="password"
-                autoComplete="new-password"
-                value={secret}
-                onChange={(e) => {
-                  setSecret(e.target.value);
-                  if (e.target.value) setClearSecret(false);
-                }}
-                placeholder={
-                  state?.has_secret
-                    ? t('secretPlaceholderSet')
-                    : t('secretPlaceholder')
-                }
-                disabled={!canEditSettings || saving || clearSecret}
-                className="border-border bg-muted"
-              />
+              <Label>{t('secretLabel')}</Label>
               <p className="text-xs text-muted-foreground">{t('secretHint')}</p>
-              {state?.has_secret ? (
-                <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <input
-                    type="checkbox"
-                    checked={clearSecret}
-                    onChange={(e) => {
-                      setClearSecret(e.target.checked);
-                      if (e.target.checked) setSecret('');
-                    }}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={
+                    !canEditSettings ||
+                    saving ||
+                    secretBusy ||
+                    Boolean(state?.has_secret)
+                  }
+                  onClick={() => void mintSecret('generate')}
+                >
+                  {secretBusy ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : null}
+                  {t('secretGenerate')}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!canEditSettings || saving || secretBusy}
+                  onClick={() => void mintSecret('rotate')}
+                >
+                  {t('secretRotate')}
+                </Button>
+                {state?.has_secret ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
                     disabled={!canEditSettings || saving}
-                  />
-                  {t('secretClear')}
-                </label>
+                    onClick={() => {
+                      setClearSecret(true);
+                      setRevealedSecret(null);
+                    }}
+                  >
+                    {t('secretClear')}
+                  </Button>
+                ) : null}
+              </div>
+              {revealedSecret ? (
+                <Alert>
+                  <AlertTitle>{t('secretRevealTitle')}</AlertTitle>
+                  <AlertDescription className="space-y-2">
+                    <p>{t('secretRevealDesc')}</p>
+                    <Input
+                      readOnly
+                      value={revealedSecret}
+                      className="font-mono text-xs"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={async () => {
+                        await navigator.clipboard.writeText(revealedSecret);
+                        toast.success(t('secretCopied'));
+                      }}
+                    >
+                      {t('secretCopy')}
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+              {clearSecret ? (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  {t('secretClearPending')}
+                </p>
               ) : null}
               {state?.rotation_active && state.previous_expires_at ? (
                 <p className="text-xs text-muted-foreground">
@@ -286,7 +370,8 @@ export function AstraConnectSettings() {
               ) : null}
             </div>
 
-            {state?.phone_number_id ? (              <p className="text-xs text-muted-foreground">
+            {state?.phone_number_id ? (
+              <p className="text-xs text-muted-foreground">
                 {t('phoneNumberId', { id: state.phone_number_id })}
               </p>
             ) : null}
