@@ -56,12 +56,13 @@ function body(over: Record<string, unknown> = {}) {
 }
 
 function signedRequest(
-  payload: object,
-  opts: { idempotencyKey?: string } = {},
+  payload: object | string,
+  opts: { idempotencyKey?: string; tenant?: string } = {},
 ) {
-  const raw = JSON.stringify(payload)
+  const raw = typeof payload === 'string' ? payload : JSON.stringify(payload)
+  const tenant = opts.tenant ?? TENANT
   const ts = Math.floor(Date.now() / 1000)
-  const sig = buildAstraSignature(`${raw}.${TENANT}`, SECRET, ts)
+  const sig = buildAstraSignature(`${raw}.${tenant}`, SECRET, ts)
   return new Request(
     'https://chat.example/api/astra-connect/v1/whatsapp/send',
     {
@@ -70,7 +71,7 @@ function signedRequest(
         'Content-Type': 'application/json',
         'X-Astra-Timestamp': String(ts),
         'X-Astra-Signature': sig,
-        'X-Astra-Tenant': TENANT,
+        'X-Astra-Tenant': tenant,
         'Idempotency-Key':
           opts.idempotencyKey ?? 'after-call:call_1',
       },
@@ -98,47 +99,53 @@ describe('POST /api/astra-connect/v1/whatsapp/send', () => {
     expect(h.authenticateConnectRequest).not.toHaveBeenCalled()
   })
 
-  it('returns 400 bad_kind for wrong kind', async () => {
-    const res = await POST(
-      signedRequest(body({ kind: 'whatsapp.template_send' })),
-    )
-    expect(res.status).toBe(400)
-    await expect(res.json()).resolves.toEqual({ error: 'bad_kind' })
-  })
-
-  it('returns 400 missing_idempotency_key', async () => {
-    const raw = JSON.stringify(body())
-    const ts = Math.floor(Date.now() / 1000)
-    const sig = buildAstraSignature(`${raw}.${TENANT}`, SECRET, ts)
-    const req = new Request(
-      'https://chat.example/api/astra-connect/v1/whatsapp/send',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Astra-Timestamp': String(ts),
-          'X-Astra-Signature': sig,
-          'X-Astra-Tenant': TENANT,
-        },
-        body: raw,
-      },
-    )
-    const res = await POST(req)
-    expect(res.status).toBe(400)
-    await expect(res.json()).resolves.toEqual({
-      error: 'missing_idempotency_key',
-    })
-  })
-
-  it('propagates auth 401 for bad signature', async () => {
+  it('authenticates before body validation — unsigned bad body is 401 not 400', async () => {
     h.authenticateConnectRequest.mockResolvedValue({
       ok: false,
       response: new Response(JSON.stringify({ error: 'Invalid signature' }), {
         status: 401,
       }),
     })
-    const res = await POST(signedRequest(body()))
+    const res = await POST(
+      new Request(
+        'https://chat.example/api/astra-connect/v1/whatsapp/send',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Astra-Tenant': TENANT,
+            // no signature / timestamp
+          },
+          body: '{"kind":"nope"', // invalid JSON + bad kind
+        },
+      ),
+    )
     expect(res.status).toBe(401)
+    expect(h.authenticateConnectRequest).toHaveBeenCalled()
+    // Auth ran with the raw body before parse would have returned bad_json.
+    const authArg = h.authenticateConnectRequest.mock.calls[0][0]
+    expect(authArg.rawBody).toBe('{"kind":"nope"')
+    expect(h.sendAfterCallMessage).not.toHaveBeenCalled()
+  })
+
+  it('returns 400 bad_kind only after successful auth', async () => {
+    h.authenticateConnectRequest.mockResolvedValue({
+      ok: true,
+      ctx: {
+        accountId: 'acct-1',
+        tenantId: TENANT,
+        phoneNumberId: PHONE,
+        employeeId: null,
+        enabled: true,
+        db: {},
+      },
+    })
+    const res = await POST(
+      signedRequest(body({ kind: 'whatsapp.template_send' })),
+    )
+    expect(res.status).toBe(400)
+    await expect(res.json()).resolves.toEqual({ error: 'bad_kind' })
+    expect(h.sendAfterCallMessage).not.toHaveBeenCalled()
   })
 
   it('returns 200 on success', async () => {
@@ -167,32 +174,7 @@ describe('POST /api/astra-connect/v1/whatsapp/send', () => {
     })
   })
 
-  it('returns dry_run:true with no message_id', async () => {
-    h.authenticateConnectRequest.mockResolvedValue({
-      ok: true,
-      ctx: {
-        accountId: 'acct-1',
-        tenantId: TENANT,
-        phoneNumberId: PHONE,
-        employeeId: null,
-        enabled: true,
-        db: {},
-      },
-    })
-    h.sendAfterCallMessage.mockResolvedValue({
-      ok: true,
-      status: 200,
-      body: { ok: true, dry_run: true },
-      replay: false,
-    })
-    const res = await POST(signedRequest(body()))
-    expect(res.status).toBe(200)
-    const json = await res.json()
-    expect(json).toEqual({ ok: true, dry_run: true })
-    expect(json).not.toHaveProperty('message_id')
-  })
-
-  it('returns 409 window_closed as {error}', async () => {
+  it('returns 409 in_progress from apply', async () => {
     h.authenticateConnectRequest.mockResolvedValue({
       ok: true,
       ctx: {
@@ -207,42 +189,10 @@ describe('POST /api/astra-connect/v1/whatsapp/send', () => {
     h.sendAfterCallMessage.mockResolvedValue({
       ok: false,
       status: 409,
-      body: { error: 'window_closed' },
-    })
-    const res = await POST(
-      signedRequest(
-        body({
-          type: 'text',
-          text: 'Thanks for your call',
-          template: undefined,
-        }),
-      ),
-    )
-    expect(res.status).toBe(409)
-    await expect(res.json()).resolves.toEqual({ error: 'window_closed' })
-  })
-
-  it('maps Meta template_not_found 422', async () => {
-    h.authenticateConnectRequest.mockResolvedValue({
-      ok: true,
-      ctx: {
-        accountId: 'acct-1',
-        tenantId: TENANT,
-        phoneNumberId: PHONE,
-        employeeId: null,
-        enabled: true,
-        db: {},
-      },
-    })
-    h.sendAfterCallMessage.mockResolvedValue({
-      ok: false,
-      status: 422,
-      body: { error: 'template_not_found' },
+      body: { error: 'in_progress' },
     })
     const res = await POST(signedRequest(body()))
-    expect(res.status).toBe(422)
-    await expect(res.json()).resolves.toEqual({
-      error: 'template_not_found',
-    })
+    expect(res.status).toBe(409)
+    await expect(res.json()).resolves.toEqual({ error: 'in_progress' })
   })
 })

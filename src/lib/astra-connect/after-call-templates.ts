@@ -308,11 +308,44 @@ export async function loadLastInboundAt(args: {
   return String(msg.created_at)
 }
 
+export type AfterCallRowState = 'pending' | 'final'
+
 export type AfterCallStoredResult = {
+  state: AfterCallRowState
   status_code: number
   response_body: Record<string, unknown>
   message_id: string | null
   dry_run: boolean
+  created_at: string | null
+}
+
+/**
+ * Pending reservations older than this are treated as abandoned so a
+ * Connect retry (60s / 300s) can re-reserve after a crashed worker.
+ * Documented with the SQL pack; keep in sync with Voice review notes.
+ */
+export const PENDING_STALE_MS = 5 * 60 * 1000
+
+/** Durable outcomes only — never 429 / 5xx / unknown. */
+export function isDurableAfterCallStatus(status: number): boolean {
+  if (status === 200) return true
+  if (status === 409) return true // window_closed
+  if (status === 400 || status === 403 || status === 404 || status === 422) {
+    return true
+  }
+  return false
+}
+
+export function isPendingStale(
+  createdAt: string | null | undefined,
+  now: Date | number = Date.now(),
+  staleMs = PENDING_STALE_MS,
+): boolean {
+  if (!createdAt) return true
+  const then = new Date(createdAt).getTime()
+  if (!Number.isFinite(then)) return true
+  const nowMs = typeof now === 'number' ? now : now.getTime()
+  return nowMs - then >= staleMs
 }
 
 export async function readAfterCallIdempotent(args: {
@@ -322,7 +355,9 @@ export async function readAfterCallIdempotent(args: {
 }): Promise<AfterCallStoredResult | null> {
   const { data, error } = await args.db
     .from('astra_after_call_sends')
-    .select('status_code, response_body, message_id, dry_run')
+    .select(
+      'state, status_code, response_body, message_id, dry_run, created_at',
+    )
     .eq('account_id', args.accountId)
     .eq('idempotency_key', args.idempotencyKey)
     .maybeSingle()
@@ -332,7 +367,10 @@ export async function readAfterCallIdempotent(args: {
     return null
   }
   if (!data) return null
+  const state: AfterCallRowState =
+    data.state === 'final' ? 'final' : 'pending'
   return {
+    state,
     status_code: Number(data.status_code),
     response_body:
       data.response_body && typeof data.response_body === 'object'
@@ -340,59 +378,205 @@ export async function readAfterCallIdempotent(args: {
         : {},
     message_id: data.message_id != null ? String(data.message_id) : null,
     dry_run: Boolean(data.dry_run),
+    created_at: data.created_at != null ? String(data.created_at) : null,
   }
 }
 
-export async function writeAfterCallIdempotent(args: {
+function resultFromFinalRow(
+  prior: AfterCallStoredResult,
+): AfterCallSendResult {
+  if (prior.status_code === 200) {
+    return {
+      ok: true,
+      status: 200,
+      body: prior.response_body as
+        | { ok: true; message_id: string }
+        | { ok: true; dry_run: true },
+      replay: true,
+    }
+  }
+  return {
+    ok: false,
+    status: prior.status_code as 400 | 403 | 404 | 409 | 422 | 429 | 502,
+    body: { error: String(prior.response_body.error ?? 'failed') },
+    replay: true,
+  }
+}
+
+/**
+ * Atomically reserve the idempotency key before Meta.
+ * - Insert pending succeeds → this caller owns the send.
+ * - Conflict + final → replay first result.
+ * - Conflict + fresh pending → 409 in_progress (no second send).
+ * - Conflict + stale pending → delete and re-reserve (or 409 if lost race).
+ */
+export async function reserveAfterCallIdempotency(args: {
   db: AfterCallDb
   accountId: string
   tenantId: string
   callId: string
   sendId: string
   idempotencyKey: string
-  result: AfterCallStoredResult
-}): Promise<void> {
-  const { error } = await args.db.from('astra_after_call_sends').insert({
+  now?: Date | number
+}): Promise<
+  | { ok: true; reserved: true }
+  | { ok: true; reserved: false; replay: AfterCallSendResult }
+  | { ok: false; status: 409; body: { error: 'in_progress' } }
+> {
+  const now = args.now ?? Date.now()
+  const insertRow = {
     account_id: args.accountId,
     idempotency_key: args.idempotencyKey,
     tenant_id: args.tenantId,
     call_id: args.callId,
     send_id: args.sendId,
-    status_code: args.result.status_code,
-    response_body: args.result.response_body,
-    message_id: args.result.message_id,
-    dry_run: args.result.dry_run,
-  })
-  if (error) {
-    // Unique race: another instance wrote first — treat as success path
-    // for the caller (they will re-read). Log other failures.
+    state: 'pending' as const,
+    status_code: 0,
+    response_body: {},
+    message_id: null,
+    dry_run: false,
+    created_at: new Date(
+      typeof now === 'number' ? now : now.getTime(),
+    ).toISOString(),
+    updated_at: new Date(
+      typeof now === 'number' ? now : now.getTime(),
+    ).toISOString(),
+  }
+
+  const attemptReserve = async (): Promise<
+    | { ok: true; reserved: true }
+    | { ok: true; reserved: false; replay: AfterCallSendResult }
+    | { ok: false; status: 409; body: { error: 'in_progress' } }
+    | { retry: true }
+  > => {
+    const { error } = await args.db
+      .from('astra_after_call_sends')
+      .insert(insertRow)
+
+    if (!error) return { ok: true, reserved: true }
+
     const code = (error as { code?: string }).code
     if (code !== '23505') {
-      console.error('[after-call] idempotency write failed:', error)
+      console.error('[after-call] pending reserve failed:', error)
+      // Fail closed without Meta: surface retryable so Connect backs off.
+      return {
+        ok: false,
+        status: 409,
+        body: { error: 'in_progress' },
+      }
     }
+
+    const prior = await readAfterCallIdempotent({
+      db: args.db,
+      accountId: args.accountId,
+      idempotencyKey: args.idempotencyKey,
+    })
+    if (!prior) return { retry: true }
+
+    if (prior.state === 'final') {
+      return {
+        ok: true,
+        reserved: false,
+        replay: resultFromFinalRow(prior),
+      }
+    }
+
+    // pending
+    if (!isPendingStale(prior.created_at, now)) {
+      return {
+        ok: false,
+        status: 409,
+        body: { error: 'in_progress' },
+      }
+    }
+
+    // Stale pending: delete and retry reserve once.
+    await args.db
+      .from('astra_after_call_sends')
+      .delete()
+      .eq('account_id', args.accountId)
+      .eq('idempotency_key', args.idempotencyKey)
+      .eq('state', 'pending')
+
+    return { retry: true }
+  }
+
+  let outcome = await attemptReserve()
+  if ('retry' in outcome) {
+    outcome = await attemptReserve()
+  }
+  if ('retry' in outcome) {
+    return { ok: false, status: 409, body: { error: 'in_progress' } }
+  }
+  return outcome
+}
+
+export async function finalizeAfterCallIdempotent(args: {
+  db: AfterCallDb
+  accountId: string
+  idempotencyKey: string
+  result: Omit<AfterCallStoredResult, 'state' | 'created_at'>
+}): Promise<void> {
+  if (!isDurableAfterCallStatus(args.result.status_code)) {
+    // Safety: never persist retryable outcomes.
+    await releaseAfterCallPending(args)
+    return
+  }
+  const { error } = await args.db
+    .from('astra_after_call_sends')
+    .update({
+      state: 'final',
+      status_code: args.result.status_code,
+      response_body: args.result.response_body,
+      message_id: args.result.message_id,
+      dry_run: args.result.dry_run,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('account_id', args.accountId)
+    .eq('idempotency_key', args.idempotencyKey)
+    .eq('state', 'pending')
+
+  if (error) {
+    console.error('[after-call] finalize failed:', error)
+  }
+}
+
+export async function releaseAfterCallPending(args: {
+  db: AfterCallDb
+  accountId: string
+  idempotencyKey: string
+}): Promise<void> {
+  const { error } = await args.db
+    .from('astra_after_call_sends')
+    .delete()
+    .eq('account_id', args.accountId)
+    .eq('idempotency_key', args.idempotencyKey)
+    .eq('state', 'pending')
+  if (error) {
+    console.error('[after-call] pending release failed:', error)
   }
 }
 
 function mapMetaError(err: MetaApiError): {
   status: 400 | 422 | 429 | 502
   error: string
+  durable: boolean
 } {
   if (err.httpStatus === 429) {
-    return { status: 429, error: 'rate_limited' }
+    return { status: 429, error: 'rate_limited', durable: false }
   }
-  // Meta template name / language miss
   if (
     err.code === 132001 ||
     err.code === 132000 ||
     /template/i.test(err.message) ||
     /template/i.test(err.details ?? '')
   ) {
-    return { status: 422, error: 'template_not_found' }
+    return { status: 422, error: 'template_not_found', durable: true }
   }
   if (err.httpStatus >= 400 && err.httpStatus < 500) {
-    return { status: 400, error: 'bad_request' }
+    return { status: 400, error: 'bad_request', durable: true }
   }
-  return { status: 502, error: 'upstream_error' }
+  return { status: 502, error: 'upstream_error', durable: false }
 }
 
 export type AfterCallSendResult =
@@ -421,29 +605,41 @@ export async function sendAfterCallMessage(args: {
   dryRun?: boolean
   now?: Date | number
 }): Promise<AfterCallSendResult> {
-  const prior = await readAfterCallIdempotent({
+  const reserved = await reserveAfterCallIdempotency({
     db: args.db,
     accountId: args.accountId,
+    tenantId: args.body.tenant_id,
+    callId: args.body.call_id,
+    sendId: args.body.send_id,
     idempotencyKey: args.idempotencyKey,
+    now: args.now,
   })
-  if (prior) {
-    if (prior.status_code === 200) {
-      return {
-        ok: true,
-        status: 200,
-        body: prior.response_body as
-          | { ok: true; message_id: string }
-          | { ok: true; dry_run: true },
-        replay: true,
-      }
-    }
+  if (!reserved.ok) {
     return {
       ok: false,
-      status: prior.status_code as 400 | 403 | 404 | 409 | 422 | 429 | 502,
-      body: { error: String(prior.response_body.error ?? 'failed') },
-      replay: true,
+      status: 409,
+      body: { error: 'in_progress' },
     }
   }
+  if (!reserved.reserved) {
+    return reserved.replay
+  }
+
+  const release = () =>
+    releaseAfterCallPending({
+      db: args.db,
+      accountId: args.accountId,
+      idempotencyKey: args.idempotencyKey,
+    })
+  const finalize = (
+    result: Omit<AfterCallStoredResult, 'state' | 'created_at'>,
+  ) =>
+    finalizeAfterCallIdempotent({
+      db: args.db,
+      accountId: args.accountId,
+      idempotencyKey: args.idempotencyKey,
+      result,
+    })
 
   const cfg = await loadTenantWhatsAppConfig({
     db: args.db,
@@ -452,16 +648,13 @@ export async function sendAfterCallMessage(args: {
     phoneNumberId: args.body.phone_number_id,
   })
   if (!cfg.ok) {
-    const result: AfterCallStoredResult = {
+    // Config miss is deterministic for this tenant/phone — durable 404/400.
+    await finalize({
       status_code: cfg.status,
       response_body: { error: cfg.error },
       message_id: null,
       dry_run: false,
-    }
-    // Do not durable-store 404/400 config misses as "first result" of a
-    // successful send key — only store terminal send outcomes. Spec:
-    // "treat a repeated key as the same send and answer with the first
-    // result" — config miss is not a send. Return without writing.
+    })
     return {
       ok: false,
       status: cfg.status,
@@ -476,20 +669,11 @@ export async function sendAfterCallMessage(args: {
       toDigits: args.body.to,
     })
     if (!isWithinCustomerCareWindow(lastInbound, args.now)) {
-      const stored: AfterCallStoredResult = {
+      await finalize({
         status_code: 409,
         response_body: { error: 'window_closed' },
         message_id: null,
         dry_run: false,
-      }
-      await writeAfterCallIdempotent({
-        db: args.db,
-        accountId: args.accountId,
-        tenantId: args.body.tenant_id,
-        callId: args.body.call_id,
-        sendId: args.body.send_id,
-        idempotencyKey: args.idempotencyKey,
-        result: stored,
       })
       return {
         ok: false,
@@ -501,20 +685,11 @@ export async function sendAfterCallMessage(args: {
 
   const dryRun = args.dryRun ?? isTemplatesDryRun()
   if (dryRun) {
-    const stored: AfterCallStoredResult = {
+    await finalize({
       status_code: 200,
       response_body: { ok: true, dry_run: true },
       message_id: null,
       dry_run: true,
-    }
-    await writeAfterCallIdempotent({
-      db: args.db,
-      accountId: args.accountId,
-      tenantId: args.body.tenant_id,
-      callId: args.body.call_id,
-      sendId: args.body.send_id,
-      idempotencyKey: args.idempotencyKey,
-      result: stored,
     })
     return {
       ok: true,
@@ -532,6 +707,12 @@ export async function sendAfterCallMessage(args: {
       '[after-call] decrypt access_token failed:',
       err instanceof Error ? err.message : err,
     )
+    await finalize({
+      status_code: 400,
+      response_body: { error: 'token_decrypt_failed' },
+      message_id: null,
+      dry_run: false,
+    })
     return {
       ok: false,
       status: 400,
@@ -573,6 +754,12 @@ export async function sendAfterCallMessage(args: {
       }
 
       if (templateRow && templateRow.status !== 'APPROVED') {
+        await finalize({
+          status_code: 422,
+          response_body: { error: 'template_not_found' },
+          message_id: null,
+          dry_run: false,
+        })
         return {
           ok: false,
           status: 422,
@@ -595,23 +782,21 @@ export async function sendAfterCallMessage(args: {
     }
 
     const body = { ok: true as const, message_id: messageId }
-    await writeAfterCallIdempotent({
-      db: args.db,
-      accountId: args.accountId,
-      tenantId: args.body.tenant_id,
-      callId: args.body.call_id,
-      sendId: args.body.send_id,
-      idempotencyKey: args.idempotencyKey,
-      result: {
-        status_code: 200,
-        response_body: body,
-        message_id: messageId,
-        dry_run: false,
-      },
+    await finalize({
+      status_code: 200,
+      response_body: body,
+      message_id: messageId,
+      dry_run: false,
     })
     return { ok: true, status: 200, body, replay: false }
   } catch (err) {
     if (err instanceof ChannelGateError) {
+      await finalize({
+        status_code: 403,
+        response_body: { error: 'auth_failed' },
+        message_id: null,
+        dry_run: false,
+      })
       return {
         ok: false,
         status: 403,
@@ -620,24 +805,17 @@ export async function sendAfterCallMessage(args: {
     }
     if (err instanceof MetaApiError) {
       const mapped = mapMetaError(err)
-      const stored: AfterCallStoredResult = {
-        status_code: mapped.status,
-        response_body: { error: mapped.error },
-        message_id: null,
-        dry_run: false,
+      if (mapped.durable) {
+        await finalize({
+          status_code: mapped.status,
+          response_body: { error: mapped.error },
+          message_id: null,
+          dry_run: false,
+        })
+      } else {
+        // 429 / 5xx — release pending so Connect retries hit Meta again.
+        await release()
       }
-      // Durable-store client/terminal Meta outcomes so retries with the
-      // same key return the first result. 429/5xx are retried by Connect
-      // with backoff — still store so a literal key replay is stable.
-      await writeAfterCallIdempotent({
-        db: args.db,
-        accountId: args.accountId,
-        tenantId: args.body.tenant_id,
-        callId: args.body.call_id,
-        sendId: args.body.send_id,
-        idempotencyKey: args.idempotencyKey,
-        result: stored,
-      })
       return {
         ok: false,
         status: mapped.status,
@@ -647,6 +825,7 @@ export async function sendAfterCallMessage(args: {
     }
     const message = err instanceof Error ? err.message : 'Unknown Meta error'
     console.error('[after-call] send failed:', message)
+    await release()
     return {
       ok: false,
       status: 502,

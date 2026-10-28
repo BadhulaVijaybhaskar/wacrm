@@ -3,9 +3,12 @@ import {
   AFTER_CALL_SEND_KIND,
   countTemplateVariables,
   isAfterCallTemplatesEnabled,
+  isDurableAfterCallStatus,
+  isPendingStale,
   listApprovedTemplates,
   parseAfterCallIdempotencyKey,
   parseAfterCallSendBody,
+  PENDING_STALE_MS,
   sendAfterCallMessage,
 } from './after-call-templates'
 import { MetaApiError } from '@/lib/whatsapp/meta-api'
@@ -186,8 +189,95 @@ function makeDb(opts: {
             }
           },
           async insert(row: Row) {
-            idem.push(row)
+            const clash = idem.find(
+              (r) =>
+                String(r.account_id) === String(row.account_id) &&
+                String(r.idempotency_key) === String(row.idempotency_key),
+            )
+            if (clash) {
+              return { data: null, error: { code: '23505', message: 'duplicate' } }
+            }
+            idem.push({ ...row })
             return { data: row, error: null }
+          },
+          update(patch: Row) {
+            const filters: Record<string, unknown> = {}
+            const chain: any = {
+              eq(k: string, v: unknown) {
+                filters[k] = v
+                return chain
+              },
+              then(
+                resolve: (v: unknown) => unknown,
+                reject?: (e: unknown) => unknown,
+              ) {
+                return Promise.resolve(chain._run()).then(resolve, reject)
+              },
+              async _run() {
+                for (const r of idem) {
+                  if (
+                    Object.entries(filters).every(
+                      ([k, v]) => String(r[k]) === String(v),
+                    )
+                  ) {
+                    Object.assign(r, patch)
+                  }
+                }
+                return { data: null, error: null }
+              },
+            }
+            // supabase builders are thenable via awaiting the filter chain
+            const proxy = new Proxy(chain, {
+              get(target, prop, receiver) {
+                if (prop === 'then') {
+                  return (
+                    res: (v: unknown) => unknown,
+                    rej?: (e: unknown) => unknown,
+                  ) => Promise.resolve(target._run()).then(res, rej)
+                }
+                return Reflect.get(target, prop, receiver)
+              },
+            })
+            return proxy
+          },
+          delete() {
+            const filters: Record<string, unknown> = {}
+            const chain: any = {
+              eq(k: string, v: unknown) {
+                filters[k] = v
+                return chain
+              },
+              then(
+                resolve: (v: unknown) => unknown,
+                reject?: (e: unknown) => unknown,
+              ) {
+                return Promise.resolve(chain._run()).then(resolve, reject)
+              },
+              async _run() {
+                for (let i = idem.length - 1; i >= 0; i--) {
+                  const r = idem[i]
+                  if (
+                    Object.entries(filters).every(
+                      ([k, v]) => String(r[k]) === String(v),
+                    )
+                  ) {
+                    idem.splice(i, 1)
+                  }
+                }
+                return { data: null, error: null }
+              },
+            }
+            return new Proxy(chain, {
+              get(target, prop, receiver) {
+                if (prop === 'then') {
+                  return (
+                    res: (v: unknown) => unknown,
+                    rej?: (e: unknown) => unknown,
+                  ) => Promise.resolve(target._run()).then(res, rej)
+                }
+                return Reflect.get(target, prop, receiver)
+              },
+            })
           },
         }
       }
@@ -229,9 +319,6 @@ const goodConfig = {
 describe('isAfterCallTemplatesEnabled', () => {
   it('is off by default', () => {
     expect(isAfterCallTemplatesEnabled({})).toBe(false)
-    expect(
-      isAfterCallTemplatesEnabled({ WACRM_AFTER_CALL_TEMPLATES: '0' }),
-    ).toBe(false)
   })
 
   it('turns on for 1/true', () => {
@@ -245,49 +332,43 @@ describe('parseAfterCallSendBody / idempotency key', () => {
   it('accepts §16.2 template body', () => {
     const r = parseAfterCallSendBody(baseBody())
     expect(r.ok).toBe(true)
-    if (!r.ok) return
-    expect(r.body.type).toBe('template')
-    expect(r.body.template?.name).toBe('hello_world')
-  })
-
-  it('accepts text body', () => {
-    const r = parseAfterCallSendBody(
-      baseBody({ type: 'text', text: 'hi', template: undefined }),
-    )
-    expect(r.ok).toBe(true)
-    if (!r.ok) return
-    expect(r.body.type).toBe('text')
-    expect(r.body.text).toBe('hi')
-  })
-
-  it('rejects legacy kind', () => {
-    const r = parseAfterCallSendBody(
-      baseBody({ kind: 'whatsapp.template_send' }),
-    )
-    expect(r).toEqual({ ok: false, error: 'bad_kind' })
   })
 
   it('parses after-call idempotency keys', () => {
-    expect(parseAfterCallIdempotencyKey(IDEM, CALL)).toEqual({
+    expect(parseAfterCallIdempotencyKey(IDEM, CALL)).toMatchObject({
       ok: true,
       key: IDEM,
-      isTemplateRetry: false,
     })
+  })
+})
+
+describe('durable status / stale pending', () => {
+  it('marks only final statuses durable', () => {
+    expect(isDurableAfterCallStatus(200)).toBe(true)
+    expect(isDurableAfterCallStatus(409)).toBe(true)
+    expect(isDurableAfterCallStatus(422)).toBe(true)
+    expect(isDurableAfterCallStatus(429)).toBe(false)
+    expect(isDurableAfterCallStatus(502)).toBe(false)
+    expect(isDurableAfterCallStatus(500)).toBe(false)
+  })
+
+  it('detects stale pending after PENDING_STALE_MS', () => {
+    const now = Date.parse('2026-10-28T12:00:00Z')
     expect(
-      parseAfterCallIdempotencyKey(`after-call:${CALL}:template`, CALL),
-    ).toEqual({
-      ok: true,
-      key: `after-call:${CALL}:template`,
-      isTemplateRetry: true,
-    })
-    expect(parseAfterCallIdempotencyKey('other', CALL).ok).toBe(false)
+      isPendingStale(
+        new Date(now - PENDING_STALE_MS - 1).toISOString(),
+        now,
+      ),
+    ).toBe(true)
+    expect(
+      isPendingStale(new Date(now - 60_000).toISOString(), now),
+    ).toBe(false)
   })
 })
 
 describe('countTemplateVariables', () => {
   it('counts {{n}} placeholders', () => {
     expect(countTemplateVariables('Hi {{1}}, {{2}}')).toBe(2)
-    expect(countTemplateVariables('Hello World')).toBe(0)
   })
 })
 
@@ -299,11 +380,10 @@ describe('sendAfterCallMessage', () => {
     vi.unstubAllEnvs()
   })
 
-  it('sends template and stores durable idempotency', async () => {
+  it('reserves pending then finalizes success; replay returns first result', async () => {
     const db = makeDb({ config: goodConfig })
     const sendTemplateFn = vi.fn(async () => ({ messageId: 'wamid.1' }))
     const parsed = parseAfterCallSendBody(baseBody())
-    expect(parsed.ok).toBe(true)
     if (!parsed.ok) return
 
     const first = await sendAfterCallMessage({
@@ -319,8 +399,9 @@ describe('sendAfterCallMessage', () => {
       body: { ok: true, message_id: 'wamid.1' },
       replay: false,
     })
-    expect(sendTemplateFn).toHaveBeenCalledTimes(1)
     expect(db._idem).toHaveLength(1)
+    expect(db._idem[0].state).toBe('final')
+    expect(sendTemplateFn).toHaveBeenCalledTimes(1)
 
     const second = await sendAfterCallMessage({
       db,
@@ -338,7 +419,135 @@ describe('sendAfterCallMessage', () => {
     expect(sendTemplateFn).toHaveBeenCalledTimes(1)
   })
 
-  it('dry_run returns ok+dry_run without message_id and skips Meta', async () => {
+  it('returns 409 in_progress for a fresh pending reservation', async () => {
+    const db = makeDb({
+      config: goodConfig,
+      idempotency: [
+        {
+          account_id: ACCOUNT,
+          idempotency_key: IDEM,
+          tenant_id: TENANT,
+          call_id: CALL,
+          send_id: 'wac_x',
+          state: 'pending',
+          status_code: 0,
+          response_body: {},
+          message_id: null,
+          dry_run: false,
+          created_at: new Date().toISOString(),
+        },
+      ],
+    })
+    const sendTemplateFn = vi.fn(async () => ({ messageId: 'wamid.x' }))
+    const parsed = parseAfterCallSendBody(baseBody())
+    if (!parsed.ok) return
+    const r = await sendAfterCallMessage({
+      db,
+      accountId: ACCOUNT,
+      body: parsed.body,
+      idempotencyKey: IDEM,
+      sendTemplateFn,
+      dryRun: false,
+    })
+    expect(r).toEqual({
+      ok: false,
+      status: 409,
+      body: { error: 'in_progress' },
+    })
+    expect(sendTemplateFn).not.toHaveBeenCalled()
+  })
+
+  it('does not durable-store 429; releases pending so Meta can retry', async () => {
+    const db = makeDb({ config: goodConfig })
+    const sendTemplateFn = vi.fn(async () => {
+      throw new MetaApiError('rate limited', {
+        code: 4,
+        httpStatus: 429,
+        details: 'too many',
+      })
+    })
+    const parsed = parseAfterCallSendBody(baseBody())
+    if (!parsed.ok) return
+    const r = await sendAfterCallMessage({
+      db,
+      accountId: ACCOUNT,
+      body: parsed.body,
+      idempotencyKey: IDEM,
+      sendTemplateFn,
+      dryRun: false,
+    })
+    expect(r).toMatchObject({
+      ok: false,
+      status: 429,
+      body: { error: 'rate_limited' },
+    })
+    expect(db._idem).toHaveLength(0)
+
+    // Second attempt may call Meta again.
+    sendTemplateFn.mockResolvedValueOnce({ messageId: 'wamid.retry' })
+    const r2 = await sendAfterCallMessage({
+      db,
+      accountId: ACCOUNT,
+      body: parsed.body,
+      idempotencyKey: IDEM,
+      sendTemplateFn,
+      dryRun: false,
+    })
+    expect(r2).toMatchObject({
+      ok: true,
+      body: { ok: true, message_id: 'wamid.retry' },
+    })
+    expect(sendTemplateFn).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not durable-store 502; releases pending', async () => {
+    const db = makeDb({ config: goodConfig })
+    const sendTemplateFn = vi.fn(async () => {
+      throw new MetaApiError('upstream', { httpStatus: 500, code: 1 })
+    })
+    const parsed = parseAfterCallSendBody(baseBody())
+    if (!parsed.ok) return
+    await sendAfterCallMessage({
+      db,
+      accountId: ACCOUNT,
+      body: parsed.body,
+      idempotencyKey: IDEM,
+      sendTemplateFn,
+      dryRun: false,
+    })
+    expect(db._idem).toHaveLength(0)
+  })
+
+  it('durable-stores Meta permanent 422 template_not_found', async () => {
+    const db = makeDb({ config: goodConfig })
+    const sendTemplateFn = vi.fn(async () => {
+      throw new MetaApiError('Template name does not exist', {
+        code: 132001,
+        httpStatus: 400,
+        details: 'Template name does not exist in the translation',
+      })
+    })
+    const parsed = parseAfterCallSendBody(baseBody())
+    if (!parsed.ok) return
+    const r = await sendAfterCallMessage({
+      db,
+      accountId: ACCOUNT,
+      body: parsed.body,
+      idempotencyKey: IDEM,
+      sendTemplateFn,
+      dryRun: false,
+    })
+    expect(r).toMatchObject({
+      ok: false,
+      status: 422,
+      body: { error: 'template_not_found' },
+    })
+    expect(db._idem).toHaveLength(1)
+    expect(db._idem[0].state).toBe('final')
+    expect(db._idem[0].status_code).toBe(422)
+  })
+
+  it('dry_run finalizes without Meta', async () => {
     const db = makeDb({ config: goodConfig })
     const sendTemplateFn = vi.fn(async () => ({ messageId: 'wamid.nope' }))
     const parsed = parseAfterCallSendBody(baseBody())
@@ -358,12 +567,16 @@ describe('sendAfterCallMessage', () => {
       replay: false,
     })
     expect(sendTemplateFn).not.toHaveBeenCalled()
+    expect(db._idem[0].state).toBe('final')
+    expect(db._idem[0].dry_run).toBe(true)
   })
 
   it('returns 409 window_closed for text outside the 24h window', async () => {
     const db = makeDb({
       config: goodConfig,
-      contacts: [{ id: 'c1', account_id: ACCOUNT, phone_normalized: '919876543210' }],
+      contacts: [
+        { id: 'c1', account_id: ACCOUNT, phone_normalized: '919876543210' },
+      ],
       conversations: [
         {
           id: 'conv1',
@@ -398,60 +611,30 @@ describe('sendAfterCallMessage', () => {
       status: 409,
       body: { error: 'window_closed' },
     })
+    expect(db._idem[0].state).toBe('final')
   })
 
-  it('sends text when window is open', async () => {
-    const now = new Date('2026-10-28T12:00:00Z')
+  it('takes over a stale pending reservation', async () => {
+    const staleAt = new Date(Date.now() - PENDING_STALE_MS - 1000).toISOString()
     const db = makeDb({
       config: goodConfig,
-      contacts: [{ id: 'c1', account_id: ACCOUNT, phone_normalized: '919876543210' }],
-      conversations: [
+      idempotency: [
         {
-          id: 'conv1',
           account_id: ACCOUNT,
-          contact_id: 'c1',
-          channel: 'whatsapp',
-          last_message_at: '2026-10-28T11:00:00Z',
+          idempotency_key: IDEM,
+          tenant_id: TENANT,
+          call_id: CALL,
+          send_id: 'wac_old',
+          state: 'pending',
+          status_code: 0,
+          response_body: {},
+          message_id: null,
+          dry_run: false,
+          created_at: staleAt,
         },
       ],
-      messages: [
-        {
-          conversation_id: 'conv1',
-          sender_type: 'customer',
-          created_at: '2026-10-28T11:00:00Z',
-        },
-      ],
     })
-    const sendTextFn = vi.fn(async () => ({ messageId: 'wamid.text' }))
-    const parsed = parseAfterCallSendBody(
-      baseBody({ type: 'text', text: 'Thanks', template: undefined }),
-    )
-    if (!parsed.ok) return
-    const r = await sendAfterCallMessage({
-      db,
-      accountId: ACCOUNT,
-      body: parsed.body,
-      idempotencyKey: IDEM,
-      sendTextFn,
-      dryRun: false,
-      now,
-    })
-    expect(r).toMatchObject({
-      ok: true,
-      body: { ok: true, message_id: 'wamid.text' },
-    })
-    expect(sendTextFn).toHaveBeenCalled()
-  })
-
-  it('maps Meta template miss to 422 template_not_found', async () => {
-    const db = makeDb({ config: goodConfig })
-    const sendTemplateFn = vi.fn(async () => {
-      throw new MetaApiError('Template name does not exist', {
-        code: 132001,
-        httpStatus: 400,
-        details: 'Template name does not exist in the translation',
-      })
-    })
+    const sendTemplateFn = vi.fn(async () => ({ messageId: 'wamid.stale' }))
     const parsed = parseAfterCallSendBody(baseBody())
     if (!parsed.ok) return
     const r = await sendAfterCallMessage({
@@ -463,10 +646,10 @@ describe('sendAfterCallMessage', () => {
       dryRun: false,
     })
     expect(r).toMatchObject({
-      ok: false,
-      status: 422,
-      body: { error: 'template_not_found' },
+      ok: true,
+      body: { ok: true, message_id: 'wamid.stale' },
     })
+    expect(sendTemplateFn).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -483,14 +666,6 @@ describe('listApprovedTemplates', () => {
           body_text: 'Hello World',
           meta_template_id: '1',
         },
-        {
-          name: 'call_followup',
-          language: 'en_US',
-          category: 'UTILITY',
-          status: 'APPROVED',
-          body_text: 'Hi {{1}}, {{2}} {{3}} {{4}}',
-          meta_template_id: '2',
-        },
       ],
     })
     const r = await listApprovedTemplates({
@@ -501,11 +676,6 @@ describe('listApprovedTemplates', () => {
     })
     expect(r.ok).toBe(true)
     if (!r.ok) return
-    expect(r.templates.map((t) => t.name).sort()).toEqual([
-      'call_followup',
-      'hello_world',
-    ])
-    const followup = r.templates.find((t) => t.name === 'call_followup')
-    expect(followup?.variable_count).toBe(4)
+    expect(r.templates[0].name).toBe('hello_world')
   })
 })

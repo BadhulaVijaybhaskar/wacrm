@@ -67,16 +67,19 @@ function fakeDb() {
   const q = (rows: Record<string, unknown>[], table?: string) => {
     const b: any = {
       _rows: rows,
+      _filters: {} as Record<string, unknown>,
       select: () => b,
       order: () => b,
       limit: () => b,
-      eq: (k: string, v: unknown) =>
-        q(
+      eq: (k: string, v: unknown) => {
+        b._filters[k] = v
+        return q(
           (b._rows as Record<string, unknown>[]).filter(
             (r) => String(r[k]) === String(v),
           ),
           table,
-        ),
+        )
+      },
       is: () => b,
       gt: () => b,
       ilike: () => b,
@@ -90,8 +93,95 @@ function fakeDb() {
       }),
       insert: async (row: Record<string, unknown>) => {
         const target = table ? tables[table] : null
-        if (target) target.push(row)
+        if (!target) return { data: row, error: null }
+        if (table === 'astra_after_call_sends') {
+          const clash = target.find(
+            (r) =>
+              String(r.account_id) === String(row.account_id) &&
+              String(r.idempotency_key) === String(row.idempotency_key),
+          )
+          if (clash) {
+            return {
+              data: null,
+              error: { code: '23505', message: 'duplicate' },
+            }
+          }
+        }
+        target.push(row)
         return { data: row, error: null }
+      },
+      update: (patch: Record<string, unknown>) => {
+        const filters: Record<string, unknown> = {}
+        const chain: any = {
+          eq(k: string, v: unknown) {
+            filters[k] = v
+            return chain
+          },
+          then(res: any, rej: any) {
+            return Promise.resolve(chain._run()).then(res, rej)
+          },
+          async _run() {
+            const target = table ? tables[table] : null
+            if (target) {
+              for (const r of target) {
+                if (
+                  Object.entries(filters).every(
+                    ([k, v]) => String(r[k]) === String(v),
+                  )
+                ) {
+                  Object.assign(r, patch)
+                }
+              }
+            }
+            return { data: null, error: null }
+          },
+        }
+        return new Proxy(chain, {
+          get(target, prop, receiver) {
+            if (prop === 'then') {
+              return (res: any, rej: any) =>
+                Promise.resolve(target._run()).then(res, rej)
+            }
+            return Reflect.get(target, prop, receiver)
+          },
+        })
+      },
+      delete: () => {
+        const filters: Record<string, unknown> = {}
+        const chain: any = {
+          eq(k: string, v: unknown) {
+            filters[k] = v
+            return chain
+          },
+          then(res: any, rej: any) {
+            return Promise.resolve(chain._run()).then(res, rej)
+          },
+          async _run() {
+            const target = table ? tables[table] : null
+            if (target) {
+              for (let i = target.length - 1; i >= 0; i--) {
+                const r = target[i]
+                if (
+                  Object.entries(filters).every(
+                    ([k, v]) => String(r[k]) === String(v),
+                  )
+                ) {
+                  target.splice(i, 1)
+                }
+              }
+            }
+            return { data: null, error: null }
+          },
+        }
+        return new Proxy(chain, {
+          get(target, prop, receiver) {
+            if (prop === 'then') {
+              return (res: any, rej: any) =>
+                Promise.resolve(target._run()).then(res, rej)
+            }
+            return Reflect.get(target, prop, receiver)
+          },
+        })
       },
       then: (res: any, rej: any) =>
         Promise.resolve({ data: b._rows, error: null }).then(res, rej),
