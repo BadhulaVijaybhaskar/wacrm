@@ -41,14 +41,25 @@ export function AccountAccessAlert() {
     }
   };
 
+  const title =
+    accountStatus === "invite_only"
+      ? t("inviteOnlyTitle")
+      : accountStatus === "unlinked"
+        ? t("unlinkedTitle")
+        : t("errorTitle");
+  const body =
+    accountStatus === "invite_only"
+      ? t("inviteOnlyBody")
+      : accountStatus === "unlinked"
+        ? t("unlinkedBody")
+        : t("errorBody");
+
   return (
     <Alert variant="destructive" className="mb-4">
       <TriangleAlert />
-      <AlertTitle>
-        {accountStatus === "unlinked" ? t("unlinkedTitle") : t("errorTitle")}
-      </AlertTitle>
+      <AlertTitle>{title}</AlertTitle>
       <AlertDescription>
-        {accountStatus === "unlinked" ? t("unlinkedBody") : t("errorBody")}
+        {body}
         {accountStatusDetail ? (
           // The raw reason, so a self-hoster reading a bug report has
           // something to act on instead of just "it's broken".

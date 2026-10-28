@@ -70,9 +70,16 @@
   "AccountAccess": {
     "unlinkedTitle": "Este usuário não está vinculado a uma conta",
     "unlinkedBody": "Nada do que você alterar será salvo enquanto isso não for resolvido — o banco de dados rejeita toda gravação de um usuário sem conta ou função. Se você foi convidado para uma equipe, peça ao proprietário para reenviar o convite. Em uma instalação própria, verifique se a migração de bootstrap da conta foi executada para este usuário.",
+    "inviteOnlyTitle": "Acesso somente por convite",
+    "inviteOnlyBody": "Este espaço do Astra Chat é somente por convite. Peça a um administrador um link de convite ou use um e-mail da lista permitida. Nenhuma conta do Chat foi criada para este login.",
     "errorTitle": "Não foi possível carregar suas permissões",
     "errorBody": "A função da sua conta não foi carregada, então toda ação é tratada como somente leitura e as alterações não serão salvas. Verifique sua conexão e tente novamente.",
     "retry": "Tentar novamente"
+  },
+  "AccessByInvitation": {
+    "title": "Acesso somente por convite",
+    "body": "Novas contas neste espaço do Astra Chat exigem um link de convite ou um e-mail da lista permitida. Se você foi convidado, abra o link do seu administrador. Se já tiver uma conta, entre.",
+    "backToSignIn": "Voltar para entrar"
   },
   "Dashboard": {
     "page": {

@@ -70,9 +70,16 @@
   "AccountAccess": {
     "unlinkedTitle": "Este usuario no está vinculado a una cuenta",
     "unlinkedBody": "Nada de lo que cambies se guardará mientras esto no se resuelva: la base de datos rechaza toda escritura de un usuario sin cuenta ni rol. Si te invitaron a un equipo, pide al propietario que reenvíe la invitación. En una instalación propia, verifica que la migración de bootstrap de la cuenta se haya ejecutado para este usuario.",
+    "inviteOnlyTitle": "Acceso solo por invitación",
+    "inviteOnlyBody": "Este espacio de Astra Chat es solo por invitación. Pide a un administrador un enlace de invitación o usa un correo de la lista permitida. No se creó ninguna cuenta de Chat para este inicio de sesión.",
     "errorTitle": "No se pudieron cargar tus permisos",
     "errorBody": "El rol de tu cuenta no se cargó, así que toda acción se trata como de solo lectura y los cambios no se guardarán. Revisa tu conexión e inténtalo de nuevo.",
     "retry": "Reintentar"
+  },
+  "AccessByInvitation": {
+    "title": "Acceso solo por invitación",
+    "body": "Las cuentas nuevas en este espacio de Astra Chat requieren un enlace de invitación o un correo de la lista permitida. Si te invitaron, abre el enlace de tu administrador. Si ya tienes una cuenta, inicia sesión.",
+    "backToSignIn": "Volver a iniciar sesión"
   },
   "Dashboard": {
     "page": {

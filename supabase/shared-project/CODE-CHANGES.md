@@ -16,6 +16,26 @@ Chat ships the draft flag-gated route
 on the shared project without Voice sign-off.** Run order: after
 `wacrm_schema.sql`.
 
+## Voice review — invite-only signup gate (do not apply yet)
+
+- `wacrm_signup_invite_gate.sql` — `app_runtime_config`, 
+  `account_invitations.minted_by_platform_admin`, replaced
+  `ensure_chat_profile(p_full_name, p_invite_token_hash)` (atomic
+  platform-invite redeem, no personal account; allowlist unchanged;
+  label-match removed), idempotent `peek_invitation` /
+  `redeem_invitation` for the accepter.
+- `rollback_wacrm_signup_invite_gate.sql` — exact inverse.
+
+**After apply (and after rollback), reload PostgREST:**
+
+```sql
+NOTIFY pgrst, 'reload schema';
+```
+
+(The apply SQL already ends with this `NOTIFY`; re-run if the API still
+404s the new function signature.) Default `signup_mode` stays `open`.
+**Do not apply without Voice sign-off.**
+
 ## 1. Private buckets: stop using getPublicUrl (REQUIRED, otherwise media breaks)
 All three `wacrm-*` buckets are now `public = false`, so public object URLs return 400/404.
 - Store the **storage path**, not a public URL, wherever one is saved today:

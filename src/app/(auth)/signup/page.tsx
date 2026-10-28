@@ -1,8 +1,8 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -30,6 +30,7 @@ export default function SignupPage() {
 
 function SignupPageInner() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   // When the user lands here from `/join/<token>` we carry the
   // invite token in the query so it survives the signup → email
   // verification → redirect round-trip. `emailRedirectTo` below
@@ -47,6 +48,36 @@ function SignupPageInner() {
   const [success, setSuccess] = useState(false);
   const supabase = createClient();
 
+  useEffect(() => {
+    let cancelled = false;
+    ;(async () => {
+      try {
+        const qs = new URLSearchParams();
+        if (inviteToken) qs.set('invite', inviteToken)
+        const res = await fetch(`/api/auth/signup-access?${qs.toString()}`)
+        if (!res.ok || cancelled) return
+        const body = (await res.json()) as {
+          mode?: string
+          may_signup?: boolean
+        }
+        // Invite-only with no token → dedicated page (strangers should
+        // not see an open signup form). Allowlisted checks happen on submit.
+        if (
+          body.mode === 'invite' &&
+          !inviteToken &&
+          body.may_signup === false
+        ) {
+          router.replace('/access-by-invitation')
+        }
+      } catch {
+        // leave open UX if the gate endpoint is unreachable
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [inviteToken, router])
+
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -62,6 +93,27 @@ function SignupPageInner() {
     }
 
     setLoading(true);
+
+    // Re-check gate with the typed email (allowlist) before creating
+    // an Auth user — invite mode without token needs allowlist match.
+    try {
+      const qs = new URLSearchParams({ email });
+      if (inviteToken) qs.set('invite', inviteToken);
+      const accessRes = await fetch(`/api/auth/signup-access?${qs.toString()}`);
+      if (accessRes.ok) {
+        const access = (await accessRes.json()) as {
+          mode?: string;
+          may_signup?: boolean;
+        };
+        if (access.mode === 'invite' && access.may_signup === false) {
+          setLoading(false);
+          router.push('/access-by-invitation');
+          return;
+        }
+      }
+    } catch {
+      // proceed; Auth signup itself is still gated at profile create time
+    }
 
     // If we have an invite token, point Supabase's verification
     // email back at the join page so the user can accept after
