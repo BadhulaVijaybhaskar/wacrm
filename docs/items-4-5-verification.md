@@ -18,13 +18,13 @@ Re-run tip after code changes: unset stub/`NODE_ENV` leakage before vitest.
 |------|--------------------------|---------------|----------------|------------|
 | **4a** Connect on/off → no inbound forward; read API **403** `connect_disabled` | `18426dc` | **17** | `authenticateConnectRequest … returns 403 when Connect is disabled for the tenant (item 4a)`; `dispatchInboundToAstraConnect no-ops when adapter is not active`; `PATCH … updates enabled + tenant_id` | `artifacts/item-4/4a-astra-connect-switch.png` |
 | **4b** Per-customer secret generate / rotate / reveal-once (044) | `203601a` | **7** | `POST …/secret generates a reveal-once secret when none exists`; `… rejects generate when a secret already exists`; `… rotates even when a secret exists`; secrets encrypt / 24h previous | `artifacts/item-4/4b-secret-generate-rotate.png` |
-| **4c** Usage daily + Settings view + `BILLING_WEBHOOK_URL` stub (045) | `213ff43` (+ service-read fix below) | **20** | `GET /api/billing/usage returns daily rows + totals`; `emitBillingUsageWebhook is a no-op when URL is unset`; metering wiring on send/webhook/broadcast | `artifacts/item-4/4c-usage-billing.png` |
+| **4c** Usage daily + Settings view + `BILLING_WEBHOOK_URL` stub (045) | `213ff43` / `dd9a85d` | **20** | `GET /api/billing/usage returns daily rows + totals`; `emitBillingUsageWebhook is a no-op when URL is unset`; metering wiring on send/webhook/broadcast | `artifacts/item-4/4c-usage-billing.png` |
 | **5a** Templates list / create / stub submit / composer | *(pre-existing on branch)* | **12** | stub-decision APPROVED under `META_STUB`; dry-run id helpers; template preview `{{n}}`; role gate on PATCH/DELETE | `artifacts/item-5/5a-templates.png` |
 | **5b** Inbox assign / notes / labels / filters / takeover / quick replies / search | *(pre-existing on branch)* | **9** | `matchesAssignmentFilter`; `matchesConversationSearch`; tag/company filters; `normalizeConversation` tags | `artifacts/item-5/5b-inbox-upgrades.png` |
 | **5c** Contact CSV import preview / dedupe / errors | *(pre-existing on branch)* | **30** | `validateImportRows`; `dedupeByPhone`; column map; E.164 `normalizeToE164`; `buildImportErrorCsv` | `artifacts/item-5/5c-contacts-csv-import.png` |
 | **5d** Opt-out list + STOP + broadcasts skip + consent ledger (047) | `95c1bee` | **14** | `processInboundConsentKeyword applies STOP`; `skipIfOptedOut`; `/api/consent/opt-outs` GET/POST; keyword detect | `artifacts/item-5/5d-consent-opt-out.png` |
 
-Evidence / docs commit SHA is recorded at the bottom after the final push.
+Evidence bundle: `bdcb314` (shots + script + this doc). Branch tip after pins: see footer.
 
 ### 4c note
 
