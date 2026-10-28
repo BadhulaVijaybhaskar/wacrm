@@ -2,6 +2,20 @@
 
 These go with the shared-project install. Branch `cursor/astra-connect-adapter-f6ad`.
 
+## Voice review — Connect §15 provisions ledger (do not apply yet)
+
+Additive CREATE-only pack piece for Connect automatic WhatsApp setup:
+
+- `wacrm_connect_provisioned.sql` — creates `wacrm.astra_connect_provisions`
+  (idempotency ledger for `whatsapp.connect_provisioned`).
+- `rollback_wacrm_connect_provisioned.sql` — drops that table only.
+
+Chat ships the draft flag-gated route
+`POST /api/astra-connect/v1/whatsapp/connect-provisioned` behind
+`WACRM_CONNECT_PROVISIONED` (default off → 404). **Do not apply this SQL
+on the shared project without Voice sign-off.** Run order: after
+`wacrm_schema.sql`.
+
 ## 1. Private buckets: stop using getPublicUrl (REQUIRED, otherwise media breaks)
 All three `wacrm-*` buckets are now `public = false`, so public object URLs return 400/404.
 - Store the **storage path**, not a public URL, wherever one is saved today:

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   isDryRunTemplateId,
@@ -7,6 +7,11 @@ import {
 } from './templates-dry-run';
 
 describe('isTemplatesDryRun', () => {
+  beforeEach(() => {
+    delete process.env.WHATSAPP_TEMPLATES_DRY_RUN;
+    delete process.env.META_STUB;
+  });
+
   afterEach(() => {
     delete process.env.WHATSAPP_TEMPLATES_DRY_RUN;
     delete process.env.META_STUB;
