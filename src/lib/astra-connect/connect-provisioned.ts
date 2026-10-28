@@ -10,10 +10,22 @@
  */
 
 import { encrypt } from '@/lib/whatsapp/encryption'
+import { isUniqueViolation } from '@/lib/contacts/dedupe'
 import {
   decryptProvisionedAccessToken,
   ProvisionCryptoError,
 } from './provision-crypto'
+
+/** Concurrent insert/update raced the UNIQUE(phone_number_id) index. */
+function isPhoneNumberIdUniqueViolation(error: unknown): boolean {
+  if (!isUniqueViolation(error)) return false
+  const e = error as { message?: string; details?: string; constraint?: string }
+  const blob = `${e.constraint ?? ''} ${e.message ?? ''} ${e.details ?? ''}`.toLowerCase()
+  return (
+    blob.includes('phone_number_id') ||
+    blob.includes('whatsapp_config_phone_number_id')
+  )
+}
 
 export const CONNECT_PROVISIONED_KIND = 'whatsapp.connect_provisioned' as const
 
@@ -306,6 +318,15 @@ export async function applyConnectProvisioned(args: {
       .select('id')
       .single()
     if (updErr || !updated?.id) {
+      if (isPhoneNumberIdUniqueViolation(updErr)) {
+        return {
+          ok: false,
+          status: 409,
+          error:
+            'phone_number_id is already active for another tenant on this instance',
+          code: 'phone_number_in_use',
+        }
+      }
       console.error('[connect-provisioned] config update failed:', updErr)
       return { ok: false, status: 400, error: 'Failed to update whatsapp_config' }
     }
@@ -322,6 +343,15 @@ export async function applyConnectProvisioned(args: {
       .select('id')
       .single()
     if (insErr || !inserted?.id) {
+      if (isPhoneNumberIdUniqueViolation(insErr)) {
+        return {
+          ok: false,
+          status: 409,
+          error:
+            'phone_number_id is already active for another tenant on this instance',
+          code: 'phone_number_in_use',
+        }
+      }
       console.error('[connect-provisioned] config insert failed:', insErr)
       return { ok: false, status: 400, error: 'Failed to create whatsapp_config' }
     }

@@ -262,4 +262,30 @@ describe('applyConnectProvisioned', () => {
       expect(result.code).toMatch(/bad_aad|bad_ciphertext/)
     }
   })
+
+  it('returns 409 when a concurrent unique(phone_number_id) race loses', async () => {
+    const result = await applyConnectProvisioned({
+      db: makeDb({
+        onConfigInsert: () => ({
+          data: null as unknown as Row,
+          error: {
+            code: '23505',
+            message:
+              'duplicate key value violates unique constraint "whatsapp_config_phone_number_id_key"',
+            details: 'Key (phone_number_id)=(106540352242922) already exists.',
+            constraint: 'whatsapp_config_phone_number_id_key',
+          },
+        }),
+      }) as never,
+      accountId: ACCOUNT,
+      body: validBody() as never,
+      adapterSecret: SECRET,
+      ownerUserId: OWNER,
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.status).toBe(409)
+      expect(result.code).toBe('phone_number_in_use')
+    }
+  })
 })

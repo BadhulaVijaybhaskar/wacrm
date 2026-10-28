@@ -10,6 +10,6 @@
 BEGIN;
 SET LOCAL search_path = wacrm, extensions;
 
-DROP TABLE IF EXISTS wacrm.astra_connect_provisions CASCADE;
+DROP TABLE IF EXISTS wacrm.astra_connect_provisions;
 
 COMMIT;
