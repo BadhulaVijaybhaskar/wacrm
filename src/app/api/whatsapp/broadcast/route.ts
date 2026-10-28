@@ -223,18 +223,31 @@ export async function POST(request: Request) {
             template: templateRow ?? undefined,
             messageParams: recipient.messageParams,
             params: recipient.params ?? [],
+            accountId,
           })
           sentMessageId = result.messageId
           lastError = null
           break
         } catch (error) {
+          const code =
+            error &&
+            typeof error === 'object' &&
+            'code' in error &&
+            typeof (error as { code: unknown }).code === 'string'
+              ? (error as { code: string }).code
+              : null
           const errorMessage =
             error instanceof Error ? error.message : 'Unknown error'
+          const labeled =
+            code === 'channel_disabled' ||
+            code === 'channel_status_unavailable'
+              ? `${code}: ${errorMessage}`
+              : errorMessage
           if (!isRecipientNotAllowedError(errorMessage)) {
-            lastError = errorMessage
+            lastError = labeled
             break
           }
-          lastError = errorMessage
+          lastError = labeled
           // retry with next variant
         }
       }

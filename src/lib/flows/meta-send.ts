@@ -124,6 +124,7 @@ export async function engineSendText(
       accessToken,
       to: phone,
       text: args.text,
+      accountId: args.accountId,
     })
     return r.messageId
   }
@@ -261,6 +262,7 @@ export async function engineSendMedia(
       link: signedLink,
       caption: args.caption,
       filename: args.filename,
+      accountId: args.accountId,
     })
     return r.messageId
   }
@@ -433,6 +435,7 @@ async function sendInteractiveViaMeta(
         buttons: input.buttons,
         headerText: input.headerText,
         footerText: input.footerText,
+        accountId: input.accountId,
       })
       return r.messageId
     }
@@ -445,6 +448,7 @@ async function sendInteractiveViaMeta(
       sections: input.sections,
       headerText: input.headerText,
       footerText: input.footerText,
+      accountId: input.accountId,
     })
     return r.messageId
   }

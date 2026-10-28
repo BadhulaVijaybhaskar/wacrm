@@ -36,6 +36,7 @@ import {
 } from '@/lib/whatsapp/interactive';
 import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption';
 import { notifyConnectOutbound } from '@/lib/astra-connect';
+import { ChannelGateError } from '@/lib/astra-connect/channel-status';
 import { recordWhatsappUsage } from '@/lib/astra-billing';
 import { supabaseAdmin } from '@/lib/flows/admin-client';
 import {
@@ -374,6 +375,7 @@ export async function sendMessageToConversation(
         messageParams: templateMessageParams ?? undefined,
         params: templateParams || [],
         contextMessageId,
+        accountId,
       });
       return result.messageId;
     }
@@ -389,6 +391,7 @@ export async function sendMessageToConversation(
         caption: contentText || undefined,
         filename: filename || undefined,
         contextMessageId,
+        accountId,
       });
       return result.messageId;
     }
@@ -404,6 +407,7 @@ export async function sendMessageToConversation(
           footerText: p.footer || undefined,
           buttons: p.buttons,
           contextMessageId,
+          accountId,
         });
         return result.messageId;
       }
@@ -417,6 +421,7 @@ export async function sendMessageToConversation(
         footerText: p.footer || undefined,
         sections: p.sections,
         contextMessageId,
+        accountId,
       });
       return result.messageId;
     }
@@ -426,6 +431,7 @@ export async function sendMessageToConversation(
       to: phone,
       text: contentText!,
       contextMessageId,
+      accountId,
     });
     return result.messageId;
   };
@@ -467,6 +473,35 @@ export async function sendMessageToConversation(
 
       if (lastError) throw lastError;
     } catch (err) {
+      if (err instanceof ChannelGateError) {
+        // Persist a failed outbound row so inbox/history shows the block,
+        // then surface the stable Connect gate code to the caller.
+        try {
+          await db.from('messages').insert({
+            conversation_id: conversationId,
+            sender_type: 'agent',
+            content_type: messageType,
+            content_text:
+              messageType === 'interactive'
+                ? interactivePayload?.body ?? null
+                : contentText ?? null,
+            media_url: mediaUrl || null,
+            template_name: templateName || null,
+            message_id: null,
+            status: 'failed',
+            // Meta's error_code is numeric; Connect gate codes are strings —
+            // store them in title/details so the inbox failure chip shows.
+            error_title: err.code,
+            error_details: err.message,
+          });
+        } catch (persistErr) {
+          console.error(
+            '[send-message] failed to persist channel-gate block:',
+            persistErr instanceof Error ? persistErr.message : persistErr,
+          );
+        }
+        throw new SendMessageError(err.code, err.message, 403);
+      }
       const message =
         err instanceof Error ? err.message : 'Unknown Meta API error';
       console.error(

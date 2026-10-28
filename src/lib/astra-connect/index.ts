@@ -25,6 +25,16 @@ export {
 } from './sign'
 export { dispatchInboundToAstraConnect } from './inbound'
 export { notifyConnectOutbound } from './notify'
+export {
+  CONNECT_WHATSAPP_CHANNEL_STATUS_PATH,
+  CHANNEL_STATUS_CACHE_TTL_MS,
+  ChannelGateError,
+  assertWhatsAppChannelEnabled,
+  assertWhatsAppChannelEnabledForAccount,
+  fetchWhatsAppChannelStatus,
+  logChannelGateBlock,
+} from './channel-status'
+export type { ChannelGateCode, ChannelStatusResult } from './channel-status'
 export { notifyConnectHandoff } from './handoff'
 export {
   buildSignedMediaUrl,

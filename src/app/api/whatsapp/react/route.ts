@@ -3,6 +3,7 @@ import { requireRole, toErrorResponse } from '@/lib/auth/account';
 import { sendReactionMessage } from '@/lib/whatsapp/meta-api';
 import { decrypt } from '@/lib/whatsapp/encryption';
 import { resolveContactSendTarget } from '@/lib/whatsapp/wa-identity';
+import { ChannelGateError } from '@/lib/astra-connect/channel-status';
 import {
   checkRateLimit,
   rateLimitResponse,
@@ -114,8 +115,15 @@ export async function POST(request: Request) {
         to: sendTarget.target,
         targetMessageId: targetMessage.message_id,
         emoji,
+        accountId,
       });
     } catch (err) {
+      if (err instanceof ChannelGateError) {
+        return NextResponse.json(
+          { error: err.message, code: err.code },
+          { status: 403 },
+        );
+      }
       const message =
         err instanceof Error ? err.message : 'Unknown Meta API error';
       console.error('[whatsapp/react] Meta send failed:', message);

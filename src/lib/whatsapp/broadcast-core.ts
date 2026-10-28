@@ -316,13 +316,24 @@ export async function deliverBroadcast(
           language: plan.templateLanguage,
           template: plan.templateRow ?? undefined,
           params: recipient.params,
+          accountId: plan.accountId,
         });
         sentMessageId = result.messageId;
         lastError = null;
         break;
       } catch (error) {
+        const code =
+          error &&
+          typeof error === 'object' &&
+          'code' in error &&
+          typeof (error as { code: unknown }).code === 'string'
+            ? (error as { code: string }).code
+            : null;
         const message = error instanceof Error ? error.message : 'Unknown error';
-        lastError = message;
+        lastError =
+          code === 'channel_disabled' || code === 'channel_status_unavailable'
+            ? `${code}: ${message}`
+            : message;
         // Only a "recipient not allowed" error is worth another variant.
         if (!isRecipientNotAllowedError(message)) break;
       }

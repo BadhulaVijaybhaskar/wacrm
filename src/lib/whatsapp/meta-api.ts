@@ -10,12 +10,82 @@
  */
 
 import { isBusinessScopedUserId } from './wa-identity'
+import {
+  assertWhatsAppChannelEnabledForAccount,
+  ChannelGateError,
+  logChannelGateBlock,
+} from '@/lib/astra-connect/channel-status'
 
 const META_API_VERSION = 'v21.0'
 const META_API_BASE = `https://graph.facebook.com/${META_API_VERSION}`
 
 export interface MetaSendResult {
   messageId: string
+}
+
+/**
+ * Sole outbound POST to Meta `/{phoneNumberId}/messages` for content
+ * sends. Every text / media / template / interactive / reaction path
+ * must go through here so the Connect `channels.whatsapp` gate cannot
+ * be bypassed. Typing indicators use {@link postCloudApiMessages} with
+ * `skipChannelGate: true` (not a customer-visible send).
+ */
+export async function postCloudApiMessages(args: {
+  phoneNumberId: string
+  accessToken: string
+  body: Record<string, unknown>
+  /**
+   * Owning Chat account. Required for Connect-gated sends; when omitted
+   * the gate is skipped (unit tests / legacy). Production callers always
+   * pass it.
+   */
+  accountId?: string
+  /** Read receipts / typing — not a content send. */
+  skipChannelGate?: boolean
+  fetchFn?: typeof fetch
+}): Promise<{ messageId: string; raw: unknown }> {
+  if (!args.skipChannelGate && args.accountId) {
+    try {
+      await assertWhatsAppChannelEnabledForAccount({
+        accountId: args.accountId,
+        phoneNumberId: args.phoneNumberId,
+      })
+    } catch (err) {
+      if (err instanceof ChannelGateError) {
+        logChannelGateBlock({
+          accountId: args.accountId,
+          phoneNumberId: args.phoneNumberId,
+          code: err.code,
+          detail: err.message,
+          employeeId: err.employeeId,
+        })
+      }
+      throw err
+    }
+  }
+
+  const url = `${META_API_BASE}/${args.phoneNumberId}/messages`
+  const fetchFn = args.fetchFn ?? fetch
+  const response = await fetchFn(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${args.accessToken}`,
+    },
+    body: JSON.stringify(args.body),
+  })
+  if (!response.ok) {
+    await throwMetaError(response, `Meta API error: ${response.status}`)
+  }
+  const raw = await response.json()
+  const messageId =
+    raw &&
+    typeof raw === 'object' &&
+    Array.isArray((raw as { messages?: unknown }).messages) &&
+    (raw as { messages: { id?: string }[] }).messages[0]?.id
+      ? String((raw as { messages: { id: string }[] }).messages[0].id)
+      : ''
+  return { messageId, raw }
 }
 
 export interface MetaPhoneInfo {
@@ -345,6 +415,8 @@ export interface SendTextMessageArgs {
   accessToken: string
   to: string
   text: string
+  /** Chat account — Connect channels.whatsapp gate. */
+  accountId?: string
   /** Meta's message_id of the message being replied to. Adds a `context` field
    *  so WhatsApp renders the new message as a reply with a quote preview. */
   contextMessageId?: string
@@ -357,8 +429,7 @@ export interface SendTextMessageArgs {
 export async function sendTextMessage(
   args: SendTextMessageArgs
 ): Promise<MetaSendResult> {
-  const { phoneNumberId, accessToken, to, text, contextMessageId } = args
-  const url = `${META_API_BASE}/${phoneNumberId}/messages`
+  const { phoneNumberId, accessToken, to, text, contextMessageId, accountId } = args
   const body: Record<string, unknown> = {
     messaging_product: 'whatsapp',
     ...recipientFields(to),
@@ -368,19 +439,13 @@ export async function sendTextMessage(
   if (contextMessageId) {
     body.context = { message_id: contextMessageId }
   }
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify(body),
+  const { messageId } = await postCloudApiMessages({
+    phoneNumberId,
+    accessToken,
+    body,
+    accountId,
   })
-  if (!response.ok) {
-    await throwMetaError(response, `Meta API error: ${response.status}`)
-  }
-  const data = await response.json()
-  return { messageId: data.messages[0].id }
+  return { messageId }
 }
 
 export type MediaKind = 'image' | 'video' | 'document' | 'audio'
@@ -396,6 +461,8 @@ export interface SendMediaMessageArgs {
   caption?: string
   /** Document-only. Shown in the recipient's chat as the file name. Ignored for image/video/audio. */
   filename?: string
+  /** Chat account — Connect channels.whatsapp gate. */
+  accountId?: string
   contextMessageId?: string
 }
 
@@ -414,10 +481,8 @@ export interface SendMediaMessageArgs {
 export async function sendMediaMessage(
   args: SendMediaMessageArgs,
 ): Promise<MetaSendResult> {
-  const { phoneNumberId, accessToken, to, kind, link, caption, filename, contextMessageId } = args
+  const { phoneNumberId, accessToken, to, kind, link, caption, filename, contextMessageId, accountId } = args
   if (!link) throw new Error('sendMediaMessage requires a link.')
-  const url = `${META_API_BASE}/${phoneNumberId}/messages`
-
   // Audio accepts neither caption nor filename per Meta's spec — adding
   // either yields a 400. image/video/document accept a caption; only
   // document accepts a filename.
@@ -433,19 +498,13 @@ export async function sendMediaMessage(
   }
   if (contextMessageId) body.context = { message_id: contextMessageId }
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify(body),
+  const { messageId } = await postCloudApiMessages({
+    phoneNumberId,
+    accessToken,
+    body,
+    accountId,
   })
-  if (!response.ok) {
-    await throwMetaError(response, `Meta API error: ${response.status}`)
-  }
-  const data = await response.json()
-  return { messageId: data.messages[0].id }
+  return { messageId }
 }
 
 import type { MessageTemplate } from '@/types'
@@ -481,6 +540,8 @@ export interface SendTemplateMessageArgs {
    * in `buttonParams` keyed by index.
    */
   messageParams?: SendTimeParams
+  /** Chat account — Connect channels.whatsapp gate. */
+  accountId?: string
   /** Meta's message_id of the message being replied to. */
   contextMessageId?: string
 }
@@ -509,8 +570,8 @@ export async function sendTemplateMessage(
     template,
     messageParams,
     contextMessageId,
+    accountId,
   } = args
-  const url = `${META_API_BASE}/${phoneNumberId}/messages`
 
   const templatePayload: Record<string, unknown> = {
     name: templateName,
@@ -566,19 +627,13 @@ export async function sendTemplateMessage(
     body.context = { message_id: contextMessageId }
   }
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify(body),
+  const { messageId } = await postCloudApiMessages({
+    phoneNumberId,
+    accessToken,
+    body,
+    accountId,
   })
-  if (!response.ok) {
-    await throwMetaError(response, `Meta API error: ${response.status}`)
-  }
-  const data = await response.json()
-  return { messageId: data.messages[0].id }
+  return { messageId }
 }
 
 // ============================================================
@@ -809,6 +864,8 @@ export interface SendReactionMessageArgs {
   targetMessageId: string
   /** Single emoji, or empty string to remove an existing reaction. */
   emoji: string
+  /** Chat account — Connect channels.whatsapp gate. */
+  accountId?: string
 }
 
 /**
@@ -818,26 +875,19 @@ export interface SendReactionMessageArgs {
 export async function sendReactionMessage(
   args: SendReactionMessageArgs
 ): Promise<MetaSendResult> {
-  const { phoneNumberId, accessToken, to, targetMessageId, emoji } = args
-  const url = `${META_API_BASE}/${phoneNumberId}/messages`
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify({
+  const { phoneNumberId, accessToken, to, targetMessageId, emoji, accountId } = args
+  const { messageId } = await postCloudApiMessages({
+    phoneNumberId,
+    accessToken,
+    accountId,
+    body: {
       messaging_product: 'whatsapp',
       ...recipientFields(to),
       type: 'reaction',
       reaction: { message_id: targetMessageId, emoji },
-    }),
+    },
   })
-  if (!response.ok) {
-    await throwMetaError(response, `Meta API error: ${response.status}`)
-  }
-  const data = await response.json()
-  return { messageId: data.messages[0].id }
+  return { messageId }
 }
 
 // ============================================================
@@ -870,23 +920,17 @@ export async function sendTypingIndicator(
   args: SendTypingIndicatorArgs
 ): Promise<void> {
   const { phoneNumberId, accessToken, messageId } = args
-  const url = `${META_API_BASE}/${phoneNumberId}/messages`
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify({
+  await postCloudApiMessages({
+    phoneNumberId,
+    accessToken,
+    skipChannelGate: true,
+    body: {
       messaging_product: 'whatsapp',
       status: 'read',
       message_id: messageId,
       typing_indicator: { type: 'text' },
-    }),
+    },
   })
-  if (!response.ok) {
-    await throwMetaError(response, `Meta API error: ${response.status}`)
-  }
 }
 
 // ============================================================
@@ -939,6 +983,8 @@ export interface SendInteractiveButtonsArgs {
   buttons: InteractiveButton[]
   /** Meta's message_id of the message being replied to (quote preview). */
   contextMessageId?: string
+  /** Chat account — Connect channels.whatsapp gate. */
+  accountId?: string
 }
 
 /**
@@ -954,7 +1000,7 @@ export async function sendInteractiveButtons(
 ): Promise<MetaSendResult> {
   const {
     phoneNumberId, accessToken, to,
-    bodyText, headerText, footerText, buttons, contextMessageId,
+    bodyText, headerText, footerText, buttons, contextMessageId, accountId,
   } = args
   validateInteractiveBody(bodyText)
   validateInteractiveHeaderFooter(headerText, footerText)
@@ -1002,20 +1048,13 @@ export async function sendInteractiveButtons(
   }
   if (contextMessageId) body.context = { message_id: contextMessageId }
 
-  const url = `${META_API_BASE}/${phoneNumberId}/messages`
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify(body),
+  const { messageId } = await postCloudApiMessages({
+    phoneNumberId,
+    accessToken,
+    body,
+    accountId,
   })
-  if (!response.ok) {
-    await throwMetaError(response, `Meta API error: ${response.status}`)
-  }
-  const data = await response.json()
-  return { messageId: data.messages[0].id }
+  return { messageId }
 }
 
 export interface InteractiveListRow {
@@ -1048,6 +1087,8 @@ export interface SendInteractiveListArgs {
    */
   sections: InteractiveListSection[]
   contextMessageId?: string
+  /** Chat account — Connect channels.whatsapp gate. */
+  accountId?: string
 }
 
 /**
@@ -1062,6 +1103,7 @@ export async function sendInteractiveList(
   const {
     phoneNumberId, accessToken, to,
     bodyText, buttonLabel, headerText, footerText, sections, contextMessageId,
+    accountId,
   } = args
   validateInteractiveBody(bodyText)
   validateInteractiveHeaderFooter(headerText, footerText)
@@ -1133,20 +1175,13 @@ export async function sendInteractiveList(
   }
   if (contextMessageId) body.context = { message_id: contextMessageId }
 
-  const url = `${META_API_BASE}/${phoneNumberId}/messages`
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify(body),
+  const { messageId } = await postCloudApiMessages({
+    phoneNumberId,
+    accessToken,
+    body,
+    accountId,
   })
-  if (!response.ok) {
-    await throwMetaError(response, `Meta API error: ${response.status}`)
-  }
-  const data = await response.json()
-  return { messageId: data.messages[0].id }
+  return { messageId }
 }
 
 function validateInteractiveBody(bodyText: string): void {
