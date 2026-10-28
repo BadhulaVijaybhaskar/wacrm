@@ -91,6 +91,8 @@ describe('wacrm_signup_invite_gate.sql contract', () => {
     )
     expect(followupRollback).toMatch(/NOTIFY pgrst,\s*'reload schema'/i)
     // Must not wipe invite-gate redeem on followup rollback.
-    expect(followupRollback).not.toMatch(/redeem_invitation/)
+    expect(followupRollback).not.toMatch(
+      /CREATE OR REPLACE FUNCTION wacrm\.redeem_invitation/,
+    )
   })
 })

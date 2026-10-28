@@ -1,7 +1,13 @@
+import path from "node:path";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   resolve: {
+    // Explicit alias — tsconfig excludes `**/*.test.ts` for next build,
+    // and vite-tsconfig-paths then skips path mapping for those importers.
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+    },
     tsconfigPaths: true,
   },
   test: {
