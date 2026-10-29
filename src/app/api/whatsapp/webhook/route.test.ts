@@ -77,7 +77,7 @@ vi.mock('@supabase/supabase-js', () => ({
         case 'wa_connections':
           return { select: () => ({ eq: (key: string, value: unknown) => {
             h.lookups.push([key, value]);
-            return Promise.resolve({data:h.embeddedRows,error:h.embeddedLookupError ? {code:'test'} : null})
+            return Promise.resolve({data:h.embeddedRows,error:h.embeddedLookupError ? {code:'test',message:'private-db-details pn-1 dummy-embedded-token'} : null})
           } }) }
         case 'profiles': {
           const q = {
@@ -1126,6 +1126,15 @@ describe('Embedded Signup webhook routing', () => {
     if(kind==='owner')h.ownerMissing=true
     if(kind==='ciphertext')h.embeddedRows[0].token_ciphertext='bad'
     await runWebhook();expect(h.state.upsertCalls).toEqual([])
+  })
+  it('logs only a constant diagnostic when the embedded mapping lookup DB error skips an event',async()=>{
+    useConnection();h.embeddedLookupError=true;
+    const warn=vi.spyOn(console,'warn').mockImplementation(()=>{});
+    const r=await runWebhook();expect(r.init?.status).toBe(200);
+    expect(warn.mock.calls).toEqual([['[webhook] embedded connection lookup failed; skipping event']]);
+    const logs=JSON.stringify(warn.mock.calls);
+    for(const value of ['private-db-details','pn-1','dummy-embedded-token','embedded-account'])expect(logs).not.toContain(value);
+    expect(h.state.upsertCalls).toEqual([]);expect(mockFindExistingContact).not.toHaveBeenCalled();
   })
   it('scopes connected-number status updates to its own account, even when Meta ids collide',async () => {
     useConnection();h.scopedMessageIds=['only-owned-message']

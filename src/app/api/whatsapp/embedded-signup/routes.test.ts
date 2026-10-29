@@ -8,6 +8,7 @@ import { encryptToken } from '@/lib/whatsapp/embedded-signup/crypto';
 const h = vi.hoisted(() => ({
   auth: vi.fn(), row: null as null | Record<string, unknown>, patches: [] as Record<string, unknown>[],
   failure: '' as string, owner: null as null | string, dbError: false,
+  legacyNumber:false,legacyAccount:null as string|null,legacyError:false,emptyUpdate:false,
   metaCode:100,siblings:[] as {id:string}[],siblingError:false,filters:[] as [string,unknown][],
 }));
 vi.mock('@/lib/auth/account', async importOriginal => ({
@@ -17,14 +18,16 @@ vi.mock('@/lib/auth/account', async importOriginal => ({
 vi.mock('@/lib/supabase/admin', () => ({ createServiceClient: () => ({ schema: (schema: string) => {
   expect(schema).toBe('wacrm');
   return {
-    from: () => ({
+    from: (table:string) => ({
       select: (fields: string) => {
         const filters: Record<string, unknown> = {};
         const q = {
           eq: (key: string, value: unknown) => { filters[key] = value; h.filters.push([key,value]);return q; },
-          neq: (key:string,value:unknown) => {h.filters.push(['not.'+key,value]);return q;},
+          neq: (key:string,value:unknown) => {filters['not.'+key]=value;h.filters.push(['not.'+key,value]);return q;},
           in: (key:string,value:unknown) => {h.filters.push([key,value]);return q;},
-          limit: async () => ({data:h.siblings,error:h.siblingError?{code:'test'}:null}),
+          limit: async () => table==='whatsapp_config'
+            ? {data:fields==='account_id'?(h.legacyAccount && h.legacyAccount!==filters['not.account_id']?[{account_id:h.legacyAccount}]:[]):h.legacyNumber?[{id:'legacy-number'}]:[],error:h.legacyError?{code:'private-db-error'}:null}
+            : {data:h.siblings,error:h.siblingError?{code:'test'}:null},
           order: async () => ({ data: h.row ? [h.row] : [], error: h.dbError ? {code:'test'} : null }),
           maybeSingle: async () => ({
             data: fields.includes('pin_ciphertext') && fields.includes('account_id') ? (h.owner ? {account_id:h.owner,status:'connected'} : null)
@@ -34,9 +37,18 @@ vi.mock('@/lib/supabase/admin', () => ({ createServiceClient: () => ({ schema: (
         };
         return q;
       },
-      update: (patch: Record<string, unknown>) => ({ eq: () => ({ eq: async () => {
-        h.patches.push(patch); return {error:null};
-      } }) }),
+      update: (patch: Record<string, unknown>) => {
+        const q={
+          eq:()=>q,
+          select:async()=>{
+            if(h.emptyUpdate)return {data:[],error:null};
+            h.patches.push(patch);return {data:[{id:'connection'}],error:null};
+          },
+          then:(resolve:(result:unknown)=>unknown)=>{
+            h.patches.push(patch);return Promise.resolve({error:null}).then(resolve);
+          },
+        };return q;
+      },
     }),
     rpc: async () => ({data:[{id:'connection',status:'pending',waba_id:'123'}],error:null}),
   };
@@ -49,7 +61,7 @@ const disconnectReq = () => disconnect(req(),{params:Promise.resolve({id})});
 beforeEach(() => {
   vi.stubEnv('WACRM_EMBEDDED_SIGNUP','1'); vi.stubEnv('META_APP_ID','test-app'); vi.stubEnv('META_APP_SECRET','test-secret');
   vi.stubEnv('WACRM_TOKEN_ENC_KEY',Buffer.alloc(32,2).toString('base64'));
-  h.auth.mockResolvedValue({accountId:'a',role:'admin'}); h.row=null; h.patches=[];h.failure='';h.owner=null;h.dbError=false;h.siblings=[];h.siblingError=false;h.filters=[];h.metaCode=100;
+  h.auth.mockResolvedValue({accountId:'a',role:'admin'}); h.row=null; h.patches=[];h.failure='';h.owner=null;h.dbError=false;h.siblings=[];h.siblingError=false;h.filters=[];h.metaCode=100;h.legacyNumber=false;h.legacyAccount=null;h.legacyError=false;h.emptyUpdate=false;
   vi.stubGlobal('fetch',vi.fn(async (url: string) => {
     if(h.failure && url.includes(h.failure)) return Response.json({error:{code:h.metaCode,message:'test-code test-token'}},{status:400});
     return Response.json(url.includes('oauth') ? {access_token:'test-token'} : url.includes('/phone_numbers')
@@ -133,6 +145,28 @@ describe('Embedded Signup routes', () => {
   it('returns 500 for connections database errors',async () => {
     h.dbError=true;const r=await connections();expect(r.status).toBe(500);
     expect(await r.json()).toEqual({error:'database_error'});
+  });
+  it('does not unsubscribe a WABA still used by any legacy config',async()=>{
+    h.row={id,account_id:'a',status:'connected',waba_id:'123',token_ciphertext:encryptToken('test-token')};
+    h.legacyNumber=true;
+    const r=await disconnectReq();expect(r.status).toBe(200);expect(fetch).not.toHaveBeenCalled();
+    expect(h.patches).toEqual([expect.objectContaining({status:'disconnected'})]);
+    expect(h.filters).toContainEqual(['waba_id','123']);
+  });
+  it('fails closed before unsubscribe if the legacy WABA lookup fails',async()=>{
+    h.row={id,account_id:'a',status:'connected',waba_id:'123',token_ciphertext:encryptToken('test-token')};
+    h.legacyError=true;
+    expect((await disconnectReq()).status).toBe(500);expect(fetch).not.toHaveBeenCalled();expect(h.patches).toEqual([]);
+  });
+  it('returns 409 number_in_use_legacy instead of taking another accounts legacy number',async()=>{
+    h.legacyAccount='b';const r=await complete(req());expect(r.status).toBe(409);
+    expect(await r.json()).toMatchObject({error:'number_in_use_legacy'});
+    expect(vi.mocked(fetch).mock.calls.some(args=>/register|subscribed_apps/.test(String(args[0])))).toBe(false);
+    expect(h.patches).toEqual([]);
+  });
+  it('returns 409 state_changed when the guarded connect update affects zero rows',async()=>{
+    h.emptyUpdate=true;const r=await complete(req());expect(r.status).toBe(409);
+    expect(await r.json()).toMatchObject({error:'state_changed'});expect(h.patches).toEqual([]);
   });
   it('disconnect query error is not misreported as auth or not found',async () => {
     h.dbError=true;expect((await disconnectReq()).status).toBe(500);

@@ -21,8 +21,11 @@ export async function POST(_request: Request, context: {params: Promise<{id:stri
     const {data:siblings, error:siblingError} = await db.from('wa_connections').select('id')
       .eq('waba_id',row.waba_id).neq('id',id).in('status',['connected','pending']).limit(1);
     if (siblingError) return NextResponse.json({error:'database_error'},{status:500});
+    const {data:legacyNumbers, error:legacyError} = await db.from('whatsapp_config').select('id')
+      .eq('waba_id',row.waba_id).limit(1);
+    if (legacyError || !legacyNumbers) return NextResponse.json({error:'database_error'},{status:500});
     let failed = false;
-    if (row.status !== 'disconnected' && !siblings?.length) {
+    if (row.status !== 'disconnected' && !siblings?.length && legacyNumbers.length === 0) {
       try { await unsubscribe(row.waba_id, decryptToken(row.token_ciphertext)); }
       catch { failed = true; }
     }

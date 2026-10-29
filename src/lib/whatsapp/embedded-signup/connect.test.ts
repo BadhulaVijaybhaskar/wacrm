@@ -9,6 +9,8 @@ const h = vi.hoisted(() => ({
   ownerStatus: 'connected', pinCiphertext: null as string | null,
   atomicPin: null as string | null, liveToken: '', writeFailure: false,
   pins: [] as string[],
+  updatedAt:'',legacyAccount:null as string|null,legacyError:false,
+  updateAttempts:[] as Record<string,unknown>[],legacyFilters:[] as [string,unknown][],
   events: [] as string[],
   updates: [] as Record<string, unknown>[],
   claimError: false,
@@ -20,25 +22,47 @@ vi.mock('@/lib/supabase/admin', () => ({ createServiceClient: () => ({
   schema: (schema: string) => {
     expect(schema).toBe('wacrm');
     return {
-      from: () => ({
+      from: (table:string) => table==='whatsapp_config' ? {
+        select: () => {
+          let excluded='';
+          const q={
+            eq:(key:string,value:unknown)=>{h.legacyFilters.push([key,value]);return q;},
+            neq:(key:string,value:string)=>{excluded=value;h.legacyFilters.push(['not.'+key,value]);return q;},
+            limit:async()=>{
+              h.events.push('legacy');
+              return {data:h.legacyAccount && h.legacyAccount!==excluded?[{account_id:h.legacyAccount}]:[],error:h.legacyError?{message:'private-db-details'}:null};
+            },
+          };return q;
+        },
+      } : ({
         select: () => ({ eq: () => ({ maybeSingle: async () => {
           h.events.push('ownership');
-          return { data: h.owner ? { account_id: h.owner, status: h.ownerStatus, pin_ciphertext: h.pinCiphertext } : null, error: null };
+          return { data: h.owner ? { account_id: h.owner, status: h.ownerStatus, pin_ciphertext: h.pinCiphertext,updated_at:h.updatedAt } : null, error: null };
         } }) }),
-        update: (patch: Record<string, unknown>) => ({ eq: () => ({ eq: async () => {
-          h.events.push(String(patch.status)); h.updates.push(patch);
-          if(h.writeFailure) throw new Error('simulated write failure');
-          if(typeof patch.token_ciphertext==='string') h.liveToken=patch.token_ciphertext;
-          h.ownerStatus=String(patch.status);return { error: null };
-        } }) }),
+        update: (patch: Record<string, unknown>) => {
+          const filters:Record<string,unknown>={};
+          const q={
+            eq:(key:string,value:unknown)=>{filters[key]=value;return q;},
+            select:async()=>{
+              h.updateAttempts.push({...patch,expected_status:filters.status});
+              if(h.writeFailure) throw new Error('simulated write failure');
+              if(h.ownerStatus!==filters.status || h.claimed!==filters.account_id)return {data:[],error:null};
+              h.events.push(String(patch.status));h.updates.push(patch);
+              if(typeof patch.token_ciphertext==='string')h.liveToken=patch.token_ciphertext;
+              h.ownerStatus=String(patch.status);return {data:[{id:'connection-id'}],error:null};
+            },
+          };return q;
+        },
       }),
       rpc: async (_name: string, args: Record<string, string>) => {
         h.events.push('claim');
-        if (h.claimError || (h.claimed && h.claimed !== args.p_account_id && h.ownerStatus !== 'disconnected'))
+        const recoverable=h.ownerStatus==='disconnected' || h.ownerStatus==='error'
+          || (h.ownerStatus==='pending' && Date.parse(h.updatedAt)<Date.now()-15*60*1000);
+        if (h.claimError || (h.claimed && h.claimed !== args.p_account_id && !recoverable))
           return { data: null, error: { code: '23505', message: 'wa_connection_owned' } };
         const wasConnected=h.owner===args.p_account_id && h.ownerStatus==='connected';
         h.claimed = args.p_account_id;
-        if(!wasConnected){h.ownerStatus='pending';h.liveToken=args.p_token_ciphertext;}
+        if(!wasConnected){h.ownerStatus='pending';h.liveToken=args.p_token_ciphertext;h.updatedAt=new Date(Date.now()).toISOString();}
         h.pinCiphertext=h.atomicPin || h.pinCiphertext || args.p_pin_ciphertext;
         expect(decryptToken(args.p_token_ciphertext)).toBe('test-business-token');
         expect(decryptToken(args.p_pin_ciphertext)).toMatch(/^\d{6}$/);
@@ -57,7 +81,7 @@ beforeEach(() => {
   vi.stubEnv('WACRM_TOKEN_ENC_KEY', Buffer.alloc(32, 1).toString('base64'));
   h.owner = null; h.claimed = null; h.events = []; h.updates = []; h.claimError = false;
   h.mismatch = false; h.failure = ''; h.metaCode = 100;
-  h.ownerStatus='connected';h.pinCiphertext=null;h.atomicPin=null;h.liveToken='';h.writeFailure=false;h.pins=[];
+  h.ownerStatus='connected';h.pinCiphertext=null;h.atomicPin=null;h.liveToken='';h.writeFailure=false;h.pins=[];h.updatedAt=new Date(Date.now()).toISOString();h.legacyAccount=null;h.legacyError=false;h.updateAttempts=[];h.legacyFilters=[];
   vi.stubGlobal('fetch', vi.fn(async (url: string, options?: RequestInit) => {
     const step = url.includes('oauth/access_token') ? 'exchange' : url.includes('/phone_numbers') ? 'verify'
       : url.includes('/register') ? 'register' : url.includes('/subscribed_apps') ? 'subscribe' : 'phone';
@@ -75,7 +99,7 @@ afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.restoreAllMocks(
 describe('Embedded Signup connect orchestration', () => {
   it('exchanges, verifies, claims pending, registers, subscribes, then connects without secrets in response', async () => {
     const result = await connect(input, 'a');
-    expect(h.events).toEqual(['exchange', 'verify', 'phone', 'ownership', 'claim', 'register', 'subscribe', 'connected']);
+    expect(h.events).toEqual(['exchange', 'verify', 'phone', 'legacy', 'ownership', 'claim', 'register', 'subscribe', 'connected']);
     expect(result.status).toBe('connected');
     expect(Object.keys(result).sort()).toEqual(['id','display_phone_number','verified_name','quality_rating','waba_id','status'].sort());
     expect(JSON.stringify(result)).not.toMatch(/test-business-token|test-oauth-code|ciphertext|pin/i);
@@ -183,6 +207,59 @@ describe('Embedded Signup connect orchestration', () => {
     h.failure='register';h.metaCode=133005;h.writeFailure=true;
     await expect(connect(input,'a')).rejects.toMatchObject({code:'pin_mismatch',status:409});
   });
+  it.each(['error','stale-pending'])('allows another account to recover a %s number',async state=>{
+    h.owner='b';h.claimed='b';h.ownerStatus=state==='error'?'error':'pending';
+    h.updatedAt=new Date(Date.now()-16*60*1000).toISOString();h.pinCiphertext=encryptToken('123456');
+    await expect(connect(input,'a')).resolves.toMatchObject({status:'connected'});
+    expect(h.claimed).toBe('a');expect(h.pins).toEqual(['123456']);
+  });
+  it.each(['fresh','exact-cutoff','invalid-timestamp'])('rejects another accounts %s pending claim before register',async age=>{
+    vi.spyOn(Date,'now').mockReturnValue(Date.parse('2026-10-30T00:00:00Z'));
+    h.owner='b';h.claimed='b';h.ownerStatus='pending';
+    h.updatedAt=age==='invalid-timestamp'?'invalid':new Date(Date.now()-(age==='fresh'?14:15)*60*1000).toISOString();
+    await expect(connect(input,'a')).rejects.toMatchObject({code:'phone_in_use',status:409});
+    expect(h.events).not.toContain('claim');expect(h.pins).toEqual([]);
+  });
+  it.each(['pending','connected'])('does not reconnect over a disconnect during a %s connect',async state=>{
+    if(state==='connected'){h.owner='a';h.pinCiphertext=encryptToken('123456');h.liveToken=encryptToken('old-business-token');}
+    const fetchMock=vi.mocked(fetch);const original=fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async(...args)=>{
+      const response=await original(...args);
+      if(String(args[0]).includes('/subscribed_apps'))h.ownerStatus='disconnected';
+      return response;
+    });
+    await expect(connect(input,'a')).rejects.toMatchObject({code:'state_changed',status:409});
+    expect(h.ownerStatus).toBe('disconnected');expect(h.updates).toEqual([]);
+    expect(h.updateAttempts).toHaveLength(1);expect(h.updateAttempts[0].expected_status).toBe(state);
+  });
+  it.each(['pending','connected'])('does not restore over a disconnect after a %s registration failure',async state=>{
+    if(state==='connected'){h.owner='a';h.pinCiphertext=encryptToken('123456');h.liveToken=encryptToken('old-business-token');}
+    h.failure='register';
+    const fetchMock=vi.mocked(fetch);const original=fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async(...args)=>{
+      const response=await original(...args);
+      if(String(args[0]).includes('/register'))h.ownerStatus='disconnected';
+      return response;
+    });
+    await expect(connect(input,'a')).rejects.toMatchObject({code:'state_changed',status:409});
+    expect(h.ownerStatus).toBe('disconnected');expect(h.updates).toEqual([]);
+    expect(h.updateAttempts).toHaveLength(1);expect(h.updateAttempts[0].expected_status).toBe(state);
+  });
+  it('blocks another accounts legacy number before claim/register/subscribe',async()=>{
+    h.legacyAccount='b';
+    await expect(connect(input,'a')).rejects.toMatchObject({code:'number_in_use_legacy',status:409});
+    expect(h.legacyFilters).toContainEqual(['phone_number_id','456']);
+    expect(h.legacyFilters).toContainEqual(['not.account_id','a']);
+    expect(h.events).not.toContain('claim');expect(h.pins).toEqual([]);expect(h.events).not.toContain('subscribe');
+  });
+  it('allows the same accounts legacy number',async()=>{
+    h.legacyAccount='a';await expect(connect(input,'a')).resolves.toMatchObject({status:'connected'});
+  });
+  it('fails closed on a legacy ownership lookup DB error',async()=>{
+    h.legacyError=true;
+    await expect(connect(input,'a')).rejects.toMatchObject({code:'database_error',status:500});
+    expect(h.events).not.toContain('claim');expect(h.pins).toEqual([]);
+  });
   it('claims pending in review-only SQL with unambiguous columns and an empty search path', () => {
     const sql = readFileSync('supabase/shared-project/wacrm_embedded_signup.sql','utf8');
     expect(sql).toContain("('pending','connected','disconnected','error')");
@@ -196,5 +273,11 @@ describe('Embedded Signup connect orchestration', () => {
     expect(sql).toContain("token_ciphertext=CASE WHEN c.status='connected' THEN c.token_ciphertext");
     expect(sql).toContain("current_setting('role', true) IS DISTINCT FROM 'service_role'");
     expect(sql.indexOf('DROP POLICY IF EXISTS')).toBeLessThan(sql.indexOf('CREATE POLICY'));
+    expect(sql).toContain("OR c.status='error'");
+    expect(sql).toContain("OR (c.status='pending' AND c.updated_at < now() - interval '15 minutes')");
+    const signature='DROP FUNCTION IF EXISTS wacrm.claim_wa_connection(uuid,text,text,text,text,text,text,text,text);';
+    expect(sql.indexOf(signature)).toBeGreaterThan(-1);
+    expect(sql.indexOf(signature)).toBeLessThan(sql.indexOf('CREATE OR REPLACE FUNCTION wacrm.claim_wa_connection'));
+    expect(readFileSync('supabase/shared-project/rollback_wacrm_embedded_signup.sql','utf8')).toContain(signature);
   });
 });

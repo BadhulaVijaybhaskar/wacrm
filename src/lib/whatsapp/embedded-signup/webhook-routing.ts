@@ -18,7 +18,12 @@ export async function resolveEmbeddedWebhookConnection(phoneNumberId: string): P
   const db = createServiceClient().schema('wacrm');
   const { data: rows, error } = await db.from('wa_connections')
     .select('account_id,phone_number_id,token_ciphertext,status').eq('phone_number_id', phoneNumberId);
-  if (error || !rows) return { status: 'not_connected' };
+  if (error) {
+    // Constant-only diagnostic: never include phone/account identifiers or DB details.
+    console.warn('[webhook] embedded connection lookup failed; skipping event');
+    return { status: 'not_connected' };
+  }
+  if (!rows) return { status: 'not_connected' };
   if (rows.length === 0) return { status: 'not_found' };
   if (rows.length !== 1 || rows[0].status !== 'connected') return { status: 'not_connected' };
   // profiles.account_role is defined in wacrm_schema.sql and used by getCurrentAccount.

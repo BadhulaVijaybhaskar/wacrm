@@ -57,13 +57,20 @@ export async function connect(input: SignupInput, accountId: string) {
     throw new SignupError('asset_mismatch', 403);
   const phone = await graph(input.phone_number_id + '?fields=display_phone_number,verified_name,quality_rating', token);
   const service = createServiceClient().schema('wacrm');
+  // Existing legacy ownership is still authoritative during the mixed rollout.
+  const { data: legacyOwners, error: legacyError } = await service.from('whatsapp_config')
+    .select('account_id').eq('phone_number_id', input.phone_number_id).neq('account_id', accountId).limit(1);
+  if (legacyError || !legacyOwners) throw new SignupError('database_error', 500);
+  if (legacyOwners.length > 0) throw new SignupError('number_in_use_legacy', 409);
   // This fast rejection is backed by the atomic claim below (the race arbiter).
   const { data: owner, error: ownershipError } = await service.from('wa_connections')
-    .select('account_id,status,pin_ciphertext').eq('phone_number_id', input.phone_number_id).maybeSingle();
+    .select('account_id,status,pin_ciphertext,updated_at').eq('phone_number_id', input.phone_number_id).maybeSingle();
   if (ownershipError) throw new SignupError('database_error', 500);
-  if (owner && owner.account_id !== accountId && owner.status !== 'disconnected')
+  const recoverable = owner && (owner.status === 'disconnected' || owner.status === 'error'
+    || (owner.status === 'pending' && Date.parse(owner.updated_at) < Date.now() - 15 * 60 * 1000));
+  if (owner && owner.account_id !== accountId && !recoverable)
     throw new SignupError('phone_in_use', 409);
-  // Disconnected transfers also retain the PIN originally registered by us.
+  // Recoverable transfers also retain the PIN originally registered by us.
   const pin = owner?.pin_ciphertext ? decryptToken(owner.pin_ciphertext)
     : String(randomInt(0, 1000000)).padStart(6, '0');
   const { data, error } = await service.rpc('claim_wa_connection', {
@@ -86,10 +93,12 @@ export async function connect(input: SignupInput, accountId: string) {
   // Use the atomically claimed PIN rather than a potentially stale pre-check.
   const registrationPin = result.claimed_pin_ciphertext ? decryptToken(result.claimed_pin_ciphertext) : pin;
   const update = async (status: string, last_error: string | null, fields: Record<string, unknown> = {}) => {
-    const { error: updateError } = await service.from('wa_connections')
+    const { data: updated, error: updateError } = await service.from('wa_connections')
       .update({ ...fields, status, last_error, updated_at: new Date().toISOString() })
-      .eq('account_id', accountId).eq('id', result.id);
+      .eq('account_id', accountId).eq('id', result.id)
+      .eq('status', wasConnected ? 'connected' : 'pending').select('id');
     if (updateError) throw new SignupError('database_error', 500);
+    if (!updated || updated.length === 0) throw new SignupError('state_changed', 409);
   };
   try {
     try {
@@ -110,10 +119,15 @@ export async function connect(input: SignupInput, accountId: string) {
       quality_rating: typeof phone.quality_rating === 'string' ? phone.quality_rating : null,
     });
   } catch (error) {
+    // A concurrent disconnect/transfer wins. Do not restore over its state.
+    if (error instanceof SignupError && error.code === 'state_changed') throw error;
     try {
       await update(wasConnected ? 'connected' : 'error', error instanceof SignupError ? error.code : 'meta_request_failed',
         wasConnected ? { token_ciphertext: result.previous_token_ciphertext } : {});
-    } catch { /* Preserve the original Meta error if recording/restoring state fails. */ }
+    } catch (restoreError) {
+      if (restoreError instanceof SignupError && restoreError.code === 'state_changed') throw restoreError;
+      // Preserve the original Meta error if recording/restoring state fails.
+    }
     throw error instanceof SignupError ? error : new SignupError('meta_request_failed', 502);
   }
   // Explicit allowlist: even an unexpected RPC response cannot leak ciphertext.

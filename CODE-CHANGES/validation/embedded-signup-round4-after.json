@@ -1,0 +1,128 @@
+{
+  "base": "778a097fa9fc8543b7e9d91706bee919f207aef5",
+  "counts": {
+    "numPassedTests": 1619,
+    "numFailedTests": 12,
+    "numPendingTests": 0,
+    "numTotalTests": 1631
+  },
+  "newFailureNames": [],
+  "removedFailureNames": [],
+  "remainingFailureMessagesChanged": [],
+  "newFailureNamesVsOriginalBaseline": [],
+  "removedFailureNamesVsOriginalBaseline": [
+    "inbound webhook: after() awaits automations (#368) every triggered automation settles before the after() callback resolves",
+    "inbound webhook: atomic unread bump (#369) increments unread through the DB-side RPC, not a read-modify-write",
+    "inbound webhook: business-scoped user IDs (#519) backfills the BSUID onto a contact we already knew by phone",
+    "inbound webhook: business-scoped user IDs (#519) creates ONE contact keyed on the BSUID when Meta sends no phone",
+    "inbound webhook: business-scoped user IDs (#519) fills in the phone once Meta finally discloses it",
+    "inbound webhook: business-scoped user IDs (#519) leaves the legacy phone-only payload behaving exactly as before",
+    "inbound webhook: contact name backfill (#519 regression guard) does adopt a username when that is all Meta gives us",
+    "inbound webhook: idempotent insert (#367) a genuine first delivery persists once and fans out downstream",
+    "inbound webhook: idempotent insert (#367) a replayed delivery is a no-op: no unread bump, no fan-out",
+    "inbound webhook: inbound media is mirrored (#466) does not mirror when the account has opted out",
+    "inbound webhook: inbound media is mirrored (#466) falls back to the proxy URL when the download from Meta throws",
+    "inbound webhook: inbound media is mirrored (#466) falls back to the proxy URL when the upload is refused",
+    "inbound webhook: inbound media is mirrored (#466) leaves text messages alone",
+    "inbound webhook: inbound media is mirrored (#466) mirrors when the column is absent, e.g. a row read before migration 039",
+    "inbound webhook: inbound media is mirrored (#466) names the object after a document's own filename",
+    "inbound webhook: inbound media is mirrored (#466) skips media larger than the bucket accepts, without downloading it",
+    "inbound webhook: inbound media is mirrored (#466) stores a durable storage path instead of the expiring proxy path",
+    "inbound webhook: template quick-reply buttons (#478) falls back to the label when the template button carries no payload",
+    "inbound webhook: template quick-reply buttons (#478) routes the tap to flows and fires the interactive_reply trigger",
+    "inbound webhook: template quick-reply buttons (#478) stores the tap as an interactive reply, not an unsupported message",
+    "status webhook: failed statuses keep Meta's reason (#535) a failed status with no errors array still flips status and stores no reason",
+    "status webhook: failed statuses keep Meta's reason (#535) a plain delivered status updates only status \u2014 error columns untouched",
+    "status webhook: failed statuses keep Meta's reason (#535) folds the reason into broadcast_recipients.error_message",
+    "status webhook: failed statuses keep Meta's reason (#535) persists code, title and details on the messages row in the same update as status",
+    "template-lifecycle webhooks: WABA id is threaded to the handler (#534) passes entry.id as wabaId so an unknown template can be stubbed for the right account"
+  ],
+  "failedTests": [
+    {
+      "file": "src/lib/astra-billing/usage-paths.test.ts",
+      "name": "WhatsApp usage metering wiring src/lib/whatsapp/send-message.ts calls recordWhatsappUsage"
+    },
+    {
+      "file": "src/lib/astra-billing/usage-paths.test.ts",
+      "name": "WhatsApp usage metering wiring src/lib/whatsapp/broadcast-core.ts calls recordWhatsappUsage"
+    },
+    {
+      "file": "src/lib/astra-billing/usage-paths.test.ts",
+      "name": "WhatsApp usage metering wiring src/app/api/whatsapp/broadcast/route.ts calls recordWhatsappUsage"
+    },
+    {
+      "file": "src/lib/astra-billing/usage-paths.test.ts",
+      "name": "WhatsApp usage metering wiring src/lib/automations/meta-send.ts calls recordWhatsappUsage"
+    },
+    {
+      "file": "src/lib/astra-billing/usage-paths.test.ts",
+      "name": "WhatsApp usage metering wiring src/lib/flows/meta-send.ts calls recordWhatsappUsage"
+    },
+    {
+      "file": "src/lib/astra-billing/usage-paths.test.ts",
+      "name": "WhatsApp usage metering wiring src/app/api/whatsapp/webhook/route.ts calls recordWhatsappUsage"
+    },
+    {
+      "file": "src/lib/astra-connect/outbound-paths.test.ts",
+      "name": "outbound Connect notify wiring src/lib/whatsapp/send-message.ts calls notifyConnectOutbound"
+    },
+    {
+      "file": "src/lib/astra-connect/outbound-paths.test.ts",
+      "name": "outbound Connect notify wiring src/lib/whatsapp/broadcast-core.ts calls notifyConnectOutbound"
+    },
+    {
+      "file": "src/lib/astra-connect/outbound-paths.test.ts",
+      "name": "outbound Connect notify wiring src/app/api/whatsapp/broadcast/route.ts calls notifyConnectOutbound"
+    },
+    {
+      "file": "src/lib/astra-connect/outbound-paths.test.ts",
+      "name": "outbound Connect notify wiring src/lib/automations/meta-send.ts calls notifyConnectOutbound"
+    },
+    {
+      "file": "src/lib/astra-connect/outbound-paths.test.ts",
+      "name": "outbound Connect notify wiring src/lib/flows/meta-send.ts calls notifyConnectOutbound"
+    },
+    {
+      "file": "src/lib/deploy/staging-next-public-build-args.test.ts",
+      "name": "staging Dockerfile inlines every NEXT_PUBLIC_* read in src declares ARG + ENV for each NEXT_PUBLIC_* used by the app"
+    }
+  ],
+  "signupAndWebhookSuites": [
+    {
+      "file": "src/components/settings/embedded-signup-card.test.ts",
+      "tests": 9
+    },
+    {
+      "file": "src/components/settings/embedded-signup-wiring.test.ts",
+      "tests": 1
+    },
+    {
+      "file": "src/lib/whatsapp/embedded-signup.test.ts",
+      "tests": 7
+    },
+    {
+      "file": "src/lib/whatsapp/embedded-signup/connect.test.ts",
+      "tests": 35
+    },
+    {
+      "file": "src/lib/whatsapp/embedded-signup/core.test.ts",
+      "tests": 6
+    },
+    {
+      "file": "src/app/api/whatsapp/embedded-signup/routes.test.ts",
+      "tests": 27
+    },
+    {
+      "file": "src/app/api/whatsapp/webhook/route.test.ts",
+      "tests": 48
+    },
+    {
+      "file": "src/app/api/whatsapp/config/embedded-signup/route.test.ts",
+      "tests": 4
+    }
+  ],
+  "sqlSha256": {
+    "supabase/shared-project/wacrm_embedded_signup.sql": "29122cb6a85d5fd6bafee0ed0c46fdccb9fb986fcfd9fa981aa16b51398bb8ed",
+    "supabase/shared-project/rollback_wacrm_embedded_signup.sql": "590d28b48deb42938d6b98b35ac9978f41d5aee06518304d1fa02d084116ad72"
+  }
+}

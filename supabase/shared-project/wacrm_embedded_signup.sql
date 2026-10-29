@@ -34,8 +34,10 @@ GRANT SELECT ON wacrm.wa_connections_public TO authenticated;
 DROP POLICY IF EXISTS wa_connections_member_read ON wacrm.wa_connections;
 CREATE POLICY wa_connections_member_read ON wacrm.wa_connections FOR SELECT TO authenticated
  USING (wacrm.is_account_member(account_id,'viewer'::wacrm.account_role_enum));
--- Atomic ownership claim. Only disconnected rows can transfer to another account.
+-- Atomic ownership claim. Disconnected/error rows and stale pending rows can transfer.
 -- Connected reconnects retain their live token/status until Meta provisioning succeeds.
+-- Drop the exact input signature so older draft OUT shapes can be replaced on re-run.
+DROP FUNCTION IF EXISTS wacrm.claim_wa_connection(uuid,text,text,text,text,text,text,text,text);
 CREATE OR REPLACE FUNCTION wacrm.claim_wa_connection(
  p_account_id uuid,p_waba_id text,p_phone_number_id text,p_business_id text,
  p_display_phone_number text,p_verified_name text,p_quality_rating text,
@@ -67,7 +69,8 @@ CREATE OR REPLACE FUNCTION wacrm.claim_wa_connection(
  pin_ciphertext=COALESCE(c.pin_ciphertext, EXCLUDED.pin_ciphertext),
  status=CASE WHEN c.status='connected' THEN c.status ELSE 'pending' END,
  last_error=CASE WHEN c.status='connected' THEN c.last_error ELSE NULL END,updated_at=now()
- WHERE c.account_id=EXCLUDED.account_id OR c.status='disconnected'
+ WHERE c.account_id=EXCLUDED.account_id OR c.status='disconnected' OR c.status='error'
+ OR (c.status='pending' AND c.updated_at < now() - interval '15 minutes')
  RETURNING c.id,c.display_phone_number,c.verified_name,c.quality_rating,c.waba_id,c.status,
  c.pin_ciphertext,c.token_ciphertext;
  IF NOT FOUND THEN RAISE EXCEPTION 'wa_connection_owned' USING ERRCODE='23505'; END IF;
