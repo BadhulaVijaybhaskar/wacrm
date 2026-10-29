@@ -1,10 +1,11 @@
 // Compare a vitest JSON report against a list of known baseline failures.
-// Usage: node check-known-failures.mjs <vitest-results.json> <known-failures.txt>
+// Usage: node check-known-failures.mjs <vitest-results.json> <known-failures.txt> [vitest.log]
+// With a log, also fails on missing log or any "Unhandled Error/Rejection" line.
 // Exits 1 on new failures, a missing/unparsable report, or zero tests.
 import fs from 'node:fs';
 import path from 'node:path';
 
-const [reportPath, knownPath] = process.argv.slice(2);
+const [reportPath, knownPath, logPath] = process.argv.slice(2);
 const gha = Boolean(process.env.GITHUB_ACTIONS);
 
 function error(msg) {
@@ -17,6 +18,22 @@ function notice(msg) {
 if (!reportPath || !knownPath) {
   error('Usage: check-known-failures.mjs <vitest-results.json> <known-failures.txt>');
   process.exit(1);
+}
+
+if (logPath) {
+  let log;
+  try {
+    log = fs.readFileSync(logPath, 'utf8');
+  } catch (err) {
+    error(`Cannot read vitest log "${logPath}": ${err.message}`);
+    process.exit(1);
+  }
+  const unhandled = log.split(/\r?\n/).filter((l) => /Unhandled (Error|Rejection)/.test(l));
+  if (unhandled.length > 0) {
+    error(`Vitest log contains ${unhandled.length} unhandled error line(s):`);
+    for (const l of unhandled.slice(0, 20)) console.error(l);
+    process.exit(1);
+  }
 }
 
 let report;
@@ -55,6 +72,12 @@ for (const file of report.testResults ?? []) {
   }
   if (file.status === 'failed' && assertions.length === 0) {
     failed.add(`${rel} > (suite failed to load)`);
+  } else if (
+    file.status === 'failed' &&
+    !assertions.some((a) => a.status === 'failed')
+  ) {
+    failed.add(`${rel} > (suite error)`);
+    if (file.message) console.error(`${rel}: ${file.message}`);
   }
 }
 

@@ -3,6 +3,7 @@
  * imports recordWhatsappUsage.
  */
 import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const PATHS = [
@@ -17,7 +18,7 @@ const PATHS = [
 describe('WhatsApp usage metering wiring', () => {
   for (const rel of PATHS) {
     it(`${rel} calls recordWhatsappUsage`, () => {
-      const src = readFileSync(`/workspace/${rel}`, 'utf8')
+      const src = readFileSync(join(process.cwd(), rel), 'utf8')
       expect(src).toMatch(/recordWhatsappUsage/)
     })
   }

@@ -32,6 +32,11 @@ function isAppOrigin(request: Request): boolean {
   return allowed.includes(origin);
 }
 
+// Browsers label cross-site requests; reject them even if Origin looks acceptable.
+function isCrossSite(request: Request): boolean {
+  return request.headers.get('sec-fetch-site') === 'cross-site';
+}
+
 export async function POST(request: Request) {
   if (!enabled()) return NextResponse.json({ error: 'not_found' }, { status: 404 });
   // The callback state cookie is single-use: every response after a
@@ -47,7 +52,7 @@ export async function POST(request: Request) {
     return response;
   };
   if (!isJsonRequest(request)) return reply(NextResponse.json({ error: 'unsupported_media_type' }, { status: 415 }));
-  if (!isAppOrigin(request)) return reply(NextResponse.json({ error: 'forbidden_origin' }, { status: 403 }));
+  if (isCrossSite(request) || !isAppOrigin(request)) return reply(NextResponse.json({ error: 'forbidden_origin' }, { status: 403 }));
   try {
     const ctx = await requireRole('admin');
     const input = signupInput.safeParse(await request.json().catch(() => null));

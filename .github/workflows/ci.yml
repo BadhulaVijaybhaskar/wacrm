@@ -5,6 +5,9 @@ on:
   push:
     branches: ['**']
 
+permissions:
+  contents: read
+
 # Cancel older CI runs for the same branch when a new commit arrives —
 # saves minutes when someone pushes a stack of fixes to one PR.
 concurrency:
@@ -55,12 +58,14 @@ jobs:
       # in .github/ci/known-test-failures.txt. The Test step never fails on
       # vitest's exit code; the check step below fails CI only on NEW
       # failures (or if the JSON report is missing/empty, or suites fail
-      # to load). Build still runs after tests.
+      # to load). Build still runs after tests. Unhandled errors/rejections
+      # don't show up in the JSON report, so the console output is saved to
+      # vitest.log and the checker scans it for them.
       - name: Test
-        run: npx vitest run --exclude src/components/brand/brand-lockup-fit.test.ts --reporter=default --reporter=json --outputFile=vitest-results.json || true
+        run: npx vitest run --exclude src/components/brand/brand-lockup-fit.test.ts --reporter=default --reporter=json --outputFile=vitest-results.json 2>&1 | tee vitest.log || true
 
       - name: Check test failures against known baseline
-        run: node scripts/ci/check-known-failures.mjs vitest-results.json .github/ci/known-test-failures.txt
+        run: node scripts/ci/check-known-failures.mjs vitest-results.json .github/ci/known-test-failures.txt vitest.log
 
       - name: Build
         run: npm run build

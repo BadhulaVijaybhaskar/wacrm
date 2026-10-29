@@ -5,6 +5,7 @@ import { checkAccountConnections, checkScheduledConnections } from './health'
 const h = vi.hoisted(() => ({
   rows: [] as { id: string; account_id: string; phone_number_id: string; token_ciphertext: string; status: string }[],
   updates: [] as { id: string; patch: Record<string, unknown> }[],
+  failUpdates: false,
 }))
 
 vi.mock('@/lib/supabase/admin', () => ({
@@ -35,7 +36,8 @@ vi.mock('@/lib/supabase/admin', () => ({
               filters[key] = value
               return query
             },
-            then: (resolve: (value: unknown) => void) => {
+            then: (resolve: (value: unknown) => void, reject: (reason: unknown) => void) => {
+              if (h.failUpdates) return reject(new Error('db down'))
               h.updates.push({ id: String(filters.id), patch })
               resolve({ error: null })
             },
@@ -71,6 +73,7 @@ beforeEach(() => {
   vi.stubEnv('WACRM_TOKEN_ENC_KEY', Buffer.alloc(32, 1).toString('base64'))
   h.rows = [row('a1', 'A'), row('b1', 'B')]
   h.updates = []
+  h.failUpdates = false
   vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
 afterEach(() => {
@@ -89,7 +92,7 @@ describe('WhatsApp connection health check', () => {
     vi.stubGlobal('fetch', fetchMock)
     await expect(checkScheduledConnections()).resolves.toBeUndefined()
     expect(fetchMock).toHaveBeenCalledTimes(2)
-    expect(h.updates.map((u) => u.id)).toEqual(['b1'])
+    expect(h.updates.filter((u) => 'last_error' in u.patch).map((u) => u.id)).toEqual(['b1'])
   })
 
   it('bumps updated_at on a healthy check', async () => {
@@ -105,7 +108,21 @@ describe('WhatsApp connection health check', () => {
     await expect(checkAccountConnections('A')).rejects.toBeTruthy()
     await checkScheduledConnections()
     expect(h.updates.some((u) => u.patch.status === 'error')).toBe(false)
-    expect(h.updates).toEqual([])
+    expect(h.updates.every((u) => Object.keys(u.patch).join() === 'updated_at')).toBe(true)
+  })
+
+  it('bumps only updated_at for a failing account so it leaves the front of the scan', async () => {
+    h.rows = [row('a1', 'A'), row('b1', 'B')]
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('network down') }))
+    await checkScheduledConnections()
+    expect(h.updates).toHaveLength(2)
+    for (const u of h.updates) expect(Object.keys(u.patch)).toEqual(['updated_at'])
+  })
+
+  it('swallows a failure of the updated_at bump', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('network down') }))
+    h.failUpdates = true
+    await expect(checkScheduledConnections()).resolves.toBeUndefined()
   })
 
   it('stops scanning remaining accounts once aborted', async () => {

@@ -230,6 +230,11 @@ describe('Embedded Signup routes', () => {
       expect(r.status).toBe(403);expect(h.auth).not.toHaveBeenCalled();expect(fetch).not.toHaveBeenCalled();
       expect(r.headers.get('set-cookie')).toContain('Max-Age=0');
     });
+    it('rejects Sec-Fetch-Site: cross-site with 403',async()=>{
+      const issued=signedState();const r=await complete(withCookie(popupBody(issued.state),issued.cookie,{'Sec-Fetch-Site':'cross-site'}));
+      expect(r.status).toBe(403);expect(h.auth).not.toHaveBeenCalled();expect(fetch).not.toHaveBeenCalled();
+      expect(r.headers.get('set-cookie')).toContain('Max-Age=0');
+    });
     it('accepts the request origin and the configured site origin',async()=>{
       for(const origin of ['https://test.invalid','https://crm.example']){
         vi.stubEnv('NEXT_PUBLIC_SITE_URL','https://crm.example');

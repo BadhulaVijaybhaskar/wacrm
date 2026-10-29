@@ -46,6 +46,16 @@ export async function checkAccountConnections(accountId:string){
   return {connections:results};
 }
 
+// Moves a failing account to the back of the oldest-first scan without touching status or last_error.
+async function deferAccount(accountId:string){
+  try{
+    await createServiceClient().schema('wacrm').from('wa_connections').update({updated_at:new Date().toISOString()})
+      .eq('account_id',accountId).eq('status','connected');
+  }catch{
+    // Best effort: a failed bump must not affect the rest of the batch.
+  }
+}
+
 // Reuses the existing authenticated automation cron; no new scheduler/infra.
 export async function checkScheduledConnections(options:{signal?:AbortSignal}={}){
   const {signal}=options;
@@ -60,6 +70,7 @@ export async function checkScheduledConnections(options:{signal?:AbortSignal}={}
       // One failing account (network, timeout, database) must not stop the batch,
       // and never flips the row to error: only a definitive invalid token does.
       console.warn('[embedded-signup] account health check failed',accountError instanceof SignupError?accountError.code:'unexpected_error');
+      await deferAccount(accountId);
     }
   }
 }

@@ -3,6 +3,7 @@
  * so Connect's /message stays in sync when the adapter is on.
  */
 import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const PATHS = [
@@ -16,7 +17,7 @@ const PATHS = [
 describe('outbound Connect notify wiring', () => {
   for (const rel of PATHS) {
     it(`${rel} calls notifyConnectOutbound`, () => {
-      const src = readFileSync(`/workspace/${rel}`, 'utf8')
+      const src = readFileSync(join(process.cwd(), rel), 'utf8')
       expect(src).toMatch(/notifyConnectOutbound/)
     })
   }
