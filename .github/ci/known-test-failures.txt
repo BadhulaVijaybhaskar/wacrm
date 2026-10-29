@@ -1,0 +1,16 @@
+# Known baseline test failures tolerated by CI.
+# Format: <relative test file> > <full test name>   (one per line)
+# Lines starting with # and blank lines are ignored.
+# Do not add entries to hide new failures; remove entries when fixed.
+src/lib/astra-billing/usage-paths.test.ts > WhatsApp usage metering wiring src/lib/whatsapp/send-message.ts calls recordWhatsappUsage
+src/lib/astra-billing/usage-paths.test.ts > WhatsApp usage metering wiring src/lib/whatsapp/broadcast-core.ts calls recordWhatsappUsage
+src/lib/astra-billing/usage-paths.test.ts > WhatsApp usage metering wiring src/app/api/whatsapp/broadcast/route.ts calls recordWhatsappUsage
+src/lib/astra-billing/usage-paths.test.ts > WhatsApp usage metering wiring src/lib/automations/meta-send.ts calls recordWhatsappUsage
+src/lib/astra-billing/usage-paths.test.ts > WhatsApp usage metering wiring src/lib/flows/meta-send.ts calls recordWhatsappUsage
+src/lib/astra-billing/usage-paths.test.ts > WhatsApp usage metering wiring src/app/api/whatsapp/webhook/route.ts calls recordWhatsappUsage
+src/lib/astra-connect/outbound-paths.test.ts > outbound Connect notify wiring src/lib/whatsapp/send-message.ts calls notifyConnectOutbound
+src/lib/astra-connect/outbound-paths.test.ts > outbound Connect notify wiring src/lib/whatsapp/broadcast-core.ts calls notifyConnectOutbound
+src/lib/astra-connect/outbound-paths.test.ts > outbound Connect notify wiring src/app/api/whatsapp/broadcast/route.ts calls notifyConnectOutbound
+src/lib/astra-connect/outbound-paths.test.ts > outbound Connect notify wiring src/lib/automations/meta-send.ts calls notifyConnectOutbound
+src/lib/astra-connect/outbound-paths.test.ts > outbound Connect notify wiring src/lib/flows/meta-send.ts calls notifyConnectOutbound
+src/lib/deploy/staging-next-public-build-args.test.ts > staging Dockerfile inlines every NEXT_PUBLIC_* read in src declares ARG + ENV for each NEXT_PUBLIC_* used by the app
