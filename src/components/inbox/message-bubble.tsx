@@ -27,6 +27,7 @@ import {
   sanitizeInteractivePayload,
   stripControlChars,
 } from '@/lib/security/sanitize-message';
+import { publicInteractivePayload } from '@/lib/whatsapp/internal-payload';
 import { useTranslations } from 'next-intl';
 
 /** React text node after control-char strip — never HTML-unescaped. */
@@ -99,7 +100,7 @@ function StatusIcon({
   }
 }
 
-function MessageContent({
+export function MessageContent({
   message,
   t,
   isAgent,
@@ -231,10 +232,13 @@ function MessageContent({
       //  - OUTBOUND with NO payload (legacy bot/Flow sends from before
       //    migration 035 backfilled the column): show the body text plainly —
       //    it is our own message, NOT a customer tap.
-      if (message.interactive_payload) {
+      const interactivePayload = publicInteractivePayload(
+        message.interactive_payload,
+      );
+      if (interactivePayload) {
         return (
           <InteractivePreview
-            payload={sanitizeInteractivePayload(message.interactive_payload)}
+            payload={sanitizeInteractivePayload(interactivePayload)}
           />
         );
       }

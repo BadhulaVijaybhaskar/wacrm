@@ -2068,6 +2068,7 @@
       "connectedMessage": "WhatsApp conectado.",
       "connectFailed": "La conexión falló. Inténtalo de nuevo.",
       "pinMismatch": "Desactiva la verificación en dos pasos para este número en el administrador de WhatsApp y vuelve a intentar la conexión.",
+      "coexistenceRequired": "Este número sigue activo en la app WhatsApp Business. Elige la opción de coexistencia para conectarlo.",
       "cancelled": "La configuración se canceló o falló. Inténtalo de nuevo cuando estés listo.",
       "authorizationIncomplete": "La autorización no se completó.",
       "startFailed": "No se pudo iniciar la configuración. Revisa el navegador y la configuración.",

@@ -21,6 +21,8 @@ export class SignupError extends Error {
 }
 export const publicError = (e: unknown) => e instanceof SignupError && e.code === 'pin_mismatch'
   ? { status: 409, body: { error: 'pin_mismatch', code: 'pin_mismatch', message: 'Turn off two-step verification for this number in WhatsApp Manager, then retry connecting.' } }
+  : e instanceof SignupError && e.code === 'coexistence_required'
+  ? { status: 409, body: { error: 'coexistence_required', code: 'coexistence_required', message: 'This number is active on the WhatsApp Business app. Connect it using coexistence.' } }
   : e instanceof SignupError
   ? { status: e.status, body: { error: e.code, message: 'WhatsApp connection could not be completed.' } }
   : { status: 500, body: { error: 'internal_error', message: 'WhatsApp connection could not be completed.' } };
@@ -74,6 +76,8 @@ async function resolveAssets(input: SignupInput,token:string):Promise<{waba:stri
   if(!ids.includes(phoneId))throw new SignupError('asset_mismatch',403);
   return {waba,phoneId};
 }
+// Meta: the one-time Business app data sync was already performed for this number.
+const ALREADY_SYNCED_META_CODE = 2593107;
 export async function connect(input: SignupInput, accountId: string) {
   const appId = process.env.META_APP_ID;
   const secret = process.env.META_APP_SECRET?.split(',')[0]?.trim();
@@ -87,6 +91,10 @@ export async function connect(input: SignupInput, accountId: string) {
   const mode=input.mode || (input.source==='hosted' && phone.is_on_biz_app===true?'coexistence':'standard');
   if(mode==='coexistence' && (phone.is_on_biz_app!==true || phone.platform_type!=='CLOUD_API'))
     throw new SignupError('asset_mismatch',403);
+  // A number still active on the Business app must onboard via coexistence;
+  // registering it would take it off the app.
+  if(mode==='standard' && phone.is_on_biz_app===true)
+    throw new SignupError('coexistence_required',409);
   const service = createServiceClient().schema('wacrm');
   // Existing legacy ownership is still authoritative during the mixed rollout.
   const { data: legacyOwners, error: legacyError } = await service.from('whatsapp_config')
@@ -154,14 +162,22 @@ export async function connect(input: SignupInput, accountId: string) {
       throw error;
     }
     await graph(waba + '/subscribed_apps', token, 'POST');
-    if(mode==='coexistence' && (!owner || owner.account_id!==accountId)){
+    // A previously connected coexistence row was already synced. A connected
+    // standard row (it still holds a PIN) switching to coexistence was not.
+    const switchedFromStandard=wasConnected && typeof result.claimed_pin_ciphertext==='string';
+    if(mode==='coexistence' && (!wasConnected || switchedFromStandard)){
       // Registration is forbidden for coexistence. Both documented one-time
       // sync requests must start within 24h, after WABA subscription.
       // https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/onboarding-business-app-users#synchronizing-whatsapp-business-app-data
       for(const sync_type of ['smb_app_state_sync','history']){
-        const sync=await graph(phoneId+'/smb_app_data',token,'POST',{messaging_product:'whatsapp',sync_type});
-        console.info('[embedded-signup] sync accepted',sync_type,
-          typeof sync.request_id==='string'&&/^[\w-]{1,128}$/.test(sync.request_id)?sync.request_id:'unavailable');
+        try{
+          const sync=await graph(phoneId+'/smb_app_data',token,'POST',{messaging_product:'whatsapp',sync_type});
+          console.info('[embedded-signup] sync accepted',sync_type,
+            typeof sync.request_id==='string'&&/^[\w-]{1,128}$/.test(sync.request_id)?sync.request_id:'unavailable');
+        }catch(syncError){
+          if(!(syncError instanceof SignupError && syncError.metaCode===ALREADY_SYNCED_META_CODE))throw syncError;
+          console.info('[embedded-signup] sync already performed',sync_type,syncError.metaCode);
+        }
       }
     }
     await update('connected', null, {

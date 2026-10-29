@@ -51,4 +51,17 @@ describe('serializeMessage', () => {
     const agent = { ...inbound, sender_type: 'agent' } as unknown as Message;
     expect(serializeMessage(agent).direction).toBe('outbound');
   });
+
+  it('never exposes _wacrm_ provenance keys', () => {
+    const row = {
+      id: 'm1',
+      conversation_id: 'conv1',
+      sender_type: 'agent',
+      content_type: 'interactive',
+      status: 'sent',
+      created_at: '2026-01-01T00:00:00Z',
+      interactive_payload: { body: 'hi', _wacrm_phone_number_id: '999' },
+    } as unknown as Message;
+    expect(JSON.stringify(serializeMessage(row))).not.toContain('_wacrm_');
+  });
 });

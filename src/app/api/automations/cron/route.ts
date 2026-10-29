@@ -30,11 +30,50 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  if(process.env.WACRM_EMBEDDED_SIGNUP==='1'){
-    try{const {checkScheduledConnections}=await import('@/lib/whatsapp/embedded-signup/health');await checkScheduledConnections();}
-    catch{console.warn('[embedded-signup] scheduled health check failed');}
-  }
+  const response = await processPendingExecutions()
+  await runHealthCheckIfDue()
+  return response
+}
 
+const HEALTH_CHECK_BUDGET_MS = 20_000
+const HEALTH_CHECK_INTERVAL_MS = 60 * 60 * 1000
+let lastHealthCheckAt = 0
+
+/**
+ * Best-effort WhatsApp connection health check. Runs after automation
+ * processing, at most once per hour per process, and is abandoned after
+ * the time budget. It never throws.
+ */
+async function runHealthCheckIfDue() {
+  if (process.env.WACRM_EMBEDDED_SIGNUP !== '1') return
+  const now = Date.now()
+  if (now - lastHealthCheckAt < HEALTH_CHECK_INTERVAL_MS) return
+  lastHealthCheckAt = now
+
+  const controller = new AbortController()
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<void>((resolve) => {
+    timer = setTimeout(() => {
+      controller.abort()
+      resolve()
+    }, HEALTH_CHECK_BUDGET_MS)
+  })
+  try {
+    const { checkScheduledConnections } = await import(
+      '@/lib/whatsapp/embedded-signup/health'
+    )
+    const check = checkScheduledConnections({ signal: controller.signal }).catch(() => {
+      console.warn('[embedded-signup] scheduled health check failed')
+    })
+    await Promise.race([check, timeout])
+  } catch {
+    console.warn('[embedded-signup] scheduled health check failed')
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+async function processPendingExecutions() {
   const admin = supabaseAdmin()
   const { data: due, error } = await admin
     .from('automation_pending_executions')

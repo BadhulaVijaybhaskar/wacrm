@@ -18,7 +18,7 @@ const h = vi.hoisted(() => ({
   claimError: false,
   mismatch: false,
   failure: '' as string,
-  metaCode: 100,biz:false,syncs:[] as string[],debugTargets:['123'],
+  metaCode: 100,biz:false,syncs:[] as string[],debugTargets:['123'],syncErrorCode:null as number|null,
 }));
 vi.mock('node:crypto',async importOriginal=>({
   ...await importOriginal<typeof import('node:crypto')>(),
@@ -100,11 +100,12 @@ beforeEach(() => {
   vi.stubEnv('WACRM_TOKEN_ENC_KEY', Buffer.alloc(32, 1).toString('base64'));
   h.owner = null; h.claimed = null; h.events = []; h.updates = []; h.claimError = false;
   h.mismatch = false; h.failure = ''; h.metaCode = 100;
-  h.ownerStatus='connected';h.pinCiphertext=null;h.atomicPin=null;h.liveToken='';h.writeFailure=false;h.pins=[];h.updatedAt=new Date(Date.now()).toISOString();h.legacyAccount=null;h.legacyError=false;h.updateAttempts=[];h.legacyFilters=[];h.selections=[];h.returnedPins=[];h.pinReadError=false;h.biz=false;h.syncs=[];h.debugTargets=['123'];
+  h.ownerStatus='connected';h.pinCiphertext=null;h.atomicPin=null;h.liveToken='';h.writeFailure=false;h.pins=[];h.updatedAt=new Date(Date.now()).toISOString();h.legacyAccount=null;h.legacyError=false;h.updateAttempts=[];h.legacyFilters=[];h.selections=[];h.returnedPins=[];h.pinReadError=false;h.biz=false;h.syncs=[];h.debugTargets=['123'];h.syncErrorCode=null;
   vi.stubGlobal('fetch', vi.fn(async (url: string, options?: RequestInit) => {
     const step = url.includes('debug_token')?'debug':url.includes('smb_app_data')?'sync':url.includes('oauth/access_token') ? 'exchange' : url.includes('/phone_numbers') ? 'verify'
       : url.includes('/register') ? 'register' : url.includes('/subscribed_apps') ? 'subscribe' : 'phone';
     h.events.push(step);
+    if(step==='sync'&&h.syncErrorCode!==null){h.syncs.push(JSON.parse(String(options?.body)).sync_type);return Response.json({error:{code:h.syncErrorCode,message:'test-business-token'}},{status:400});}
     if(step==='sync'){const payload=JSON.parse(String(options?.body));h.syncs.push(payload.sync_type);return Response.json({messaging_product:'whatsapp',request_id:'request-'+payload.sync_type});}
     if(step==='debug')return Response.json({data:{is_valid:true,app_id:'test-app',granular_scopes:[{scope:'whatsapp_business_management',target_ids:h.debugTargets}]}});
     if(step==='register')h.pins.push(JSON.parse(String(options?.body)).pin);
@@ -324,6 +325,38 @@ describe('Embedded Signup connect orchestration', () => {
   });
   it('does not trust a coexistence mode flag for a number not verified on the Business app',async()=>{
     await expect(connect({...input,mode:'coexistence'},'a')).rejects.toMatchObject({code:'asset_mismatch',status:403});expect(h.events).not.toContain('claim');
+  });
+  it('retrying coexistence after an earlier error on the same account runs both syncs',async()=>{
+    h.biz=true;h.owner='a';h.ownerStatus='error';
+    await expect(connect({...input,mode:'coexistence'},'a')).resolves.toMatchObject({status:'connected'});
+    expect(h.syncs).toEqual(['smb_app_state_sync','history']);
+  });
+  it('reconnecting an already-connected coexistence row does not sync again',async()=>{
+    h.biz=true;h.owner='a';h.ownerStatus='connected';
+    await expect(connect({...input,mode:'coexistence'},'a')).resolves.toMatchObject({status:'connected'});
+    expect(h.syncs).toEqual([]);
+  });
+  it('treats an already-synced Meta error as non-fatal and logs only the code',async()=>{
+    h.biz=true;h.syncErrorCode=2593107;const info=vi.spyOn(console,'info').mockImplementation(()=>{});
+    await expect(connect({...input,mode:'coexistence'},'a')).resolves.toMatchObject({status:'connected'});
+    expect(h.syncs).toEqual(['smb_app_state_sync','history']);
+    expect(JSON.stringify(info.mock.calls)).not.toContain('test-business-token');
+  });
+  it('keeps other sync errors fatal',async()=>{
+    h.biz=true;h.syncErrorCode=100;
+    await expect(connect({...input,mode:'coexistence'},'a')).rejects.toMatchObject({code:'meta_request_failed'});
+    expect(h.ownerStatus).toBe('error');
+  });
+  it('syncs when a connected standard row of the account switches to coexistence',async()=>{
+    h.biz=true;h.owner='a';h.ownerStatus='connected';h.pinCiphertext=encryptToken('123456');
+    await expect(connect({...input,mode:'coexistence'},'a')).resolves.toMatchObject({status:'connected'});
+    expect(h.syncs).toEqual(['smb_app_state_sync','history']);
+  });
+  it('rejects standard onboarding of a Business-app number before claim or register',async()=>{
+    h.biz=true;
+    await expect(connect({...input,mode:'standard'},'a')).rejects.toMatchObject({code:'coexistence_required',status:409});
+    expect(h.events).not.toContain('claim');expect(h.events).not.toContain('register');
+    expect(publicError(new SignupError('coexistence_required',409)).body).toMatchObject({code:'coexistence_required'});
   });
   it('claims pending in review-only SQL with unambiguous columns and an empty search path', () => {
     const sql = readFileSync('supabase/shared-project/wacrm_embedded_signup.sql','utf8');

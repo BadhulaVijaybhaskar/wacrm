@@ -24,6 +24,11 @@ function loadSdk(appId:string,version:string) {
   return sdkPromise.then(()=>window.FB?.init({appId,version}));
 }
 
+function errorMessageKey(code:unknown){
+  if(code==='pin_mismatch')return 'pinMismatch';
+  if(code==='coexistence_required')return 'coexistenceRequired';
+  return 'connectFailed';
+}
 export function EmbeddedSignupCard() {
   const t = useTranslations('Settings.whatsappConnections');
   const {canEditSettings,accountId} = useAuth();
@@ -34,6 +39,7 @@ export function EmbeddedSignupCard() {
   const [message,setMessage]=useState('');
   const code=useRef<string|null>(null);
   const finish=useRef<Finish|null>(null);
+  const callbackState=useRef<string|null>(null);
   const submitted=useRef(false);
   const alive=useRef(true);
   const refresh=useCallback(async()=>{
@@ -47,13 +53,13 @@ export function EmbeddedSignupCard() {
   const complete=useCallback(async()=>{
     if(!code.current || !finish.current || submitted.current) return;
     submitted.current=true;
-    const payload={code:code.current,...finish.current,mode:finish.current.mode||mode,source:'popup'};
-    code.current=null;finish.current=null;
+    const payload={code:code.current,...finish.current,mode:finish.current.mode||mode,source:'popup',state:callbackState.current??undefined};
+    code.current=null;finish.current=null;callbackState.current=null;
     try {
       const r=await fetch('/api/whatsapp/embedded-signup/complete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
       const body=await r.json();
       if(!r.ok) {
-        if(alive.current){setState('error');setMessage(t(body.code==='pin_mismatch'?'pinMismatch':'connectFailed'));await refresh();}
+        if(alive.current){setState('error');setMessage(t(errorMessageKey(body.code)));await refresh();}
         return;
       }
       if(alive.current){setState('idle');setMessage(t('connectedMessage'));await refresh();}
@@ -70,7 +76,7 @@ export function EmbeddedSignupCard() {
   },[enabled,canEditSettings,complete,t]);
   async function start(){
     if(!canEditSettings)return;
-    setState('connecting');setMessage('');code.current=null;finish.current=null;submitted.current=false;
+    setState('connecting');setMessage('');code.current=null;finish.current=null;callbackState.current=null;submitted.current=false;
     try {
       const appId=process.env.NEXT_PUBLIC_META_APP_ID;
       const configId=process.env.NEXT_PUBLIC_META_ES_CONFIG_ID;
@@ -78,6 +84,8 @@ export function EmbeddedSignupCard() {
       const config=await fetch('/api/whatsapp/embedded-signup/config');
       if(!config.ok)throw new Error('configuration_error');
       const settings=await config.json();
+      if(typeof settings.state!=='string')throw new Error('configuration_error');
+      callbackState.current=settings.state;
       await loadSdk(appId,settings.graph_version||process.env.NEXT_PUBLIC_META_GRAPH_VERSION||'v26.0');
       if(!window.FB)throw new Error('sdk_unavailable');
       window.FB.login(r=>{

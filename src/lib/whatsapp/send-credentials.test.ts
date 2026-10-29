@@ -48,6 +48,33 @@ describe('Per-account WhatsApp credentials',()=>{
  it('requires a number when more than one connected number exists',async()=>{
   h.rows=[row(),{...row(),id:'second',phone_number_id:'789'}];await expect(getSendCredentials('a')).rejects.toMatchObject({code:'whatsapp_number_required'});
  });
+ it.each(['disconnected','error','pending'])('uses legacy when the only ES row is %s and no number is given',async status=>{
+  h.rows=[row(status)];expect(await getSendCredentials('a')).toMatchObject({source:'legacy',accessToken:'legacy-token'});
+ });
+ it('uses legacy for a provenance-less conversation even with a connected ES number',async()=>{
+  h.rows=[row()];h.messageRows=[];
+  const config=await loadSendConfig(createServiceClient(),'a',undefined,'conv');
+  expect(config.data.id).toBe('legacy');expect(decrypt(config.data.access_token)).toBe('legacy-token');
+ });
+ it('uses legacy for a conversation whose latest message has no provenance',async()=>{
+  h.rows=[row()];h.messageRows=[{interactive_payload:{}}];
+  const config=await loadSendConfig(createServiceClient(),'a',undefined,'conv');
+  expect(config.data.id).toBe('legacy');
+ });
+ it('uses the connected ES number for a provenance-less conversation when no legacy exists',async()=>{
+  h.rows=[row()];h.legacy=null;
+  const config=await loadSendConfig(createServiceClient(),'a',undefined,'conv');
+  expect(config.data.phone_number_id).toBe('123');expect(decrypt(config.data.access_token)).toBe('business-token');
+ });
+ it('throws the reconnect error when no legacy exists and the only ES row is in error',async()=>{
+  h.rows=[row('error')];h.legacy=null;
+  await expect(getSendCredentials('a')).rejects.toBeInstanceOf(SendCredentialError);
+  await expect(getSendCredentials('a')).rejects.toMatchObject({code:'whatsapp_reconnect_required'});
+ });
+ it('still fails closed for an explicit number matching a non-connected ES row when legacy exists',async()=>{
+  h.rows=[row('disconnected')];
+  await expect(getSendCredentials('a','123')).rejects.toMatchObject({code:'whatsapp_reconnect_required'});
+ });
  it('keeps flag-off legacy selection independent of ES rows',async()=>{
   vi.stubEnv('WACRM_EMBEDDED_SIGNUP','0');h.rows=[row('error')];expect(await getSendCredentials('a')).toMatchObject({source:'legacy'});
   expect(h.calls.some(c=>c.table==='wa_connections')).toBe(false);

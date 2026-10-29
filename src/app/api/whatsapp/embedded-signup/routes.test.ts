@@ -57,9 +57,15 @@ vi.mock('@/lib/supabase/admin', () => ({ createServiceClient: () => ({ schema: (
   };
 } }) }));
 const id = '12345678-1234-4234-8234-123456789012';
-const req = (body: unknown = {code:'test-code',waba_id:'123',phone_number_id:'456'}) => new Request('https://test.invalid', {
-  method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),
-});
+const signedState = () => issueCallbackState('a','test-secret');
+const req = (body?: unknown) => {
+  const issued = signedState();
+  const payload = body === undefined
+    ? {code:'test-code',waba_id:'123',phone_number_id:'456',source:'popup',state:issued.state} : body;
+  return new Request('https://test.invalid', {
+    method:'POST',headers:{'Content-Type':'application/json',cookie:CALLBACK_COOKIE+'='+issued.cookie},body:JSON.stringify(payload),
+  });
+};
 const disconnectReq = () => disconnect(req(),{params:Promise.resolve({id})});
 beforeEach(() => {
   vi.stubEnv('WACRM_EMBEDDED_SIGNUP','1'); vi.stubEnv('META_APP_ID','test-app'); vi.stubEnv('META_APP_SECRET','test-secret');
@@ -105,7 +111,7 @@ describe('Embedded Signup routes', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
   it('returns 400 for malformed JSON',async () => {
-    expect((await complete(new Request('https://test.invalid',{method:'POST',body:'{'}))).status).toBe(400);
+    expect((await complete(new Request('https://test.invalid',{method:'POST',headers:{'Content-Type':'application/json'},body:'{'}))).status).toBe(400);
   });
   it('returns 404 on all three routes when flag is off before auth or side effects',async () => {
     vi.stubEnv('WACRM_EMBEDDED_SIGNUP','0');
@@ -181,6 +187,61 @@ describe('Embedded Signup routes', () => {
     request.headers.set('cookie',CALLBACK_COOKIE+'='+issued.cookie);
     const r=await complete(request);expect(r.status).toBe(200);expect(await r.json()).toMatchObject({status:'connected'});
     expect(r.headers.get('set-cookie')).toContain('Max-Age=0');
+  });
+  describe('callback state for popup completions',()=>{
+    const popupBody=(state?:string)=>({code:'test-code',waba_id:'123',phone_number_id:'456',source:'popup',...(state?{state}:{})});
+    const withCookie=(body:unknown,cookie?:string,headers:Record<string,string>={})=>{
+      const request=new Request('https://test.invalid',{method:'POST',
+        headers:{'Content-Type':'application/json',...(cookie?{cookie:CALLBACK_COOKIE+'='+cookie}:{}),...headers},body:JSON.stringify(body)});
+      return request;
+    };
+    it('rejects a popup completion without state with 403 and clears the cookie',async()=>{
+      const issued=signedState();const r=await complete(withCookie(popupBody(),issued.cookie));
+      expect(r.status).toBe(403);expect(await r.json()).toMatchObject({error:'callback_state_invalid'});
+      expect(r.headers.get('set-cookie')).toContain('Max-Age=0');expect(fetch).not.toHaveBeenCalled();
+    });
+    it('rejects state issued for another account',async()=>{
+      const issued=issueCallbackState('other','test-secret');const r=await complete(withCookie(popupBody(issued.state),issued.cookie));
+      expect(r.status).toBe(403);expect(r.headers.get('set-cookie')).toContain('Max-Age=0');expect(fetch).not.toHaveBeenCalled();
+    });
+    it('rejects expired state',async()=>{
+      const issued=issueCallbackState('a','test-secret',Date.now()-700000);const r=await complete(withCookie(popupBody(issued.state),issued.cookie));
+      expect(r.status).toBe(403);expect(fetch).not.toHaveBeenCalled();
+    });
+    it('rejects tampered state and tampered cookie',async()=>{
+      const issued=signedState();
+      expect((await complete(withCookie(popupBody('0'.repeat(48)),issued.cookie))).status).toBe(403);
+      const [payload,signature]=issued.cookie.split('.');
+      const forged=payload+'.'+(signature[0]==='a'?'b':'a')+signature.slice(1);
+      const r=await complete(withCookie(popupBody(issued.state),forged));
+      expect(r.status).toBe(403);expect(r.headers.get('set-cookie')).toContain('Max-Age=0');expect(fetch).not.toHaveBeenCalled();
+    });
+    it('rejects a missing state cookie',async()=>{
+      const issued=signedState();expect((await complete(withCookie(popupBody(issued.state)))).status).toBe(403);
+    });
+    it('rejects a non-JSON content type with 415 before any work',async()=>{
+      const issued=signedState();
+      const r=await complete(new Request('https://test.invalid',{method:'POST',headers:{'Content-Type':'text/plain',cookie:CALLBACK_COOKIE+'='+issued.cookie},body:JSON.stringify(popupBody(issued.state))}));
+      expect(r.status).toBe(415);expect(h.auth).not.toHaveBeenCalled();expect(fetch).not.toHaveBeenCalled();
+      expect(r.headers.get('set-cookie')).toContain('Max-Age=0');
+    });
+    it('rejects a foreign Origin with 403',async()=>{
+      const issued=signedState();const r=await complete(withCookie(popupBody(issued.state),issued.cookie,{Origin:'https://evil.example'}));
+      expect(r.status).toBe(403);expect(h.auth).not.toHaveBeenCalled();expect(fetch).not.toHaveBeenCalled();
+      expect(r.headers.get('set-cookie')).toContain('Max-Age=0');
+    });
+    it('accepts the request origin and the configured site origin',async()=>{
+      for(const origin of ['https://test.invalid','https://crm.example']){
+        vi.stubEnv('NEXT_PUBLIC_SITE_URL','https://crm.example');
+        const issued=signedState();
+        const r=await complete(withCookie(popupBody(issued.state),issued.cookie,{Origin:origin}));expect(r.status).toBe(200);
+      }
+    });
+    it('completes a valid popup request and clears the cookie',async()=>{
+      const issued=signedState();const r=await complete(withCookie(popupBody(issued.state),issued.cookie));
+      expect(r.status).toBe(200);expect(await r.json()).toMatchObject({status:'connected'});
+      expect(r.headers.get('set-cookie')).toContain('Max-Age=0');
+    });
   });
   it('exposes only the server Graph version and a signed callback state to an admin',async()=>{
     const r=await config();expect(r.status).toBe(200);const body=await r.json();expect(body.graph_version).toBe('v26.0');

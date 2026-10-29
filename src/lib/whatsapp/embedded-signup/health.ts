@@ -36,7 +36,8 @@ export async function checkAccountConnections(accountId:string){
     const healthy=tokenIsHealthy(await inspectBusinessToken(token));
     if(!healthy)await markTokenError(accountId,row.phone_number_id,token);
     else {
-      const {error:writeError}=await db.from('wa_connections').update({last_error:null})
+      // Bumping updated_at rotates the oldest-first scheduled scan.
+      const {error:writeError}=await db.from('wa_connections').update({last_error:null,updated_at:new Date().toISOString()})
         .eq('account_id',accountId).eq('id',row.id).eq('token_ciphertext',row.token_ciphertext).eq('status','connected');
       if(writeError)throw new SignupError('database_error',500);
     }
@@ -46,10 +47,19 @@ export async function checkAccountConnections(accountId:string){
 }
 
 // Reuses the existing authenticated automation cron; no new scheduler/infra.
-export async function checkScheduledConnections(){
+export async function checkScheduledConnections(options:{signal?:AbortSignal}={}){
+  const {signal}=options;
   const {data,error}=await createServiceClient().schema('wacrm').from('wa_connections')
     .select('account_id').eq('status','connected').order('updated_at',{ascending:true}).limit(50);
   if(error)throw new SignupError('database_error',500);
-  for(const accountId of [...new Set<string>((data||[]).map((r:{account_id:string})=>r.account_id))])
-    await checkAccountConnections(accountId);
+  for(const accountId of [...new Set<string>((data||[]).map((r:{account_id:string})=>r.account_id))]){
+    if(signal?.aborted)return;
+    try{
+      await checkAccountConnections(accountId);
+    }catch(accountError){
+      // One failing account (network, timeout, database) must not stop the batch,
+      // and never flips the row to error: only a definitive invalid token does.
+      console.warn('[embedded-signup] account health check failed',accountError instanceof SignupError?accountError.code:'unexpected_error');
+    }
+  }
 }

@@ -10,4 +10,10 @@ describe('Embedded Signup settings wiring', () => {
     expect(legacyConfig).not.toContain('/api/whatsapp/config/embedded-signup');
     expect(legacyConfig).not.toContain('embeddedSignupConnect');
   });
+
+  it('sends the callback state from the config endpoint with popup completions', () => {
+    const card = readFileSync('src/components/settings/embedded-signup-card.tsx', 'utf8');
+    expect(card).toContain('callbackState.current=settings.state');
+    expect(card).toContain("source:'popup',state:callbackState.current");
+  });
 });

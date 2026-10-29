@@ -6,7 +6,9 @@ This document describes the current implementation and supersedes earlier-round 
 
 ## Configuration and scope
 
-`WACRM_EMBEDDED_SIGNUP=1` enables the new endpoints and card; default off means hidden UI and 404 responses from all three endpoints. Configuration names are `META_APP_ID`, `META_APP_SECRET`, `NEXT_PUBLIC_META_APP_ID`, `NEXT_PUBLIC_META_ES_CONFIG_ID`, `META_GRAPH_VERSION` (default `v23.0`), `NEXT_PUBLIC_META_GRAPH_VERSION`, and `WACRM_TOKEN_ENC_KEY` (base64-encoded 32-byte key). Real values must never enter source control or logs.
+`WACRM_EMBEDDED_SIGNUP=1` enables the new endpoints and card; default off means hidden UI and 404 responses from all three endpoints. Configuration names are `META_APP_ID`, `META_APP_SECRET`, `NEXT_PUBLIC_META_APP_ID`, `NEXT_PUBLIC_META_ES_CONFIG_ID`, `META_GRAPH_VERSION` (default `v26.0`), `NEXT_PUBLIC_META_GRAPH_VERSION`, and `WACRM_TOKEN_ENC_KEY` (base64-encoded 32-byte key). Real values must never enter source control or logs.
+
+Graph version bump: the global default in `src/lib/whatsapp/meta-api.ts` moved from `v21.0` (previously hard-coded) to `v26.0` via `process.env.META_GRAPH_VERSION || 'v26.0'`. Reason: older versions are nearing Meta's end of support. Override with `META_GRAPH_VERSION`; `.env.example` documents it. Test: `src/lib/whatsapp/meta-api.version.test.ts`.
 
 Meta setup requires Facebook Login for Business with the Embedded Signup configuration ID, the appropriate domains/OAuth configuration, permissions, App Review and webhook subscriptions. This task does not change a live Meta app or server environment. Sending/templates, token-health/reconnect monitoring, AI replies and CRM/billing remain later-phase work.
 

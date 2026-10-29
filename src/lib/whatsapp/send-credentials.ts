@@ -10,10 +10,29 @@ export class SendCredentialError extends Error {
 // Runtime schema clients and existing engine adapters intentionally use loose SDK generics.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type SendDb = {from:(table:string)=>any};
-export async function getSendCredentials(accountId:string,phoneNumberId?:string,options?:{db?:SendDb}) {
+type SendCredentialOptions = {
+  db?: SendDb;
+  // Set for a conversation with no stored provenance: legacy wins over any ES number.
+  preferLegacy?: boolean;
+};
+
+async function loadLegacyCredentials(db: SendDb, accountId: string, phoneNumberId?: string) {
+  const {data:legacy,error}=await db.from('whatsapp_config').select('*').eq('account_id',accountId).maybeSingle();
+  if(error)throw new SendCredentialError('credentials_lookup_failed');
+  if(!legacy || legacy.account_id && legacy.account_id!==accountId)return null;
+  if(phoneNumberId&&legacy.phone_number_id!==phoneNumberId)throw new SendCredentialError('whatsapp_number_not_found');
+  return {source:'legacy' as const,id:legacy.id,accountId,phoneNumberId:legacy.phone_number_id,wabaId:legacy.waba_id,accessToken:decrypt(legacy.access_token),legacy};
+}
+
+export async function getSendCredentials(accountId:string,phoneNumberId?:string,options?:SendCredentialOptions) {
   if(!accountId)throw new SendCredentialError('account_required');
   const legacyDb=options?.db || createServiceClient();
+  let hasUnusableRows=false;
   if(enabled()){
+    if(!phoneNumberId&&options?.preferLegacy){
+      const legacy=await loadLegacyCredentials(legacyDb,accountId);
+      if(legacy)return legacy;
+    }
     let query=createServiceClient().schema('wacrm').from('wa_connections')
       .select('id,account_id,phone_number_id,waba_id,status,token_ciphertext').eq('account_id',accountId);
     if(phoneNumberId)query=query.eq('phone_number_id',phoneNumberId);
@@ -21,19 +40,22 @@ export async function getSendCredentials(accountId:string,phoneNumberId?:string,
     if(error)throw new SendCredentialError('credentials_lookup_failed');
     if((data||[]).some((r:{account_id:string})=>r.account_id!==accountId))throw new SendCredentialError('credentials_lookup_failed');
     let rows=(data||[]).filter((r:{account_id:string;phone_number_id:string})=>r.account_id===accountId&&(!phoneNumberId||r.phone_number_id===phoneNumberId));
+    // Without an explicit number only connected rows are candidates; others never block legacy.
+    if(!phoneNumberId){
+      const connected=rows.filter((r:{status:string})=>r.status==='connected');
+      hasUnusableRows=rows.length>0&&connected.length===0;
+      rows=connected;
+    }
     if(rows.length){
-      if(!phoneNumberId){const connected=rows.filter((r:{status:string})=>r.status==='connected');if(connected.length)rows=connected;}
       if(rows.length!==1)throw new SendCredentialError('whatsapp_number_required');
       if(rows[0].status!=='connected')throw new SendCredentialError();
       try{return {source:'embedded' as const,id:rows[0].id,accountId,phoneNumberId:rows[0].phone_number_id,wabaId:rows[0].waba_id,accessToken:decryptToken(rows[0].token_ciphertext)};}
       catch{throw new SendCredentialError();}
     }
   }
-  const {data:legacy,error}=await legacyDb.from('whatsapp_config').select('*').eq('account_id',accountId).maybeSingle();
-  if(error)throw new SendCredentialError('credentials_lookup_failed');
-  if(!legacy || legacy.account_id && legacy.account_id!==accountId)return null;
-  if(phoneNumberId&&legacy.phone_number_id!==phoneNumberId)throw new SendCredentialError('whatsapp_number_not_found');
-  return {source:'legacy' as const,id:legacy.id,accountId,phoneNumberId:legacy.phone_number_id,wabaId:legacy.waba_id,accessToken:decrypt(legacy.access_token),legacy};
+  const legacy=await loadLegacyCredentials(legacyDb,accountId,phoneNumberId);
+  if(!legacy&&hasUnusableRows)throw new SendCredentialError();
+  return legacy;
 }
 
 export async function conversationPhoneNumber(accountId:string,conversationId:string,replyToMessageId?:string):Promise<string|undefined>{
@@ -56,7 +78,8 @@ export async function loadSendConfig(db:SendDb,accountId:string,phoneNumberId?:s
     return maybeSingle?q.maybeSingle():q.single();
   }
   const phone=phoneNumberId || (conversationId?await conversationPhoneNumber(accountId,conversationId,replyToMessageId):undefined);
-  const credentials=await getSendCredentials(accountId,phone,{db});
+  const provenanceless=!phone&&!!conversationId;
+  const credentials=await getSendCredentials(accountId,phone,{db,preferLegacy:provenanceless});
   if(!credentials)return {data:null,error:null};
   if(credentials.source==='legacy')return {data:credentials.legacy,error:null};
   // Adapter for older senders: transient legacy-format encryption, never persisted.
