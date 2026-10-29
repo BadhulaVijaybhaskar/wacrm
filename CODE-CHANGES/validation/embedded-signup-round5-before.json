@@ -1,0 +1,63 @@
+{
+  "head": "c7d0e564416b41a99a19d80ab6c373a850b9fd94",
+  "excluded": [
+    "**/brand-lockup-fit.test.ts",
+    "**/*e2e*"
+  ],
+  "counts": {
+    "numPassedTests": 1619,
+    "numFailedTests": 12,
+    "numPendingTests": 0,
+    "numTotalTests": 1631
+  },
+  "failedTests": [
+    {
+      "file": "src/lib/astra-billing/usage-paths.test.ts",
+      "name": "WhatsApp usage metering wiring src/lib/whatsapp/send-message.ts calls recordWhatsappUsage"
+    },
+    {
+      "file": "src/lib/astra-billing/usage-paths.test.ts",
+      "name": "WhatsApp usage metering wiring src/lib/whatsapp/broadcast-core.ts calls recordWhatsappUsage"
+    },
+    {
+      "file": "src/lib/astra-billing/usage-paths.test.ts",
+      "name": "WhatsApp usage metering wiring src/app/api/whatsapp/broadcast/route.ts calls recordWhatsappUsage"
+    },
+    {
+      "file": "src/lib/astra-billing/usage-paths.test.ts",
+      "name": "WhatsApp usage metering wiring src/lib/automations/meta-send.ts calls recordWhatsappUsage"
+    },
+    {
+      "file": "src/lib/astra-billing/usage-paths.test.ts",
+      "name": "WhatsApp usage metering wiring src/lib/flows/meta-send.ts calls recordWhatsappUsage"
+    },
+    {
+      "file": "src/lib/astra-billing/usage-paths.test.ts",
+      "name": "WhatsApp usage metering wiring src/app/api/whatsapp/webhook/route.ts calls recordWhatsappUsage"
+    },
+    {
+      "file": "src/lib/astra-connect/outbound-paths.test.ts",
+      "name": "outbound Connect notify wiring src/lib/whatsapp/send-message.ts calls notifyConnectOutbound"
+    },
+    {
+      "file": "src/lib/astra-connect/outbound-paths.test.ts",
+      "name": "outbound Connect notify wiring src/lib/whatsapp/broadcast-core.ts calls notifyConnectOutbound"
+    },
+    {
+      "file": "src/lib/astra-connect/outbound-paths.test.ts",
+      "name": "outbound Connect notify wiring src/app/api/whatsapp/broadcast/route.ts calls notifyConnectOutbound"
+    },
+    {
+      "file": "src/lib/astra-connect/outbound-paths.test.ts",
+      "name": "outbound Connect notify wiring src/lib/automations/meta-send.ts calls notifyConnectOutbound"
+    },
+    {
+      "file": "src/lib/astra-connect/outbound-paths.test.ts",
+      "name": "outbound Connect notify wiring src/lib/flows/meta-send.ts calls notifyConnectOutbound"
+    },
+    {
+      "file": "src/lib/deploy/staging-next-public-build-args.test.ts",
+      "name": "staging Dockerfile inlines every NEXT_PUBLIC_* read in src declares ARG + ENV for each NEXT_PUBLIC_* used by the app"
+    }
+  ]
+}

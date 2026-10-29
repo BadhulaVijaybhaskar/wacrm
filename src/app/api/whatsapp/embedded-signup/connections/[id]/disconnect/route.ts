@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/auth/account';
 import { createServiceClient } from '@/lib/supabase/admin';
 import { decryptToken } from '@/lib/whatsapp/embedded-signup/crypto';
-import { enabled, unsubscribe } from '@/lib/whatsapp/embedded-signup/core';
+import { sanitizeLastError } from '@/lib/whatsapp/embedded-signup/errors';
+import { enabled, unsubscribe, SignupError } from '@/lib/whatsapp/embedded-signup/core';
 
 export async function POST(_request: Request, context: {params: Promise<{id:string}>}) {
   if (!enabled()) return NextResponse.json({error:'not_found'},{status:404});
@@ -25,13 +26,18 @@ export async function POST(_request: Request, context: {params: Promise<{id:stri
       .eq('waba_id',row.waba_id).limit(1);
     if (legacyError || !legacyNumbers) return NextResponse.json({error:'database_error'},{status:500});
     let failed = false;
+    let lastError: string | null = null;
     if (row.status !== 'disconnected' && !siblings?.length && legacyNumbers.length === 0) {
       try { await unsubscribe(row.waba_id, decryptToken(row.token_ciphertext)); }
-      catch { failed = true; }
+      catch (error) {
+        failed = true;
+        lastError = sanitizeLastError(error instanceof SignupError ? error.code : undefined,
+          error instanceof SignupError ? error.metaCode : undefined);
+      }
     }
     const {error} = await db.from('wa_connections').update({
       status: failed ? 'error' : 'disconnected',
-      last_error: failed ? 'meta_request_failed' : null,
+      last_error: lastError,
       updated_at:new Date().toISOString(),
     }).eq('account_id',accountId).eq('id',id);
     if (error) return NextResponse.json({error:'database_error'},{status:500});

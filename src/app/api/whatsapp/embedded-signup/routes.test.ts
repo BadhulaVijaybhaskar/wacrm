@@ -30,7 +30,7 @@ vi.mock('@/lib/supabase/admin', () => ({ createServiceClient: () => ({ schema: (
             : {data:h.siblings,error:h.siblingError?{code:'test'}:null},
           order: async () => ({ data: h.row ? [h.row] : [], error: h.dbError ? {code:'test'} : null }),
           maybeSingle: async () => ({
-            data: fields.includes('pin_ciphertext') && fields.includes('account_id') ? (h.owner ? {account_id:h.owner,status:'connected'} : null)
+            data: fields.includes('account_id') ? (h.owner ? {account_id:h.owner,status:'connected'} : null)
               : h.row && filters.account_id === h.row.account_id ? h.row : null,
             error: h.dbError ? {code:'test'} : null,
           }),
@@ -116,7 +116,7 @@ describe('Embedded Signup routes', () => {
   it.each(['connected','error','pending'])('disconnect Meta failure on %s marks row error and returns 502',async status => {
     h.row={id,account_id:'a',status,waba_id:'123',token_ciphertext:encryptToken('test-token')};h.failure='/subscribed_apps';
     const r=await disconnectReq();expect(r.status).toBe(502);expect(await r.json()).toEqual({error:'meta_request_failed'});
-    expect(h.patches).toEqual([expect.objectContaining({status:'error',last_error:'meta_request_failed'})]);
+    expect(h.patches).toEqual([expect.objectContaining({status:'error',last_error:'Meta 100: WhatsApp connection request failed.'})]);
   });
   it('disconnect success unsubscribes and marks disconnected',async () => {
     h.row={id,account_id:'a',status:'connected',waba_id:'123',token_ciphertext:encryptToken('test-token')};

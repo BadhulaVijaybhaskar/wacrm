@@ -9,6 +9,8 @@ const h = vi.hoisted(() => ({
   ownerStatus: 'connected', pinCiphertext: null as string | null,
   atomicPin: null as string | null, liveToken: '', writeFailure: false,
   pins: [] as string[],
+  selections:[] as {fields:string;filters:Record<string,unknown>}[],
+  returnedPins:[] as string[],pinReadError:false,
   updatedAt:'',legacyAccount:null as string|null,legacyError:false,
   updateAttempts:[] as Record<string,unknown>[],legacyFilters:[] as [string,unknown][],
   events: [] as string[],
@@ -17,6 +19,10 @@ const h = vi.hoisted(() => ({
   mismatch: false,
   failure: '' as string,
   metaCode: 100,
+}));
+vi.mock('node:crypto',async importOriginal=>({
+  ...await importOriginal<typeof import('node:crypto')>(),
+  randomInt:vi.fn(()=>654321),
 }));
 vi.mock('@/lib/supabase/admin', () => ({ createServiceClient: () => ({
   schema: (schema: string) => {
@@ -35,10 +41,21 @@ vi.mock('@/lib/supabase/admin', () => ({ createServiceClient: () => ({
           };return q;
         },
       } : ({
-        select: () => ({ eq: () => ({ maybeSingle: async () => {
-          h.events.push('ownership');
-          return { data: h.owner ? { account_id: h.owner, status: h.ownerStatus, pin_ciphertext: h.pinCiphertext,updated_at:h.updatedAt } : null, error: null };
-        } }) }),
+        select: (fields:string) => {
+          const filters:Record<string,unknown>={};
+          const q={
+            eq:(key:string,value:unknown)=>{filters[key]=value;return q;},
+            maybeSingle:async()=>{
+              h.selections.push({fields,filters});
+              if(fields==='pin_ciphertext'){
+                expect(filters.account_id).toBe('a');
+                return {data:h.owner===filters.account_id?{pin_ciphertext:h.pinCiphertext}:null,error:h.pinReadError?{message:'private-db-details'}:null};
+              }
+              h.events.push('ownership');
+              return {data:h.owner?{account_id:h.owner,status:h.ownerStatus,updated_at:h.updatedAt}:null,error:null};
+            },
+          };return q;
+        },
         update: (patch: Record<string, unknown>) => {
           const filters:Record<string,unknown>={};
           const q={
@@ -60,14 +77,16 @@ vi.mock('@/lib/supabase/admin', () => ({ createServiceClient: () => ({
           || (h.ownerStatus==='pending' && Date.parse(h.updatedAt)<Date.now()-15*60*1000);
         if (h.claimError || (h.claimed && h.claimed !== args.p_account_id && !recoverable))
           return { data: null, error: { code: '23505', message: 'wa_connection_owned' } };
-        const wasConnected=h.owner===args.p_account_id && h.ownerStatus==='connected';
+        const sameAccount=(h.claimed || h.owner)===args.p_account_id;
+        const wasConnected=sameAccount && h.ownerStatus==='connected';
         h.claimed = args.p_account_id;
         if(!wasConnected){h.ownerStatus='pending';h.liveToken=args.p_token_ciphertext;h.updatedAt=new Date(Date.now()).toISOString();}
-        h.pinCiphertext=h.atomicPin || h.pinCiphertext || args.p_pin_ciphertext;
+        h.pinCiphertext=sameAccount?(h.atomicPin || h.pinCiphertext || args.p_pin_ciphertext):args.p_pin_ciphertext;
+        h.returnedPins.push(h.pinCiphertext);
         expect(decryptToken(args.p_token_ciphertext)).toBe('test-business-token');
         expect(decryptToken(args.p_pin_ciphertext)).toMatch(/^\d{6}$/);
         return { data: [{ id: 'connection-id', waba_id: args.p_waba_id, status: wasConnected?'connected':'pending',
-          claimed_pin_ciphertext:h.pinCiphertext,previous_token_ciphertext:h.liveToken,
+          claimed_pin_ciphertext:h.pinCiphertext,stored_token_ciphertext:h.liveToken,
           display_phone_number: '+123', verified_name: 'Test', quality_rating: 'GREEN',
           token_ciphertext: args.p_token_ciphertext, pin_ciphertext: args.p_pin_ciphertext }], error: null };
       },
@@ -81,7 +100,7 @@ beforeEach(() => {
   vi.stubEnv('WACRM_TOKEN_ENC_KEY', Buffer.alloc(32, 1).toString('base64'));
   h.owner = null; h.claimed = null; h.events = []; h.updates = []; h.claimError = false;
   h.mismatch = false; h.failure = ''; h.metaCode = 100;
-  h.ownerStatus='connected';h.pinCiphertext=null;h.atomicPin=null;h.liveToken='';h.writeFailure=false;h.pins=[];h.updatedAt=new Date(Date.now()).toISOString();h.legacyAccount=null;h.legacyError=false;h.updateAttempts=[];h.legacyFilters=[];
+  h.ownerStatus='connected';h.pinCiphertext=null;h.atomicPin=null;h.liveToken='';h.writeFailure=false;h.pins=[];h.updatedAt=new Date(Date.now()).toISOString();h.legacyAccount=null;h.legacyError=false;h.updateAttempts=[];h.legacyFilters=[];h.selections=[];h.returnedPins=[];h.pinReadError=false;
   vi.stubGlobal('fetch', vi.fn(async (url: string, options?: RequestInit) => {
     const step = url.includes('oauth/access_token') ? 'exchange' : url.includes('/phone_numbers') ? 'verify'
       : url.includes('/register') ? 'register' : url.includes('/subscribed_apps') ? 'subscribe' : 'phone';
@@ -125,7 +144,7 @@ describe('Embedded Signup connect orchestration', () => {
   it.each(['exchange', 'verify', 'register', 'subscribe'])('sanitizes %s Graph failures and marks claimed rows error', async step => {
     h.failure = step;
     await expect(connect(input,'a')).rejects.toMatchObject({code:'meta_request_failed',status:502});
-    expect(h.updates).toEqual(['register','subscribe'].includes(step) ? [expect.objectContaining({status:'error',last_error:'meta_request_failed'})] : []);
+    expect(h.updates).toEqual(['register','subscribe'].includes(step) ? [expect.objectContaining({status:'error',last_error:'Meta 100: WhatsApp connection request failed.'})] : []);
     expect(h.events).not.toContain('connected');
   });
   it.each([100, 136024, 133016])('does not swallow unverified registration error %s', async code => {
@@ -150,7 +169,7 @@ describe('Embedded Signup connect orchestration', () => {
     await expect(connect(input,'a')).rejects.toMatchObject({code:'meta_request_failed',status:502});
     const logs = JSON.stringify(spies.flatMap(s => s.mock.calls));
     for (const secret of ['test-business-token','test-oauth-code',pin]) expect(logs).not.toContain(secret);
-    expect(h.updates[0]).toMatchObject({status:'error',last_error:'meta_request_failed'});
+    expect(h.updates[0]).toMatchObject({status:'error',last_error:'WhatsApp: WhatsApp connection request failed.'});
   });
   it('reconnect reuses the saved PIN and keeps the live token/status until Meta succeeds',async () => {
     h.owner='a';h.pinCiphertext=encryptToken('123456');h.liveToken=encryptToken('old-business-token');
@@ -169,26 +188,30 @@ describe('Embedded Signup connect orchestration', () => {
     const old=h.liveToken;
     await expect(connect(input,'a')).rejects.toMatchObject({code:'meta_request_failed',status:502});
     expect(h.pins).toEqual(['123456']);expect(h.liveToken).toBe(old);expect(h.ownerStatus).toBe('connected');
-    expect(h.updates).toEqual([expect.objectContaining({status:'connected',token_ciphertext:old,last_error:'meta_request_failed'})]);
+    expect(h.updates).toEqual([expect.objectContaining({status:'connected',token_ciphertext:old,last_error:'Meta 100: WhatsApp connection request failed.'})]);
   });
   it('maps the documented register PIN error 133005 to 409 with recovery instructions',async () => {
     h.failure='register';h.metaCode=133005;
     const error=await connect(input,'a').catch(e=>e);
     expect(error).toMatchObject({code:'pin_mismatch',status:409});
     expect(publicError(error)).toMatchObject({status:409,body:{code:'pin_mismatch',message:expect.stringContaining('WhatsApp Manager')}});
-    expect(h.updates[0]).toMatchObject({status:'error',last_error:'pin_mismatch'});
+    expect(h.updates[0]).toMatchObject({status:'error',last_error:'Meta 133005: Two-step verification PIN is incorrect. Turn off two-step verification for this number in WhatsApp Manager, then retry.'});
   });
-  it('allows another account to claim a disconnected number and reuses its PIN',async () => {
-    h.owner='b';h.claimed='b';h.ownerStatus='disconnected';h.pinCiphertext=encryptToken('123456');
+  it('uses a fresh PIN without receiving the former accounts ciphertext on takeover',async () => {
+    h.owner='b';h.claimed='b';h.ownerStatus='disconnected';h.pinCiphertext=encryptToken('123456');const formerPin=h.pinCiphertext;
     await expect(connect(input,'a')).resolves.toMatchObject({status:'connected'});
-    expect(h.claimed).toBe('a');expect(h.pins).toEqual(['123456']);
+    expect(h.claimed).toBe('a');expect(h.pins).toEqual(['654321']);
+    expect(h.returnedPins).not.toContain(formerPin);
+    expect(h.selections.every(x=>!x.fields.includes('pin_ciphertext'))).toBe(true);
   });
   it('allows exactly one concurrent account to take a disconnected number',async () => {
-    h.owner='previous';h.claimed='previous';h.ownerStatus='disconnected';h.pinCiphertext=encryptToken('123456');
+    h.owner='previous';h.claimed='previous';h.ownerStatus='disconnected';h.pinCiphertext=encryptToken('123456');const formerPin=h.pinCiphertext;
     const results=await Promise.allSettled([connect(input,'a'),connect(input,'b')]);
     expect(results.filter(x=>x.status==='fulfilled')).toHaveLength(1);
     expect((results.find(x=>x.status==='rejected') as PromiseRejectedResult).reason).toMatchObject({code:'phone_in_use',status:409});
-    expect(h.pins).toEqual(['123456']);
+    expect(h.pins).toEqual(['654321']);
+    expect(h.returnedPins).not.toContain(formerPin);
+    expect(h.selections.every(x=>!x.fields.includes('pin_ciphertext'))).toBe(true);
   });
   it('generates a six-digit PIN on reconnect only when no saved PIN exists',async () => {
     h.owner='a';h.liveToken=encryptToken('old-business-token');
@@ -211,7 +234,8 @@ describe('Embedded Signup connect orchestration', () => {
     h.owner='b';h.claimed='b';h.ownerStatus=state==='error'?'error':'pending';
     h.updatedAt=new Date(Date.now()-16*60*1000).toISOString();h.pinCiphertext=encryptToken('123456');
     await expect(connect(input,'a')).resolves.toMatchObject({status:'connected'});
-    expect(h.claimed).toBe('a');expect(h.pins).toEqual(['123456']);
+    expect(h.claimed).toBe('a');expect(h.pins).toEqual(['654321']);
+    expect(h.selections.every(x=>!x.fields.includes('pin_ciphertext'))).toBe(true);
   });
   it.each(['fresh','exact-cutoff','invalid-timestamp'])('rejects another accounts %s pending claim before register',async age=>{
     vi.spyOn(Date,'now').mockReturnValue(Date.parse('2026-10-30T00:00:00Z'));
@@ -260,6 +284,25 @@ describe('Embedded Signup connect orchestration', () => {
     await expect(connect(input,'a')).rejects.toMatchObject({code:'database_error',status:500});
     expect(h.events).not.toContain('claim');expect(h.pins).toEqual([]);
   });
+  it('never loads or decrypts a former accounts malformed PIN ciphertext on takeover',async()=>{
+    h.owner='b';h.claimed='b';h.ownerStatus='error';h.pinCiphertext='former-account-ciphertext';
+    await expect(connect(input,'a')).resolves.toMatchObject({status:'connected'});
+    expect(h.pins).toEqual(['654321']);expect(h.returnedPins).not.toContain('former-account-ciphertext');
+    expect(h.selections.every(x=>!x.fields.includes('pin_ciphertext'))).toBe(true);
+  });
+  it('uses the existing PIN mismatch recovery path when a fresh takeover PIN is rejected',async()=>{
+    h.owner='b';h.claimed='b';h.ownerStatus='disconnected';h.pinCiphertext=encryptToken('123456');
+    h.failure='register';h.metaCode=133005;
+    const error=await connect(input,'a').catch(e=>e);
+    expect(error).toMatchObject({code:'pin_mismatch',status:409});expect(h.pins).toEqual(['654321']);
+    expect(publicError(error).body.message).toContain('WhatsApp Manager');
+  });
+  it('reads a retained same-account PIN through a scoped lookup and fails closed on lookup error',async()=>{
+    h.owner='a';h.pinReadError=true;h.pinCiphertext=encryptToken('123456');
+    await expect(connect(input,'a')).rejects.toMatchObject({code:'database_error',status:500});
+    expect(h.selections).toContainEqual({fields:'pin_ciphertext',filters:{phone_number_id:'456',account_id:'a'}});
+    expect(h.events).not.toContain('claim');expect(h.pins).toEqual([]);
+  });
   it('claims pending in review-only SQL with unambiguous columns and an empty search path', () => {
     const sql = readFileSync('supabase/shared-project/wacrm_embedded_signup.sql','utf8');
     expect(sql).toContain("('pending','connected','disconnected','error')");
@@ -269,7 +312,14 @@ describe('Embedded Signup connect orchestration', () => {
     expect(sql).toContain("SET search_path = ''");
     expect(sql).toContain("WHERE c.account_id=EXCLUDED.account_id OR c.status='disconnected'");
     expect(sql).toContain('account_id=EXCLUDED.account_id');
-    expect(sql).toContain('pin_ciphertext=COALESCE(c.pin_ciphertext, EXCLUDED.pin_ciphertext)');
+    expect(sql).toContain('pin_ciphertext=CASE WHEN c.account_id=EXCLUDED.account_id');
+    expect(sql).toContain('THEN COALESCE(c.pin_ciphertext, EXCLUDED.pin_ciphertext)');
+    expect(sql).toContain('ELSE EXCLUDED.pin_ciphertext END');
+    expect(sql).toContain('claimed_pin_ciphertext text,stored_token_ciphertext text');
+    expect(sql).not.toContain('previous_token_ciphertext');
+    expect(sql).toContain('DROP TRIGGER IF EXISTS set_updated_at ON wacrm.wa_connections;');
+    expect(sql).toContain('CREATE TRIGGER set_updated_at BEFORE UPDATE ON wacrm.wa_connections');
+    expect(sql).toContain('FOR EACH ROW EXECUTE FUNCTION wacrm.update_updated_at_column();');
     expect(sql).toContain("token_ciphertext=CASE WHEN c.status='connected' THEN c.token_ciphertext");
     expect(sql).toContain("current_setting('role', true) IS DISTINCT FROM 'service_role'");
     expect(sql.indexOf('DROP POLICY IF EXISTS')).toBeLessThan(sql.indexOf('CREATE POLICY'));

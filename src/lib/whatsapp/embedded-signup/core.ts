@@ -2,6 +2,7 @@ import { randomInt } from 'node:crypto';
 import { z } from 'zod';
 import { createServiceClient } from '@/lib/supabase/admin';
 import { decryptToken, encryptToken } from './crypto';
+import { sanitizeLastError } from './errors';
 
 export const enabled = () => process.env.WACRM_EMBEDDED_SIGNUP === '1';
 export const signupInput = z.object({
@@ -64,15 +65,23 @@ export async function connect(input: SignupInput, accountId: string) {
   if (legacyOwners.length > 0) throw new SignupError('number_in_use_legacy', 409);
   // This fast rejection is backed by the atomic claim below (the race arbiter).
   const { data: owner, error: ownershipError } = await service.from('wa_connections')
-    .select('account_id,status,pin_ciphertext,updated_at').eq('phone_number_id', input.phone_number_id).maybeSingle();
+    .select('account_id,status,updated_at').eq('phone_number_id', input.phone_number_id).maybeSingle();
   if (ownershipError) throw new SignupError('database_error', 500);
   const recoverable = owner && (owner.status === 'disconnected' || owner.status === 'error'
     || (owner.status === 'pending' && Date.parse(owner.updated_at) < Date.now() - 15 * 60 * 1000));
   if (owner && owner.account_id !== accountId && !recoverable)
     throw new SignupError('phone_in_use', 409);
-  // Recoverable transfers also retain the PIN originally registered by us.
-  const pin = owner?.pin_ciphertext ? decryptToken(owner.pin_ciphertext)
-    : String(randomInt(0, 1000000)).padStart(6, '0');
+  // Read a saved PIN only through an account-scoped lookup. A takeover must
+  // neither load/decrypt another account's ciphertext nor register with its PIN.
+  let savedPin: string | null = null;
+  if (owner?.account_id === accountId) {
+    const { data: own, error: pinError } = await service.from('wa_connections')
+      .select('pin_ciphertext').eq('phone_number_id', input.phone_number_id)
+      .eq('account_id', accountId).maybeSingle();
+    if (pinError) throw new SignupError('database_error', 500);
+    savedPin = own?.pin_ciphertext || null;
+  }
+  const pin = savedPin ? decryptToken(savedPin) : String(randomInt(0, 1000000)).padStart(6, '0');
   const { data, error } = await service.rpc('claim_wa_connection', {
     p_account_id: accountId, p_waba_id: input.waba_id, p_phone_number_id: input.phone_number_id,
     p_business_id: input.business_id || null,
@@ -88,7 +97,10 @@ export async function connect(input: SignupInput, accountId: string) {
   const result = Array.isArray(data) ? data[0] : data;
   if (!result) throw new SignupError('database_error', 500);
   const wasConnected = result.status === 'connected';
-  if (wasConnected && typeof result.previous_token_ciphertext !== 'string')
+  // This is the POST-upsert stored token, not necessarily the former token.
+  // Only connected claims preserve the former value; use it solely to restore
+  // that same account's live connection on failure. It is never a token to revoke.
+  if (wasConnected && typeof result.stored_token_ciphertext !== 'string')
     throw new SignupError('database_error', 500);
   // Use the atomically claimed PIN rather than a potentially stale pre-check.
   const registrationPin = result.claimed_pin_ciphertext ? decryptToken(result.claimed_pin_ciphertext) : pin;
@@ -122,8 +134,8 @@ export async function connect(input: SignupInput, accountId: string) {
     // A concurrent disconnect/transfer wins. Do not restore over its state.
     if (error instanceof SignupError && error.code === 'state_changed') throw error;
     try {
-      await update(wasConnected ? 'connected' : 'error', error instanceof SignupError ? error.code : 'meta_request_failed',
-        wasConnected ? { token_ciphertext: result.previous_token_ciphertext } : {});
+      await update(wasConnected ? 'connected' : 'error', sanitizeLastError(error instanceof SignupError ? error.code : undefined, error instanceof SignupError ? error.metaCode : undefined),
+        wasConnected ? { token_ciphertext: result.stored_token_ciphertext } : {});
     } catch (restoreError) {
       if (restoreError instanceof SignupError && restoreError.code === 'state_changed') throw restoreError;
       // Preserve the original Meta error if recording/restoring state fails.

@@ -16,6 +16,9 @@ CREATE TABLE IF NOT EXISTS wacrm.wa_connections (
  created_at timestamptz NOT NULL DEFAULT now(),
  updated_at timestamptz NOT NULL DEFAULT now()
 );
+DROP TRIGGER IF EXISTS set_updated_at ON wacrm.wa_connections;
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON wacrm.wa_connections
+ FOR EACH ROW EXECUTE FUNCTION wacrm.update_updated_at_column();
 CREATE INDEX IF NOT EXISTS wa_connections_account_idx ON wacrm.wa_connections(account_id);
 ALTER TABLE wacrm.wa_connections ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON wacrm.wa_connections FROM PUBLIC, anon, authenticated;
@@ -44,7 +47,7 @@ CREATE OR REPLACE FUNCTION wacrm.claim_wa_connection(
  p_token_ciphertext text,p_pin_ciphertext text
 ) RETURNS TABLE(id uuid,display_phone_number text,verified_name text,
  quality_rating text,waba_id text,status text,
- claimed_pin_ciphertext text,previous_token_ciphertext text)
+ claimed_pin_ciphertext text,stored_token_ciphertext text)
  LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
  AS $$
  #variable_conflict use_column
@@ -66,7 +69,9 @@ CREATE OR REPLACE FUNCTION wacrm.claim_wa_connection(
  verified_name=CASE WHEN c.status='connected' THEN c.verified_name ELSE EXCLUDED.verified_name END,
  quality_rating=CASE WHEN c.status='connected' THEN c.quality_rating ELSE EXCLUDED.quality_rating END,
  token_ciphertext=CASE WHEN c.status='connected' THEN c.token_ciphertext ELSE EXCLUDED.token_ciphertext END,
- pin_ciphertext=COALESCE(c.pin_ciphertext, EXCLUDED.pin_ciphertext),
+ pin_ciphertext=CASE WHEN c.account_id=EXCLUDED.account_id
+ THEN COALESCE(c.pin_ciphertext, EXCLUDED.pin_ciphertext)
+ ELSE EXCLUDED.pin_ciphertext END,
  status=CASE WHEN c.status='connected' THEN c.status ELSE 'pending' END,
  last_error=CASE WHEN c.status='connected' THEN c.last_error ELSE NULL END,updated_at=now()
  WHERE c.account_id=EXCLUDED.account_id OR c.status='disconnected' OR c.status='error'
