@@ -340,44 +340,59 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
 
       const phoneNumberId = value.metadata.phone_number_id
 
-      // Find user's config by phone_number_id. `.single()` returns
-      // PGRST116 for both 0 rows AND ≥2 rows — distinguish them so
-      // operators see the real cause in logs. ≥2 rows shouldn't happen
-      // post-migration 013 (UNIQUE constraint), but a row created
-      // before the constraint, or a race, would still surface here.
-      const { data: configRows, error: configError } = await supabaseAdmin()
-        .from('whatsapp_config')
-        .select('*')
-        .eq('phone_number_id', phoneNumberId)
-
-      if (configError) {
-        console.error(
-          'Error fetching whatsapp_config for phone_number_id:',
-          phoneNumberId,
-          configError
-        )
-        continue
+      // Prefer account-scoped Embedded Signup mapping. Never fall through to
+      // a different account's legacy config if this number is known.
+      let config: {
+        account_id: string; user_id: string; mirror_inbound_media?: boolean;
+        access_token?: string;
+      };
+      let decryptedAccessToken: string;
+      if (process.env.WACRM_EMBEDDED_SIGNUP === '1') {
+        const { data: rows, error: lookupError } = await supabaseAdmin().schema('wacrm')
+          .from('wa_connections').select('account_id,phone_number_id,token_ciphertext,status')
+          .eq('phone_number_id', phoneNumberId);
+        if (lookupError) {
+          console.warn('[webhook] embedded connection lookup failed');
+          continue; // fail closed, never cross-route.
+        }
+        if (rows && rows.length > 0) {
+          if (rows.length !== 1 || rows[0].status !== 'connected') {
+            console.warn('[webhook] inactive or ambiguous phone number');
+            continue;
+          }
+          const { data: owner } = await supabaseAdmin().from('profiles')
+            .select('user_id').eq('account_id', rows[0].account_id)
+            .eq('account_role', 'owner').limit(1).maybeSingle();
+          if (!owner) {
+            console.warn('[webhook] embedded owner profile unavailable');
+            continue;
+          }
+          const { decryptToken } = await import('@/lib/whatsapp/embedded-signup/crypto');
+          config = { account_id: rows[0].account_id, user_id: owner.user_id };
+          decryptedAccessToken = decryptToken(rows[0].token_ciphertext);
+        } else {
+          // During rollout, legacy configs continue working for their
+          // own numbers; unknown numbers are always dropped.
+          const { data: legacy, error: legacyError } = await supabaseAdmin()
+            .from('whatsapp_config').select('*').eq('phone_number_id',phoneNumberId);
+          if (legacyError || !legacy || legacy.length !== 1) {
+            console.warn('[webhook] unknown or ambiguous phone number');
+            continue;
+          }
+          config = legacy[0];
+          decryptedAccessToken = decrypt(legacy[0].access_token);
+        }
+      } else {
+        // Original config routing while feature flag is disabled.
+        const { data: legacy, error: legacyError } = await supabaseAdmin()
+          .from('whatsapp_config').select('*').eq('phone_number_id',phoneNumberId);
+        if (legacyError || !legacy || legacy.length !== 1) {
+          console.warn('[webhook] unknown or ambiguous phone number');
+          continue;
+        }
+        config = legacy[0];
+        decryptedAccessToken = decrypt(legacy[0].access_token);
       }
-
-      if (!configRows || configRows.length === 0) {
-        console.error('No config found for phone_number_id:', phoneNumberId)
-        continue
-      }
-
-      if (configRows.length > 1) {
-        console.error(
-          `Multiple configs (${configRows.length}) found for phone_number_id:`,
-          phoneNumberId,
-          '— inbound message dropped. Resolve duplicates so each number maps to a single account.',
-          'Account owners:',
-          configRows.map((r: { account_id: string; user_id: string }) => `${r.account_id} (admin ${r.user_id})`)
-        )
-        continue
-      }
-
-      const config = configRows[0]
-
-      const decryptedAccessToken = decrypt(config.access_token)
 
       for (let i = 0; i < value.messages.length; i++) {
         const message = value.messages[i]

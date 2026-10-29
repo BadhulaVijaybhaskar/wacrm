@@ -12,6 +12,7 @@ import { ProfileForm } from '@/components/settings/profile-form';
 import { SecurityPanel } from '@/components/settings/security-panel';
 import { AppearancePanel } from '@/components/settings/appearance-panel';
 import { WhatsAppConfig } from '@/components/settings/whatsapp-config';
+import { EmbeddedSignupCard } from '@/components/settings/embedded-signup-card';
 import { AstraConnectSettings } from '@/components/settings/astra-connect-settings';
 import { UsageSettings } from '@/components/settings/usage-settings';
 import { ConsentSettings } from '@/components/settings/consent-settings';
@@ -79,7 +80,7 @@ function SettingsPageInner() {
     profile: <ProfileForm />,
     security: <SecurityPanel />,
     appearance: <AppearancePanel />,
-    whatsapp: <WhatsAppConfig />,
+    whatsapp: <><WhatsAppConfig /><EmbeddedSignupCard /></>,
     'astra-connect': <AstraConnectSettings />,
     usage: <UsageSettings />,
     consent: <ConsentSettings />,
