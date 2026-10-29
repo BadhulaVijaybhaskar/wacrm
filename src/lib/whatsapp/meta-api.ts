@@ -1,3 +1,6 @@
+import { getSendCredentials, SendCredentialError } from './send-credentials';
+import { enabled } from './embedded-signup/core';
+import { markTokenError } from './embedded-signup/health';
 /**
  * Meta WhatsApp Cloud API helpers.
  *
@@ -16,7 +19,7 @@ import {
   logChannelGateBlock,
 } from '@/lib/astra-connect/channel-status'
 
-const META_API_VERSION = 'v21.0'
+const META_API_VERSION = process.env.META_GRAPH_VERSION || 'v26.0'
 const META_API_BASE = `https://graph.facebook.com/${META_API_VERSION}`
 
 export interface MetaSendResult {
@@ -44,6 +47,11 @@ export async function postCloudApiMessages(args: {
   skipChannelGate?: boolean
   fetchFn?: typeof fetch
 }): Promise<{ messageId: string; raw: unknown }> {
+  if(enabled() && args.accountId){
+    const credentials=await getSendCredentials(args.accountId,args.phoneNumberId);
+    if(!credentials)throw new Error('whatsapp_not_configured');
+    args={...args,phoneNumberId:credentials.phoneNumberId,accessToken:credentials.accessToken};
+  }
   if (!args.skipChannelGate && args.accountId) {
     try {
       await assertWhatsAppChannelEnabledForAccount({
@@ -75,7 +83,12 @@ export async function postCloudApiMessages(args: {
     body: JSON.stringify(args.body),
   })
   if (!response.ok) {
-    await throwMetaError(response, `Meta API error: ${response.status}`)
+    const error=await readMetaError(response, `Meta API error: ${response.status}`);
+    if(enabled() && args.accountId && error.code===190){
+      try{await markTokenError(args.accountId,args.phoneNumberId,args.accessToken,190);}catch{throw new Error('connection_health_update_failed');}
+      throw new SendCredentialError();
+    }
+    throw error;
   }
   const raw = await response.json()
   const messageId =

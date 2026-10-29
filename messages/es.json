@@ -2087,7 +2087,16 @@
       "retry": "Reintentar",
       "statusConnected": "Conectado",
       "statusPending": "Pendiente",
-      "statusError": "Error de conexión"
+      "statusError": "Error de conexión",
+      "modeLabel": "Modo de conexión",
+      "modeCoexistence": "Uso la app WhatsApp Business",
+      "modeStandard": "Conectar un número nuevo / solo API",
+      "syncNotice": "Mantén abierta la app WhatsApp Business durante la sincronización de contactos e historial autorizado.",
+      "reconnect": "Volver a conectar WhatsApp",
+      "checkConnection": "Comprobar conexión",
+      "checkComplete": "Comprobación completada. Vuelve a conectar las conexiones con errores.",
+      "checkFailed": "No se pudo comprobar la conexión. Inténtalo de nuevo.",
+      "callbackUntrusted": "Inicia la configuración de WhatsApp desde los ajustes de esta cuenta y vuelve a intentarlo. No se pudo verificar esta respuesta."
     }
   },
   "SignupPage": {

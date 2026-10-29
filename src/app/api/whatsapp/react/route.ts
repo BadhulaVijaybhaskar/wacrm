@@ -1,3 +1,4 @@
+import { loadSendConfig } from '@/lib/whatsapp/send-credentials';
 import { NextResponse } from 'next/server';
 import { requireRole, toErrorResponse } from '@/lib/auth/account';
 import { sendReactionMessage } from '@/lib/whatsapp/meta-api';
@@ -93,11 +94,7 @@ export async function POST(request: Request) {
     }
 
     // WhatsApp config + access token. Account-scoped post-multi-user.
-    const { data: config, error: configError } = await supabase
-      .from('whatsapp_config')
-      .select('phone_number_id, access_token')
-      .eq('account_id', accountId)
-      .single();
+    const { data: config, error: configError } = await loadSendConfig(supabase, accountId, undefined, targetMessage.conversation_id);
 
     if (configError || !config) {
       return NextResponse.json(

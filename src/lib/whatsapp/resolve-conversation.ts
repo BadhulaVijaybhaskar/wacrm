@@ -1,3 +1,4 @@
+import { loadSendConfig } from '@/lib/whatsapp/send-credentials';
 // ============================================================
 // Resolve (or create) the conversation for a phone number.
 //
@@ -58,11 +59,7 @@ export async function resolveConversationByPhone(
 
   // Fail fast (and create nothing) when the account has no WhatsApp
   // connected — the same error the send would raise anyway.
-  const { data: config } = await db
-    .from('whatsapp_config')
-    .select('id')
-    .eq('account_id', accountId)
-    .maybeSingle();
+  const { data: config } = await loadSendConfig(db, accountId, undefined, undefined, true);
   if (!config) {
     throw new SendMessageError(
       'whatsapp_not_configured',

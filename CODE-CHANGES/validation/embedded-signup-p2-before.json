@@ -1,0 +1,23 @@
+{
+  "base": "2e9a460292208fcd07ca8c18a6d3d2968a46114d",
+  "counts": {
+    "numPassedTests": 1636,
+    "numFailedTests": 12,
+    "numPendingTests": 0,
+    "numTotalTests": 1648
+  },
+  "failureNames": [
+    "WhatsApp usage metering wiring src/app/api/whatsapp/broadcast/route.ts calls recordWhatsappUsage",
+    "WhatsApp usage metering wiring src/app/api/whatsapp/webhook/route.ts calls recordWhatsappUsage",
+    "WhatsApp usage metering wiring src/lib/automations/meta-send.ts calls recordWhatsappUsage",
+    "WhatsApp usage metering wiring src/lib/flows/meta-send.ts calls recordWhatsappUsage",
+    "WhatsApp usage metering wiring src/lib/whatsapp/broadcast-core.ts calls recordWhatsappUsage",
+    "WhatsApp usage metering wiring src/lib/whatsapp/send-message.ts calls recordWhatsappUsage",
+    "outbound Connect notify wiring src/app/api/whatsapp/broadcast/route.ts calls notifyConnectOutbound",
+    "outbound Connect notify wiring src/lib/automations/meta-send.ts calls notifyConnectOutbound",
+    "outbound Connect notify wiring src/lib/flows/meta-send.ts calls notifyConnectOutbound",
+    "outbound Connect notify wiring src/lib/whatsapp/broadcast-core.ts calls notifyConnectOutbound",
+    "outbound Connect notify wiring src/lib/whatsapp/send-message.ts calls notifyConnectOutbound",
+    "staging Dockerfile inlines every NEXT_PUBLIC_* read in src declares ARG + ENV for each NEXT_PUBLIC_* used by the app"
+  ]
+}

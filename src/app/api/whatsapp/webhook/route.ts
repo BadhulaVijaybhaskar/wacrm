@@ -1,4 +1,5 @@
 import { NextResponse, after } from 'next/server'
+import { ingestCoexistence } from '@/lib/whatsapp/embedded-signup/coexistence';
 import { createServiceClient } from '@/lib/supabase/admin'
 import { resolveEmbeddedWebhookConnection, type WebhookConnection } from '@/lib/whatsapp/embedded-signup/webhook-routing'
 import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption'
@@ -332,7 +333,7 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
       // Resolve before any messaging side effect, including status updates.
       const embedded = process.env.WACRM_EMBEDDED_SIGNUP === '1';
       const resolution = embedded
-        ? await resolveEmbeddedWebhookConnection(value.metadata?.phone_number_id)
+        ? await resolveEmbeddedWebhookConnection(value.metadata?.phone_number_id,['history','smb_app_state_sync','smb_message_echoes'].includes(change.field))
         : null;
       if (resolution?.status === 'not_connected') continue;
       let connection = resolution?.status === 'connected' ? resolution.connection : null;
@@ -348,6 +349,27 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
       }
       // Only a genuinely absent row can use the legacy path. Errors and known
       // inactive rows above fail closed, preventing stale-token fallback.
+
+      if(embedded && connection && await ingestCoexistence(change.field,value,{
+        contact:async(phone,name)=>{
+          const identity=resolveInboundIdentity({from:phone},{wa_id:phone,profile:{name}});
+          const found=await findOrCreateContact(connection!.account_id,connection!.user_id,identity);
+          return found?.contact.id || null;
+        },
+        save:async(contactId,messages,outbound)=>{
+          const found=await findOrCreateConversation(connection!.account_id,connection!.user_id,contactId);
+          if(!found)return;
+          const rows=messages.map(message=>({
+            conversation_id:found.conversation.id,sender_type:outbound?'agent':'customer',
+            content_type:['text','image','audio','video','document','location','interactive','template'].includes(message.type)?message.type:'text',
+            content_text:message.text?.body || '['+message.type+']',message_id:message.id,
+            status:outbound?'sent':'delivered',created_at:new Date(Number(message.timestamp)*1000).toISOString(),
+            interactive_payload:{_wacrm_phone_number_id:value.metadata.phone_number_id},
+          }));
+          if(rows.length){const {error}=await supabaseAdmin().from('messages').upsert(rows,{onConflict:'conversation_id,message_id',ignoreDuplicates:true});
+            if(error)throw new Error('coexistence_history_persist_failed');}
+        },
+      }))continue;
 
       // Handle status updates
       if (value.statuses) {
@@ -396,7 +418,8 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
           // Default ON: the column is NOT NULL DEFAULT TRUE, but a row
           // read before migration 039 lands would have it undefined,
           // and losing attachments is the failure mode worth avoiding.
-          config.mirror_inbound_media !== false
+          config.mirror_inbound_media !== false,
+          embedded ? phoneNumberId : undefined
         )
       }
     }
@@ -715,7 +738,8 @@ async function processMessage(
   accessToken: string,
   // Per-account opt-out for the inbound-media mirror (migration 039).
   // See parseMessageContent for what it turns off.
-  mirrorMedia: boolean
+  mirrorMedia: boolean,
+  sourcePhoneNumberId?: string
 ) {
   // Phone number OR business-scoped user ID — Meta sends only the
   // latter for a sender who has adopted a WhatsApp username (#519).
@@ -880,6 +904,7 @@ async function processMessage(
         // the column; null for every other content_type so existing inserts
         // behave identically.
         interactive_reply_id: interactiveReplyId,
+        ...(sourcePhoneNumberId?{interactive_payload:{_wacrm_phone_number_id:sourcePhoneNumberId}}:{}),
       },
       { onConflict: 'conversation_id,message_id', ignoreDuplicates: true }
     )

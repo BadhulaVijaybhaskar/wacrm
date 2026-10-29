@@ -2087,7 +2087,16 @@
       "retry": "다시 시도",
       "statusConnected": "연결됨",
       "statusPending": "대기 중",
-      "statusError": "연결 오류"
+      "statusError": "연결 오류",
+      "modeLabel": "연결 방식",
+      "modeCoexistence": "WhatsApp Business 앱을 사용합니다",
+      "modeStandard": "새 번호 / API 전용 번호 연결",
+      "syncNotice": "연락처와 허용된 기록이 동기화되는 동안 WhatsApp Business 앱을 열어 두세요.",
+      "reconnect": "WhatsApp 다시 연결",
+      "checkConnection": "연결 확인",
+      "checkComplete": "연결 확인을 완료했습니다. 오류가 표시된 연결을 다시 연결하세요.",
+      "checkFailed": "연결을 확인할 수 없습니다. 다시 시도하세요.",
+      "callbackUntrusted": "이 계정의 설정에서 WhatsApp 연결을 시작한 후 다시 시도하세요. 이 콜백을 확인할 수 없습니다."
     }
   },
   "SignupPage": {

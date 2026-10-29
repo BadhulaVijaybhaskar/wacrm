@@ -1,3 +1,4 @@
+import { loadSendConfig, SendCredentialError } from '@/lib/whatsapp/send-credentials';
 /**
  * Connect §16 — after-call WhatsApp send + APPROVED template list.
  *
@@ -224,15 +225,12 @@ export async function loadTenantWhatsAppConfig(args: {
   phoneNumberId: string
 }): Promise<
   | { ok: true; config: WhatsAppConfigRow }
-  | { ok: false; status: 404 | 400; error: string }
+  | { ok: false; status: 404 | 400 | 409; error: string }
 > {
-  const { data, error } = await args.db
-    .from('whatsapp_config')
-    .select(
-      'id, account_id, phone_number_id, access_token, waba_id, status, astra_connect_tenant_id',
-    )
-    .eq('account_id', args.accountId)
-    .maybeSingle()
+  let loaded;
+  try{loaded=await loadSendConfig(args.db,args.accountId,args.phoneNumberId,undefined,true);}
+  catch(error){if(error instanceof SendCredentialError)return {ok:false,status:409,error:error.code};throw error;}
+  const {data,error}=loaded;
 
   if (error) {
     console.error('[after-call] config load failed:', error)
@@ -883,7 +881,7 @@ export type AfterCallListResult =
       phone_number_id: string
       waba_id: string | null
     }
-  | { ok: false; status: 400 | 404; error: string }
+  | { ok: false; status: 400 | 404 | 409; error: string }
 
 export async function listApprovedTemplates(args: {
   db: AfterCallDb

@@ -1,3 +1,4 @@
+import { loadSendConfig } from '@/lib/whatsapp/send-credentials';
 // ============================================================
 // Broadcast resume / retry (issue #472).
 //
@@ -206,11 +207,7 @@ export async function planBroadcastResume(
     );
   }
 
-  const { data: config, error: configError } = await db
-    .from('whatsapp_config')
-    .select('*')
-    .eq('account_id', accountId)
-    .single();
+  const { data: config, error: configError } = await loadSendConfig(db, accountId);
   if (configError || !config) {
     throw new BroadcastError(
       'whatsapp_not_configured',

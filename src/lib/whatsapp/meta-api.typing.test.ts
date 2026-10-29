@@ -34,7 +34,7 @@ afterEach(() => {
 describe('sendTypingIndicator', () => {
   it('posts the read-status + typing_indicator envelope for the inbound wamid', async () => {
     await sendTypingIndicator({ ...BASE, messageId: 'wamid.inbound-1' })
-    expect(capturedUrl).toBe('https://graph.facebook.com/v21.0/pn-1/messages')
+    expect(capturedUrl).toBe('https://graph.facebook.com/v26.0/pn-1/messages')
     expect(capturedInit?.method).toBe('POST')
     expect(capturedInit?.headers).toMatchObject({
       Authorization: 'Bearer tok',

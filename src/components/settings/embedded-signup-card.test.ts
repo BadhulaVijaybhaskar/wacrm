@@ -22,7 +22,7 @@ describe('Embedded Signup localized connection rows',()=>{
     const html=render(locale);
     for(const status of ['connected','pending','error'])expect(html).toContain(status+'-number');
     expect(html).not.toContain('disconnected-number');
-    for(const key of ['statusConnected','statusPending','statusError','disconnect','retry'])expect(html).toContain(t(key));
+    for(const key of ['statusConnected','statusPending','statusError','disconnect','reconnect'])expect(html).toContain(t(key));
     expect(html.match(/<button/g)).toHaveLength(5); // three disconnect + two retry
     expect(html).not.toContain('Settings.whatsappConnections.');
   });

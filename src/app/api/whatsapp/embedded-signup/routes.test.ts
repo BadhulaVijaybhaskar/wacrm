@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { UnauthorizedError, ForbiddenError } from '@/lib/auth/account';
+import { GET as config } from './config/route';
+import { POST as health } from './health/route';
 import { POST as complete } from './complete/route';
 import { GET as connections } from './connections/route';
 import { POST as disconnect } from './connections/[id]/disconnect/route';
+import {issueCallbackState,CALLBACK_COOKIE} from '@/lib/whatsapp/embedded-signup/callback-state';
 import { encryptToken } from '@/lib/whatsapp/embedded-signup/crypto';
 
 const h = vi.hoisted(() => ({
@@ -90,7 +93,7 @@ describe('Embedded Signup routes', () => {
   it.each([new ForbiddenError(),new UnauthorizedError()])('returns forbidden for auth error %s',async error => {
     h.auth.mockRejectedValue(error);
     const r=await complete(req());expect(r.status).toBe(error.status);expect(await r.json()).toEqual({error:'forbidden'});
-    expect((await disconnectReq()).status).toBe(error.status);expect((await connections()).status).toBe(error.status);expect(fetch).not.toHaveBeenCalled();
+    expect((await disconnectReq()).status).toBe(error.status);expect((await connections()).status).toBe(error.status);expect((await config()).status).toBe(error.status);expect((await health()).status).toBe(error.status);expect(fetch).not.toHaveBeenCalled();
   });
   it('returns 500 for unexpected failures',async () => {
     h.auth.mockRejectedValue(new Error('test-code test-token'));
@@ -106,7 +109,7 @@ describe('Embedded Signup routes', () => {
   });
   it('returns 404 on all three routes when flag is off before auth or side effects',async () => {
     vi.stubEnv('WACRM_EMBEDDED_SIGNUP','0');
-    for(const r of [await complete(req()),await connections(),await disconnectReq()]) expect(r.status).toBe(404);
+    for(const r of [await complete(req()),await connections(),await disconnectReq(),await config(),await health()]) expect(r.status).toBe(404);
     expect(h.auth).not.toHaveBeenCalled();expect(fetch).not.toHaveBeenCalled();
   });
   it('disconnect hides another accounts connection',async () => {
@@ -167,6 +170,22 @@ describe('Embedded Signup routes', () => {
   it('returns 409 state_changed when the guarded connect update affects zero rows',async()=>{
     h.emptyUpdate=true;const r=await complete(req());expect(r.status).toBe(409);
     expect(await r.json()).toMatchObject({error:'state_changed'});expect(h.patches).toEqual([]);
+  });
+  it('rejects an unbound callback code before any Graph call',async()=>{
+    const r=await complete(req({code:'code',source:'hosted',state:'untrusted'}));expect(r.status).toBe(403);
+    expect(await r.json()).toMatchObject({error:'callback_state_invalid'});expect(fetch).not.toHaveBeenCalled();
+  });
+  it('completes a signed account-bound callback through the same core and clears its cookie',async()=>{
+    const issued=issueCallbackState('a','test-secret');
+    const request=req({code:'test-code',source:'hosted',state:issued.state,waba_id:'123',phone_number_id:'456'});
+    request.headers.set('cookie',CALLBACK_COOKIE+'='+issued.cookie);
+    const r=await complete(request);expect(r.status).toBe(200);expect(await r.json()).toMatchObject({status:'connected'});
+    expect(r.headers.get('set-cookie')).toContain('Max-Age=0');
+  });
+  it('exposes only the server Graph version and a signed callback state to an admin',async()=>{
+    const r=await config();expect(r.status).toBe(200);const body=await r.json();expect(body.graph_version).toBe('v26.0');
+    expect(body.state).toMatch(/^[a-f0-9]{48}$/);expect(JSON.stringify(body)).not.toContain('test-secret');
+    expect(r.headers.get('set-cookie')).toContain('HttpOnly');expect(r.headers.get('set-cookie')).toContain('Secure');
   });
   it('disconnect query error is not misreported as auth or not found',async () => {
     h.dbError=true;expect((await disconnectReq()).status).toBe(500);

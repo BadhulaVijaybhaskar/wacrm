@@ -228,7 +228,9 @@ function InboxPageInner() {
         .eq("account_id", accountId)
         .maybeSingle();
 
-      setWhatsappConnected(data?.status === "connected");
+      const es=await fetch('/api/whatsapp/embedded-signup/connections').catch(()=>null);
+      const body=es?.ok?await es.json():null;
+      setWhatsappConnected(data?.status === "connected" || body?.connections?.some((r:{status:string})=>r.status==='connected')===true);
     };
 
     checkConnection();

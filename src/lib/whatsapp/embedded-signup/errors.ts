@@ -5,6 +5,7 @@ const safeMessages: Record<string, string> = {
   pin_mismatch: 'Two-step verification PIN is incorrect. Turn off two-step verification for this number in WhatsApp Manager, then retry.',
   database_error: 'Connection state could not be saved.',
   configuration_error: 'Connection configuration is unavailable.',
+  token_invalid: 'WhatsApp authorization is invalid or expired. Reconnect WhatsApp.',
   state_changed: 'Connection state changed. Retry the request.',
 };
 

@@ -2087,7 +2087,16 @@
       "retry": "Retry",
       "statusConnected": "Connected",
       "statusPending": "Pending",
-      "statusError": "Connection error"
+      "statusError": "Connection error",
+      "modeLabel": "Onboarding mode",
+      "modeCoexistence": "I use the WhatsApp Business app",
+      "modeStandard": "Connect a new / API-only number",
+      "syncNotice": "Keep the WhatsApp Business app open while contacts and permitted history sync.",
+      "reconnect": "Reconnect WhatsApp",
+      "checkConnection": "Check connection",
+      "checkComplete": "Connection check complete. Reconnect any connection showing an error.",
+      "checkFailed": "Unable to check the connection. Please retry.",
+      "callbackUntrusted": "Start WhatsApp setup from this account’s Settings and retry. This callback could not be verified."
     }
   },
   "SignupPage": {

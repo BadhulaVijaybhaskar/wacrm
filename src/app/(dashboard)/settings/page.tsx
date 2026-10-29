@@ -12,6 +12,7 @@ import { ProfileForm } from '@/components/settings/profile-form';
 import { SecurityPanel } from '@/components/settings/security-panel';
 import { AppearancePanel } from '@/components/settings/appearance-panel';
 import { WhatsAppConfig } from '@/components/settings/whatsapp-config';
+import { EmbeddedSignupCallback } from '@/components/settings/embedded-signup-callback';
 import { EmbeddedSignupCard } from '@/components/settings/embedded-signup-card';
 import { AstraConnectSettings } from '@/components/settings/astra-connect-settings';
 import { UsageSettings } from '@/components/settings/usage-settings';
@@ -100,6 +101,7 @@ function SettingsPageInner() {
 
   return (
     <div>
+      <EmbeddedSignupCallback />
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-foreground">
           {t('pageTitle')}

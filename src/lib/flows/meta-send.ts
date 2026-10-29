@@ -1,3 +1,4 @@
+import { loadSendConfig } from '@/lib/whatsapp/send-credentials';
 import {
   sendInteractiveButtons,
   sendInteractiveList,
@@ -43,12 +44,9 @@ import { resolveMetaMediaLink } from '@/lib/storage/resolve-meta-media'
 export async function loadAccountMetaCredentials(
   db: ReturnType<typeof supabaseAdmin>,
   accountId: string,
+  conversationId?: string,
 ): Promise<{ phoneNumberId: string; accessToken: string }> {
-  const { data: config, error: configErr } = await db
-    .from('whatsapp_config')
-    .select('phone_number_id, access_token')
-    .eq('account_id', accountId)
-    .single()
+  const { data: config, error: configErr } = await loadSendConfig(db, accountId, undefined, conversationId)
   if (configErr || !config) {
     throw new Error('WhatsApp not configured for this account')
   }
@@ -116,6 +114,7 @@ export async function engineSendText(
   const { phoneNumberId, accessToken } = await loadAccountMetaCredentials(
     db,
     args.accountId,
+    args.conversationId,
   )
 
   const attempt = async (phone: string): Promise<string> => {
@@ -247,6 +246,7 @@ export async function engineSendMedia(
   const { phoneNumberId, accessToken } = await loadAccountMetaCredentials(
     db,
     args.accountId,
+    args.conversationId,
   )
 
   // Private flow-media bucket: cfg.media_url is a path; Meta needs a
@@ -423,6 +423,7 @@ async function sendInteractiveViaMeta(
   const { phoneNumberId, accessToken } = await loadAccountMetaCredentials(
     db,
     input.accountId,
+    input.conversationId,
   )
 
   const attempt = async (phone: string): Promise<string> => {

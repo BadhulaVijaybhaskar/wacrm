@@ -13,7 +13,7 @@ export type WebhookResolution =
   | { status: 'connected'; connection: WebhookConnection }
   | { status: 'not_found' | 'not_connected' };
 
-export async function resolveEmbeddedWebhookConnection(phoneNumberId: string): Promise<WebhookResolution> {
+export async function resolveEmbeddedWebhookConnection(phoneNumberId: string, allowPending=false): Promise<WebhookResolution> {
   if (!phoneNumberId) return { status: 'not_connected' };
   const db = createServiceClient().schema('wacrm');
   const { data: rows, error } = await db.from('wa_connections')
@@ -25,7 +25,7 @@ export async function resolveEmbeddedWebhookConnection(phoneNumberId: string): P
   }
   if (!rows) return { status: 'not_connected' };
   if (rows.length === 0) return { status: 'not_found' };
-  if (rows.length !== 1 || rows[0].status !== 'connected') return { status: 'not_connected' };
+  if (rows.length !== 1 || (rows[0].status !== 'connected' && !(allowPending && rows[0].status==='pending'))) return { status: 'not_connected' };
   // profiles.account_role is defined in wacrm_schema.sql and used by getCurrentAccount.
   const { data: owner, error: ownerError } = await db.from('profiles')
     .select('user_id').eq('account_id', rows[0].account_id).eq('account_role', 'owner')

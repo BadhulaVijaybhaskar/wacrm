@@ -1,3 +1,4 @@
+import { loadSendConfig } from '@/lib/whatsapp/send-credentials';
 // ============================================================
 // Public-API broadcast core.
 //
@@ -114,11 +115,7 @@ export async function createBroadcast(
 
   // Config (fail fast + provides the audit trail owner already resolved
   // by the caller). Meta send needs phone_number_id + decrypted token.
-  const { data: config, error: configError } = await db
-    .from('whatsapp_config')
-    .select('*')
-    .eq('account_id', accountId)
-    .single();
+  const { data: config, error: configError } = await loadSendConfig(db, accountId);
   if (configError || !config) {
     throw new BroadcastError(
       'whatsapp_not_configured',

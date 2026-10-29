@@ -1173,6 +1173,28 @@ describe('Embedded Signup webhook routing', () => {
     const r=await POST(request);expect(r.init?.status).toBe(429)
     expect(h.gates).toEqual(['rate']);expect(text).not.toHaveBeenCalled();expect(h.state.afterCallbacks).toEqual([])
   })
+  it('persists the incoming ES number on normal inbox messages for same-number replies',async()=>{
+    useConnection();await runWebhook();expect(h.state.upsertCalls[0].row).toMatchObject({interactive_payload:{_wacrm_phone_number_id:'pn-1'}});
+  })
+  it.each(['history','smb_message_echoes'])('imports %s without triggering automation or AI replies',async field=>{
+    useConnection('pending');
+    const message={id:'history-1',timestamp:'1700000000',type:'text',text:{body:'imported'},...(field==='smb_message_echoes'?{to:'15551230000'}:{from:'15551230000'})};
+    const value={metadata:{phone_number_id:'pn-1'},...(field==='history'?{history:[{threads:[{id:'15551230000',messages:[message]}]}]}:{message_echoes:[message]})};
+    const r=await POST({text:async()=>JSON.stringify({entry:[{id:'waba',changes:[{field,value}]}]}),headers:{get:()=> 'sha256=stub'}} as unknown as Request);
+    for(const cb of h.state.afterCallbacks)await cb();
+    expect(r.init?.status).toBe(200);
+    expect(h.state.upsertCalls[0].row).toEqual([expect.objectContaining({message_id:'history-1',sender_type:field==='history'?'customer':'agent',interactive_payload:{_wacrm_phone_number_id:'pn-1'}})]);
+    expect(h.dispatchInboundToFlows).not.toHaveBeenCalled();expect(h.dispatchInboundToAiReply).not.toHaveBeenCalled();expect(h.runAutomationsForTrigger).not.toHaveBeenCalled();
+    expect(h.state.rpcCalls).toEqual([]);
+  })
+  it('ingests the documented contact state-sync payload under the resolved account',async()=>{
+    useConnection('pending');
+    const value={metadata:{phone_number_id:'pn-1'},state_sync:[{type:'contact',action:'add',contact:{phone_number:'15551230000',full_name:'Ada'}}]};
+    await POST({text:async()=>JSON.stringify({entry:[{id:'waba',changes:[{field:'smb_app_state_sync',value}]}]}),headers:{get:()=> 'sha256=stub'}} as unknown as Request);
+    for(const cb of h.state.afterCallbacks)await cb();
+    expect(mockFindExistingContact).toHaveBeenCalledWith(expect.anything(),'embedded-account','15551230000');
+    expect(h.state.upsertCalls).toEqual([]);expect(h.runAutomationsForTrigger).not.toHaveBeenCalled();
+  })
   it('keeps legacy routing unchanged with flag off',async () => {
     await runWebhook()
     expect(h.lookups).toEqual([])

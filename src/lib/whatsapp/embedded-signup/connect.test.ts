@@ -18,7 +18,7 @@ const h = vi.hoisted(() => ({
   claimError: false,
   mismatch: false,
   failure: '' as string,
-  metaCode: 100,
+  metaCode: 100,biz:false,syncs:[] as string[],debugTargets:['123'],
 }));
 vi.mock('node:crypto',async importOriginal=>({
   ...await importOriginal<typeof import('node:crypto')>(),
@@ -84,7 +84,7 @@ vi.mock('@/lib/supabase/admin', () => ({ createServiceClient: () => ({
         h.pinCiphertext=sameAccount?(h.atomicPin || h.pinCiphertext || args.p_pin_ciphertext):args.p_pin_ciphertext;
         h.returnedPins.push(h.pinCiphertext);
         expect(decryptToken(args.p_token_ciphertext)).toBe('test-business-token');
-        expect(decryptToken(args.p_pin_ciphertext)).toMatch(/^\d{6}$/);
+        if(args.p_pin_ciphertext!==null)expect(decryptToken(args.p_pin_ciphertext)).toMatch(/^\d{6}$/);
         return { data: [{ id: 'connection-id', waba_id: args.p_waba_id, status: wasConnected?'connected':'pending',
           claimed_pin_ciphertext:h.pinCiphertext,stored_token_ciphertext:h.liveToken,
           display_phone_number: '+123', verified_name: 'Test', quality_rating: 'GREEN',
@@ -100,16 +100,18 @@ beforeEach(() => {
   vi.stubEnv('WACRM_TOKEN_ENC_KEY', Buffer.alloc(32, 1).toString('base64'));
   h.owner = null; h.claimed = null; h.events = []; h.updates = []; h.claimError = false;
   h.mismatch = false; h.failure = ''; h.metaCode = 100;
-  h.ownerStatus='connected';h.pinCiphertext=null;h.atomicPin=null;h.liveToken='';h.writeFailure=false;h.pins=[];h.updatedAt=new Date(Date.now()).toISOString();h.legacyAccount=null;h.legacyError=false;h.updateAttempts=[];h.legacyFilters=[];h.selections=[];h.returnedPins=[];h.pinReadError=false;
+  h.ownerStatus='connected';h.pinCiphertext=null;h.atomicPin=null;h.liveToken='';h.writeFailure=false;h.pins=[];h.updatedAt=new Date(Date.now()).toISOString();h.legacyAccount=null;h.legacyError=false;h.updateAttempts=[];h.legacyFilters=[];h.selections=[];h.returnedPins=[];h.pinReadError=false;h.biz=false;h.syncs=[];h.debugTargets=['123'];
   vi.stubGlobal('fetch', vi.fn(async (url: string, options?: RequestInit) => {
-    const step = url.includes('oauth/access_token') ? 'exchange' : url.includes('/phone_numbers') ? 'verify'
+    const step = url.includes('debug_token')?'debug':url.includes('smb_app_data')?'sync':url.includes('oauth/access_token') ? 'exchange' : url.includes('/phone_numbers') ? 'verify'
       : url.includes('/register') ? 'register' : url.includes('/subscribed_apps') ? 'subscribe' : 'phone';
     h.events.push(step);
+    if(step==='sync'){const payload=JSON.parse(String(options?.body));h.syncs.push(payload.sync_type);return Response.json({messaging_product:'whatsapp',request_id:'request-'+payload.sync_type});}
+    if(step==='debug')return Response.json({data:{is_valid:true,app_id:'test-app',granular_scopes:[{scope:'whatsapp_business_management',target_ids:h.debugTargets}]}});
     if(step==='register')h.pins.push(JSON.parse(String(options?.body)).pin);
     if (h.failure === step) return Response.json({ error: { code: h.metaCode, message: 'test-business-token test-oauth-code' } }, { status: 400 });
     return Response.json(step === 'exchange' ? { access_token: 'test-business-token' }
       : step === 'verify' ? { data: [{ id: h.mismatch ? '999' : '456' }] }
-      : step === 'phone' ? { display_phone_number: '+123', verified_name: 'Test', quality_rating: 'GREEN' }
+      : step === 'phone' ? { display_phone_number: '+123', verified_name: 'Test', quality_rating: 'GREEN',...(h.biz?{is_on_biz_app:true,platform_type:'CLOUD_API'}:{}) }
       : { success: true });
   }));
 });
@@ -302,6 +304,26 @@ describe('Embedded Signup connect orchestration', () => {
     await expect(connect(input,'a')).rejects.toMatchObject({code:'database_error',status:500});
     expect(h.selections).toContainEqual({fields:'pin_ciphertext',filters:{phone_number_id:'456',account_id:'a'}});
     expect(h.events).not.toContain('claim');expect(h.pins).toEqual([]);
+  });
+  it('coexistence skips register and PIN creation, subscribes, and initiates documented contacts/history sync',async()=>{
+    h.biz=true;await expect(connect({...input,mode:'coexistence'},'a')).resolves.toMatchObject({status:'connected'});
+    expect(h.events).not.toContain('register');expect(h.pins).toEqual([]);expect(h.pinCiphertext).toBeNull();
+    expect(h.syncs).toEqual(['smb_app_state_sync','history']);
+    expect(h.events.indexOf('subscribe')).toBeLessThan(h.events.indexOf('sync'));
+    expect(vi.mocked(fetch).mock.calls.every(([url])=>String(url).includes('/v26.0/'))).toBe(true);
+  });
+  it('standard onboarding still registers and does not request app-history sync',async()=>{
+    await connect({...input,mode:'standard'},'a');expect(h.events).toContain('register');expect(h.events).toContain('subscribe');expect(h.syncs).toEqual([]);
+  });
+  it('discovers missing callback asset IDs with debug_token and phone_numbers and infers coexistence',async()=>{
+    h.biz=true;await expect(connect({code:'test-oauth-code',source:'hosted'},'a')).resolves.toMatchObject({waba_id:'123'});
+    expect(h.events).toContain('debug');expect(h.events).not.toContain('register');expect(h.syncs).toHaveLength(2);
+  });
+  it('rejects ambiguous callback WABAs instead of silently choosing assets',async()=>{
+    h.debugTargets=['123','999'];await expect(connect({code:'test-oauth-code',source:'hosted'},'a')).rejects.toMatchObject({code:'asset_selection_required',status:400});expect(h.events).not.toContain('claim');
+  });
+  it('does not trust a coexistence mode flag for a number not verified on the Business app',async()=>{
+    await expect(connect({...input,mode:'coexistence'},'a')).rejects.toMatchObject({code:'asset_mismatch',status:403});expect(h.events).not.toContain('claim');
   });
   it('claims pending in review-only SQL with unambiguous columns and an empty search path', () => {
     const sql = readFileSync('supabase/shared-project/wacrm_embedded_signup.sql','utf8');

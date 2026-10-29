@@ -25,6 +25,7 @@
 //   }
 // ============================================================
 
+import { SendCredentialError } from '@/lib/whatsapp/send-credentials';
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -67,6 +68,7 @@ export class ForbiddenError extends Error {
  * server internals out of the wire.
  */
 export function toErrorResponse(err: unknown): NextResponse {
+  if(err instanceof SendCredentialError)return NextResponse.json({error:err.code,message:'Reconnect WhatsApp or select the original phone number.'},{status:err.status});
   if (err instanceof UnauthorizedError || err instanceof ForbiddenError) {
     return NextResponse.json({ error: err.message }, { status: err.status });
   }

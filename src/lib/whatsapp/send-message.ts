@@ -1,3 +1,4 @@
+import { loadSendConfig, SendCredentialError } from '@/lib/whatsapp/send-credentials';
 // ============================================================
 // Outbound message send — the core that both the dashboard's
 // `/api/whatsapp/send` route and the public `/api/v1/messages`
@@ -264,11 +265,10 @@ export async function sendMessageToConversation(
   const sanitizedPhone = hasValidPhone ? sendTarget : '';
 
   // WhatsApp config, account-scoped.
-  const { data: loadedConfig } = await db
-    .from('whatsapp_config')
-    .select('*')
-    .eq('account_id', accountId)
-    .maybeSingle();
+  const { data: loadedConfig } = await loadSendConfig(db, accountId, undefined, conversationId, true, replyToMessageId || undefined).catch(error=>{
+    if(error instanceof SendCredentialError)throw new SendMessageError(error.code,'Reconnect WhatsApp or select the original phone number.',error.status);
+    throw error;
+  });
 
   // META_STUB: allow inbox send without a live WABA so every selectable
   // composer control works end-to-end in stub demos / E2E.
@@ -473,6 +473,7 @@ export async function sendMessageToConversation(
 
       if (lastError) throw lastError;
     } catch (err) {
+      if(err instanceof SendCredentialError)throw new SendMessageError(err.code,'Reconnect WhatsApp.',409);
       if (err instanceof ChannelGateError) {
         // Persist a failed outbound row so inbox/history shows the block,
         // then surface the stable Connect gate code to the caller.
@@ -556,8 +557,9 @@ export async function sendMessageToConversation(
       content_text: persistedText,
       media_url: mediaUrl || null,
       template_name: templateName || null,
-      interactive_payload:
-        messageType === 'interactive' ? interactivePayload : null,
+      interactive_payload:process.env.WACRM_EMBEDDED_SIGNUP==='1'
+        ? {...(messageType==='interactive'?interactivePayload:{}),_wacrm_phone_number_id:config.phone_number_id}
+        : messageType === 'interactive' ? interactivePayload : null,
       message_id: waMessageId,
       status: 'sent',
       reply_to_message_id: replyToMessageId || null,

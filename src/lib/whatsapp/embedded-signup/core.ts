@@ -7,8 +7,11 @@ import { sanitizeLastError } from './errors';
 export const enabled = () => process.env.WACRM_EMBEDDED_SIGNUP === '1';
 export const signupInput = z.object({
   code: z.string().min(1).max(4096),
-  waba_id: z.string().regex(/^\d{1,32}$/),
-  phone_number_id: z.string().regex(/^\d{1,32}$/),
+  waba_id: z.string().regex(/^\d{1,32}$/).optional(),
+  phone_number_id: z.string().regex(/^\d{1,32}$/).optional(),
+  mode: z.enum(['coexistence','standard']).optional(),
+  state: z.string().max(256).optional(),
+  source: z.enum(['popup','hosted']).optional(),
   business_id: z.string().regex(/^\d{1,32}$/).optional(),
 }).strict();
 export type SignupInput = z.infer<typeof signupInput>;
@@ -22,16 +25,16 @@ export const publicError = (e: unknown) => e instanceof SignupError && e.code ==
   ? { status: e.status, body: { error: e.code, message: 'WhatsApp connection could not be completed.' } }
   : { status: 500, body: { error: 'internal_error', message: 'WhatsApp connection could not be completed.' } };
 
-function graphVersion() {
-  const version = process.env.META_GRAPH_VERSION || 'v23.0';
+export function graphVersion() {
+  const version = process.env.META_GRAPH_VERSION || 'v26.0';
   if (!/^v\d+\.\d+$/.test(version)) throw new SignupError('configuration_error', 503);
   return version;
 }
-async function graph(path: string, token?: string, method = 'GET', data?: object) {
+export async function graph(path: string, token?: string, method = 'GET', data?: object) {
   const version = graphVersion();
   let response: Response;
   try { response = await fetch('https://graph.facebook.com/' + version + '/' + path, {
-    method, redirect: 'error',
+    method, redirect: 'error', signal: AbortSignal.timeout(15000),
     headers: { ...(token ? { Authorization: 'Bearer ' + token } : {}), ...(data ? { 'Content-Type': 'application/json' } : {}) },
     ...(data ? { body: JSON.stringify(data) } : {}),
     cache: 'no-store',
@@ -42,8 +45,34 @@ async function graph(path: string, token?: string, method = 'GET', data?: object
     const metaCode = typeof body?.error?.code === 'number' ? body.error.code : undefined;
     throw new SignupError('meta_request_failed', 502, metaCode);
   }
-  if (!body || (method !== 'GET' && body.success !== true)) throw new SignupError('meta_request_failed', 502);
+  if (!body || (method !== 'GET' && body.success !== true && !(path.endsWith('/smb_app_data') && body.messaging_product === 'whatsapp' && typeof body.request_id === 'string'))) throw new SignupError('meta_request_failed', 502);
   return body;
+}
+// https://developers.facebook.com/docs/facebook-login/guides/access-tokens/debugging-and-error-handling/
+export async function inspectBusinessToken(token: string) {
+  const appId=process.env.META_APP_ID;const secret=process.env.META_APP_SECRET?.split(',')[0]?.trim();
+  if(!appId||!secret)throw new SignupError('configuration_error',503);
+  const body=await graph('debug_token?'+new URLSearchParams({input_token:token}),appId+'|'+secret);
+  return body.data;
+}
+async function resolveAssets(input: SignupInput,token:string):Promise<{waba:string;phoneId:string}> {
+  let waba=input.waba_id;
+  if(!waba){
+    const data=await inspectBusinessToken(token);
+    if(!data?.is_valid||String(data.app_id)!==process.env.META_APP_ID)throw new SignupError('asset_mismatch',403);
+    const scopes=Array.isArray(data.granular_scopes)?data.granular_scopes:[];
+    const ids=[...new Set<string>(scopes.filter((s:{scope?:string})=>s.scope==='whatsapp_business_management')
+      .flatMap((s:{target_ids?:string[]})=>s.target_ids||[]).filter((id:unknown)=>typeof id==='string'&&/^\d+$/.test(id)))];
+    if(ids.length!==1)throw new SignupError('asset_selection_required',400);
+    waba=ids[0];
+  }
+  const assets=await graph(waba+'/phone_numbers?fields=id',token);
+  if(!Array.isArray(assets.data))throw new SignupError('asset_mismatch',403);
+  const ids=assets.data.map((p:{id?:string})=>p.id).filter((id:unknown)=>typeof id==='string');
+  const phoneId=input.phone_number_id || (ids.length===1?ids[0]:null);
+  if(!phoneId)throw new SignupError('asset_selection_required',400);
+  if(!ids.includes(phoneId))throw new SignupError('asset_mismatch',403);
+  return {waba,phoneId};
 }
 export async function connect(input: SignupInput, accountId: string) {
   const appId = process.env.META_APP_ID;
@@ -53,19 +82,20 @@ export async function connect(input: SignupInput, accountId: string) {
   const exchange = await graph('oauth/access_token?' + params.toString());
   if (typeof exchange.access_token !== 'string' || !exchange.access_token) throw new SignupError('exchange_failed', 502);
   const token: string = exchange.access_token;
-  const assets = await graph(input.waba_id + '/phone_numbers?fields=id', token);
-  if (!Array.isArray(assets.data) || !assets.data.some((p: {id?: string}) => p.id === input.phone_number_id))
-    throw new SignupError('asset_mismatch', 403);
-  const phone = await graph(input.phone_number_id + '?fields=display_phone_number,verified_name,quality_rating', token);
+  const {waba,phoneId}=await resolveAssets(input,token);
+  const phone = await graph(phoneId + '?fields=display_phone_number,verified_name,quality_rating,is_on_biz_app,platform_type', token);
+  const mode=input.mode || (input.source==='hosted' && phone.is_on_biz_app===true?'coexistence':'standard');
+  if(mode==='coexistence' && (phone.is_on_biz_app!==true || phone.platform_type!=='CLOUD_API'))
+    throw new SignupError('asset_mismatch',403);
   const service = createServiceClient().schema('wacrm');
   // Existing legacy ownership is still authoritative during the mixed rollout.
   const { data: legacyOwners, error: legacyError } = await service.from('whatsapp_config')
-    .select('account_id').eq('phone_number_id', input.phone_number_id).neq('account_id', accountId).limit(1);
+    .select('account_id').eq('phone_number_id', phoneId).neq('account_id', accountId).limit(1);
   if (legacyError || !legacyOwners) throw new SignupError('database_error', 500);
   if (legacyOwners.length > 0) throw new SignupError('number_in_use_legacy', 409);
   // This fast rejection is backed by the atomic claim below (the race arbiter).
   const { data: owner, error: ownershipError } = await service.from('wa_connections')
-    .select('account_id,status,updated_at').eq('phone_number_id', input.phone_number_id).maybeSingle();
+    .select('account_id,status,updated_at').eq('phone_number_id', phoneId).maybeSingle();
   if (ownershipError) throw new SignupError('database_error', 500);
   const recoverable = owner && (owner.status === 'disconnected' || owner.status === 'error'
     || (owner.status === 'pending' && Date.parse(owner.updated_at) < Date.now() - 15 * 60 * 1000));
@@ -74,21 +104,21 @@ export async function connect(input: SignupInput, accountId: string) {
   // Read a saved PIN only through an account-scoped lookup. A takeover must
   // neither load/decrypt another account's ciphertext nor register with its PIN.
   let savedPin: string | null = null;
-  if (owner?.account_id === accountId) {
+  if (mode==='standard' && owner?.account_id === accountId) {
     const { data: own, error: pinError } = await service.from('wa_connections')
-      .select('pin_ciphertext').eq('phone_number_id', input.phone_number_id)
+      .select('pin_ciphertext').eq('phone_number_id', phoneId)
       .eq('account_id', accountId).maybeSingle();
     if (pinError) throw new SignupError('database_error', 500);
     savedPin = own?.pin_ciphertext || null;
   }
-  const pin = savedPin ? decryptToken(savedPin) : String(randomInt(0, 1000000)).padStart(6, '0');
+  const pin = mode==='coexistence'?null:savedPin ? decryptToken(savedPin) : String(randomInt(0, 1000000)).padStart(6, '0');
   const { data, error } = await service.rpc('claim_wa_connection', {
-    p_account_id: accountId, p_waba_id: input.waba_id, p_phone_number_id: input.phone_number_id,
+    p_account_id: accountId, p_waba_id: waba, p_phone_number_id: phoneId,
     p_business_id: input.business_id || null,
     p_display_phone_number: typeof phone.display_phone_number === 'string' ? phone.display_phone_number : null,
     p_verified_name: typeof phone.verified_name === 'string' ? phone.verified_name : null,
     p_quality_rating: typeof phone.quality_rating === 'string' ? phone.quality_rating : null,
-    p_token_ciphertext: encryptToken(token), p_pin_ciphertext: encryptToken(pin),
+    p_token_ciphertext: encryptToken(token), p_pin_ciphertext: pin ? encryptToken(pin) : null,
   });
   if (error) {
     if (error.code === '23505' || error.message?.includes('wa_connection_owned')) throw new SignupError('phone_in_use', 409);
@@ -103,7 +133,7 @@ export async function connect(input: SignupInput, accountId: string) {
   if (wasConnected && typeof result.stored_token_ciphertext !== 'string')
     throw new SignupError('database_error', 500);
   // Use the atomically claimed PIN rather than a potentially stale pre-check.
-  const registrationPin = result.claimed_pin_ciphertext ? decryptToken(result.claimed_pin_ciphertext) : pin;
+  const registrationPin = mode==='coexistence'?null:result.claimed_pin_ciphertext ? decryptToken(result.claimed_pin_ciphertext) : pin;
   const update = async (status: string, last_error: string | null, fields: Record<string, unknown> = {}) => {
     const { data: updated, error: updateError } = await service.from('wa_connections')
       .update({ ...fields, status, last_error, updated_at: new Date().toISOString() })
@@ -112,9 +142,10 @@ export async function connect(input: SignupInput, accountId: string) {
     if (updateError) throw new SignupError('database_error', 500);
     if (!updated || updated.length === 0) throw new SignupError('state_changed', 409);
   };
+  console.info('[embedded-signup] onboarding mode',mode);
   try {
     try {
-      await graph(input.phone_number_id + '/register', token, 'POST', { messaging_product: 'whatsapp', pin: registrationPin });
+      if(mode==='standard')await graph(phoneId + '/register', token, 'POST', { messaging_product: 'whatsapp', pin: registrationPin });
     } catch (error) {
       // Meta Cloud API error reference: 133005 = two-step verification PIN incorrect.
       // https://developers.facebook.com/docs/whatsapp/cloud-api/support/error-codes/
@@ -122,10 +153,21 @@ export async function connect(input: SignupInput, accountId: string) {
         throw new SignupError('pin_mismatch', 409, 133005);
       throw error;
     }
-    await graph(input.waba_id + '/subscribed_apps', token, 'POST');
+    await graph(waba + '/subscribed_apps', token, 'POST');
+    if(mode==='coexistence' && (!owner || owner.account_id!==accountId)){
+      // Registration is forbidden for coexistence. Both documented one-time
+      // sync requests must start within 24h, after WABA subscription.
+      // https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/onboarding-business-app-users#synchronizing-whatsapp-business-app-data
+      for(const sync_type of ['smb_app_state_sync','history']){
+        const sync=await graph(phoneId+'/smb_app_data',token,'POST',{messaging_product:'whatsapp',sync_type});
+        console.info('[embedded-signup] sync accepted',sync_type,
+          typeof sync.request_id==='string'&&/^[\w-]{1,128}$/.test(sync.request_id)?sync.request_id:'unavailable');
+      }
+    }
     await update('connected', null, {
-      token_ciphertext: encryptToken(token), waba_id: input.waba_id,
+      token_ciphertext: encryptToken(token), waba_id: waba,
       business_id: input.business_id || null,
+      ...(mode==='coexistence'?{pin_ciphertext:null}:{}),
       display_phone_number: typeof phone.display_phone_number === 'string' ? phone.display_phone_number : null,
       verified_name: typeof phone.verified_name === 'string' ? phone.verified_name : null,
       quality_rating: typeof phone.quality_rating === 'string' ? phone.quality_rating : null,
@@ -147,7 +189,7 @@ export async function connect(input: SignupInput, accountId: string) {
     id: result.id, display_phone_number: typeof phone.display_phone_number === 'string' ? phone.display_phone_number : null,
     verified_name: typeof phone.verified_name === 'string' ? phone.verified_name : null,
     quality_rating: typeof phone.quality_rating === 'string' ? phone.quality_rating : null,
-    waba_id: input.waba_id, status: 'connected',
+    waba_id: waba, status: 'connected',
   };
 }
 export async function unsubscribe(waba: string, token: string) {

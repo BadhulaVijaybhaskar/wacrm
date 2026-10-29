@@ -30,6 +30,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  if(process.env.WACRM_EMBEDDED_SIGNUP==='1'){
+    try{const {checkScheduledConnections}=await import('@/lib/whatsapp/embedded-signup/health');await checkScheduledConnections();}
+    catch{console.warn('[embedded-signup] scheduled health check failed');}
+  }
+
   const admin = supabaseAdmin()
   const { data: due, error } = await admin
     .from('automation_pending_executions')
