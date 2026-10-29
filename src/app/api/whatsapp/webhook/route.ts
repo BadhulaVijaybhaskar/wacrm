@@ -246,6 +246,12 @@ export async function GET(request: Request) {
 
 // POST - Receive messages
 export async function POST(request: Request) {
+  // Bound unsigned flood attempts before reading the body and verifying mandatory HMAC.
+  const forwarded = request.headers.get('x-forwarded-for')
+  const ip = forwarded?.split(',')[0]?.trim() || 'unknown'
+  const rl = checkRateLimit(`webhook:${ip}`, RATE_LIMITS.webhook)
+  if (!rl.success) return rateLimitResponse(rl)
+
   // Read raw body first so we can HMAC-verify the exact bytes Meta
   // signed. request.json() would re-encode and break the signature.
   const rawBody = await request.text()
@@ -258,12 +264,6 @@ export async function POST(request: Request) {
     console.warn('[webhook] rejected request with invalid signature')
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
   }
-
-  // Apply the per-IP processing budget only after mandatory HMAC verification.
-  const forwarded = request.headers.get('x-forwarded-for')
-  const ip = forwarded?.split(',')[0]?.trim() || 'unknown'
-  const rl = checkRateLimit(`webhook:${ip}`, RATE_LIMITS.webhook)
-  if (!rl.success) return rateLimitResponse(rl)
 
   if (!isMetaWebhookPayloadFresh(rawBody)) {
     console.warn('[webhook] rejected stale / replayed payload')
@@ -331,10 +331,23 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
 
       // Resolve before any messaging side effect, including status updates.
       const embedded = process.env.WACRM_EMBEDDED_SIGNUP === '1';
-      const connection = embedded
+      const resolution = embedded
         ? await resolveEmbeddedWebhookConnection(value.metadata?.phone_number_id)
         : null;
-      if (embedded && !connection) continue;
+      if (resolution?.status === 'not_connected') continue;
+      let connection = resolution?.status === 'connected' ? resolution.connection : null;
+      if (resolution?.status === 'not_found') {
+        const { data: legacy, error } = await supabaseAdmin().from('whatsapp_config')
+          .select('*').eq('phone_number_id', value.metadata?.phone_number_id);
+        if (error || !legacy || legacy.length !== 1) continue;
+        connection = {
+          account_id: legacy[0].account_id, user_id: legacy[0].user_id,
+          mirror_inbound_media: legacy[0].mirror_inbound_media,
+          accessToken: decrypt(legacy[0].access_token),
+        };
+      }
+      // Only a genuinely absent row can use the legacy path. Errors and known
+      // inactive rows above fail closed, preventing stale-token fallback.
 
       // Handle status updates
       if (value.statuses) {
@@ -354,7 +367,7 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
         config = connection;
         decryptedAccessToken = connection.accessToken;
       } else {
-        // Original config routing while feature flag is disabled.
+        // Legacy routing with the flag off, or no embedded row for this number.
         const { data: legacy, error: legacyError } = await supabaseAdmin()
           .from('whatsapp_config').select('*').eq('phone_number_id',phoneNumberId);
         if (legacyError || !legacy || legacy.length !== 1) {

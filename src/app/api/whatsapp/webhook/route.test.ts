@@ -5,7 +5,7 @@ const h = vi.hoisted(() => ({
   embeddedRows: [] as Record<string, unknown>[],
   embeddedLookupError: false,
   ownerMissing: false,
-  validSignature: true,
+  validSignature: true, legacyFound:true,rateLimited:false,gates:[] as string[],
   scopedMessageIds: [] as string[],
   scopedStatusFilters: [] as [string, unknown][],
   lookups: [] as [string, unknown][],
@@ -92,14 +92,14 @@ vi.mock('@supabase/supabase-js', () => ({
             select: () => ({
               eq: () =>
                 Promise.resolve({
-                  data: [
+                  data: h.legacyFound ? [
                     {
                       account_id: 'acc-1',
                       user_id: 'user-1',
                       access_token: 'enc',
                       mirror_inbound_media: h.state.mirrorInboundMedia,
                     },
-                  ],
+                  ] : [],
                   error: null,
                 }),
             }),
@@ -313,8 +313,12 @@ vi.mock('@/lib/contacts/dedupe', () => ({
 }))
 
 vi.mock('@/lib/whatsapp/webhook-signature', () => ({
-  verifyMetaWebhookSignature: () => h.validSignature,
+  verifyMetaWebhookSignature: () => {h.gates.push('hmac');return h.validSignature},
   isMetaWebhookPayloadFresh: () => true,
+}))
+vi.mock('@/lib/rate-limit',async importOriginal => ({
+  ...await importOriginal<typeof import('@/lib/rate-limit')>(),
+  checkRateLimit: () => {h.gates.push('rate');return {success:!h.rateLimited,remaining:1,reset:Date.now()+60000,limit:100}},
 }))
 vi.mock('@/lib/whatsapp/template-webhook', () => ({
   isTemplateWebhookField: (field: string) =>
@@ -344,6 +348,7 @@ vi.mock('@/lib/webhooks/deliver', () => ({
 
 import { POST } from './route'
 import { encryptToken } from '@/lib/whatsapp/embedded-signup/crypto'
+import { resolveEmbeddedWebhookConnection } from '@/lib/whatsapp/embedded-signup/webhook-routing'
 import { getMediaUrl, downloadMedia } from '@/lib/whatsapp/meta-api'
 import { findExistingContact } from '@/lib/contacts/dedupe'
 import { handleTemplateWebhookChange } from '@/lib/whatsapp/template-webhook'
@@ -425,7 +430,7 @@ async function runStatusWebhook(status: Record<string, unknown>) {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  h.embeddedRows=[];h.embeddedLookupError=false;h.ownerMissing=false;h.lookups=[];h.validSignature=true
+  h.embeddedRows=[];h.embeddedLookupError=false;h.ownerMissing=false;h.lookups=[];h.validSignature=true;h.legacyFound=true;h.rateLimited=false;h.gates=[]
   h.scopedMessageIds=[];h.scopedStatusFilters=[]
   vi.stubEnv('WACRM_EMBEDDED_SIGNUP','0')
   h.state.messageUpsertResult = [{ id: 'msg-1' }]
@@ -1108,7 +1113,7 @@ describe('Embedded Signup webhook routing', () => {
   })
   it.each(['unknown','pending','disconnected','error'])('drops %s number with 200 without message or status mutations',async status => {
     useConnection(status)
-    if(status==='unknown')h.embeddedRows=[]
+    if(status==='unknown'){h.embeddedRows=[];h.legacyFound=false;}
     const r=await runWebhook()
     expect(r.init?.status).toBe(200)
     expect(h.state.upsertCalls).toEqual([]);expect(mockFindExistingContact).not.toHaveBeenCalled()
@@ -1134,6 +1139,30 @@ describe('Embedded Signup webhook routing', () => {
     useConnection();h.scopedMessageIds=[]
     await runStatusWebhook({id:'wamid.OTHER',status:'delivered',timestamp:'1700000000',recipient_id:'15551230000'})
     expect(h.state.messageUpdates).toEqual([]);expect(h.state.recipientUpdates).toEqual([])
+  })
+  it('falls back to legacy config with flag on when no embedded row exists',async () => {
+    useConnection();h.embeddedRows=[]
+    const r=await runWebhook();expect(r.init?.status).toBe(200)
+    expect(h.lookups).toContainEqual(['phone_number_id','pn-1'])
+    expect(h.state.upsertCalls).toHaveLength(1)
+    expect(mockFindExistingContact).toHaveBeenCalledWith(expect.anything(),'acc-1','15551230000')
+  })
+  it('distinguishes a missing connection from an inactive or unreadable one',async () => {
+    useConnection();h.embeddedRows=[]
+    expect(await resolveEmbeddedWebhookConnection('pn-1')).toEqual({status:'not_found'})
+    useConnection('disconnected')
+    expect(await resolveEmbeddedWebhookConnection('pn-1')).toEqual({status:'not_connected'})
+    h.embeddedRows=[];h.embeddedLookupError=true
+    expect(await resolveEmbeddedWebhookConnection('pn-1')).toEqual({status:'not_connected'})
+  })
+  it('runs the per-IP rate limiter before mandatory HMAC',async () => {
+    await runWebhook();expect(h.gates.slice(0,2)).toEqual(['rate','hmac'])
+  })
+  it('rejects rate-limited traffic before reading the body or checking HMAC',async () => {
+    h.rateLimited=true
+    const request=inboundRequest();const text=vi.spyOn(request,'text')
+    const r=await POST(request);expect(r.init?.status).toBe(429)
+    expect(h.gates).toEqual(['rate']);expect(text).not.toHaveBeenCalled();expect(h.state.afterCallbacks).toEqual([])
   })
   it('keeps legacy routing unchanged with flag off',async () => {
     await runWebhook()

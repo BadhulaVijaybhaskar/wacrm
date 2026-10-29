@@ -2060,7 +2060,35 @@
       "secretDesc": "Shown once. Use it to verify X-Astra-Signature on deliveries.",
       "copied": "Secret copied"
     },
-    "title": "Configuración"
+    "title": "Configuración",
+    "whatsappConnections": {
+      "title": "Conectar WhatsApp",
+      "description": "Conecta un número de empresa a tu cuenta.",
+      "loadFailed": "No se pudieron cargar las conexiones de WhatsApp.",
+      "connectedMessage": "WhatsApp conectado.",
+      "connectFailed": "La conexión falló. Inténtalo de nuevo.",
+      "pinMismatch": "Desactiva la verificación en dos pasos para este número en el administrador de WhatsApp y vuelve a intentar la conexión.",
+      "cancelled": "La configuración se canceló o falló. Inténtalo de nuevo cuando estés listo.",
+      "authorizationIncomplete": "La autorización no se completó.",
+      "startFailed": "No se pudo iniciar la configuración. Revisa el navegador y la configuración.",
+      "confirmDisconnect": "¿Desconectar este número de WhatsApp?",
+      "disconnectedMessage": "WhatsApp desconectado.",
+      "disconnectFailed": "No se pudo desconectar el número.",
+      "noVerifiedName": "Sin nombre verificado",
+      "unknown": "Desconocida",
+      "nameQuality": "{name} · Calidad: {quality}",
+      "wabaId": "ID de WABA: {id}",
+      "notConnected": "Sin conexión",
+      "connecting": "Conectando…",
+      "retryFacebook": "Reintentar · Continuar con Facebook",
+      "continueFacebook": "Continuar con Facebook",
+      "adminOnly": "Solo los administradores de la cuenta pueden gestionar las conexiones.",
+      "disconnect": "Desconectar",
+      "retry": "Reintentar",
+      "statusConnected": "Conectado",
+      "statusPending": "Pendiente",
+      "statusError": "Error de conexión"
+    }
   },
   "SignupPage": {
     "passwordsMismatch": "Las contraseñas no coinciden",

@@ -16,10 +16,13 @@ export async function POST(_request: Request, context: {params: Promise<{id:stri
       .eq('account_id',accountId).eq('id',id).maybeSingle();
     if (lookupError) return NextResponse.json({error:'database_error'},{status:500});
     if (!row) return NextResponse.json({error:'not_found'},{status:404});
-    // Retry unsubscribe for an error/pending row too: a prior subscribe might
-    // have succeeded remotely even when its response was lost.
+    // Subscriptions are WABA-wide: never remove delivery for a sibling number,
+    // including another account's pending claim on the same WABA.
+    const {data:siblings, error:siblingError} = await db.from('wa_connections').select('id')
+      .eq('waba_id',row.waba_id).neq('id',id).in('status',['connected','pending']).limit(1);
+    if (siblingError) return NextResponse.json({error:'database_error'},{status:500});
     let failed = false;
-    if (row.status !== 'disconnected') {
+    if (row.status !== 'disconnected' && !siblings?.length) {
       try { await unsubscribe(row.waba_id, decryptToken(row.token_ciphertext)); }
       catch { failed = true; }
     }
@@ -33,7 +36,7 @@ export async function POST(_request: Request, context: {params: Promise<{id:stri
     return NextResponse.json({status:'disconnected'});
   } catch (error) {
     if (error instanceof UnauthorizedError || error instanceof ForbiddenError)
-      return NextResponse.json({error:'forbidden'},{status:403});
+      return NextResponse.json({error:'forbidden'},{status:error.status});
     return NextResponse.json({error:'internal_error'},{status:500});
   }
 }

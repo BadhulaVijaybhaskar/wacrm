@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getCurrentAccount } from '@/lib/auth/account';
+import { getCurrentAccount, UnauthorizedError, ForbiddenError } from '@/lib/auth/account';
 import { enabled } from '@/lib/whatsapp/embedded-signup/core';
 export async function GET() {
   if (!enabled()) return NextResponse.json({error:'not_found'}, {status:404});
@@ -11,5 +11,9 @@ export async function GET() {
       .eq('account_id',accountId).order('created_at',{ascending:false});
     if(error) return NextResponse.json({error:'database_error'},{status:500});
     return NextResponse.json({connections:data || []});
-  } catch {return NextResponse.json({error:'forbidden'},{status:403});}
+  } catch (error) {
+    if (error instanceof UnauthorizedError || error instanceof ForbiddenError)
+      return NextResponse.json({error:'forbidden'},{status:error.status});
+    return NextResponse.json({error:'internal_error'},{status:500});
+  }
 }
