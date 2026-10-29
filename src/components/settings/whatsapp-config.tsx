@@ -115,14 +115,6 @@ export function WhatsAppConfig() {
   const [mirrorMedia, setMirrorMedia] = useState(true);
   const [savingMirror, setSavingMirror] = useState(false);
 
-  // Embedded Signup scaffolding (CHAT-07). Hidden unless the server
-  // reports WHATSAPP_EMBEDDED_SIGNUP is on.
-  const [embeddedSignup, setEmbeddedSignup] = useState<{
-    enabled: boolean;
-    stub: boolean;
-  } | null>(null);
-  const [connectingSignup, setConnectingSignup] = useState(false);
-
   // True once /register has succeeded on Meta's side (timestamp set
   // in the row). When false, the saved config is metadata-only and
   // Meta will silently drop every inbound event — that's the
@@ -190,27 +182,6 @@ export function WhatsAppConfig() {
       // Clear any stale probe result when reloading the row.
       setRegistrationProbe(null);
 
-      // Feature-flag probe for Embedded Signup — best-effort.
-      try {
-        const esRes = await fetch('/api/whatsapp/config/embedded-signup', {
-          cache: 'no-store',
-        });
-        if (esRes.ok) {
-          const es = (await esRes.json()) as {
-            enabled?: boolean;
-            stub?: boolean;
-          };
-          setEmbeddedSignup({
-            enabled: es.enabled === true,
-            stub: es.stub === true,
-          });
-        } else {
-          setEmbeddedSignup({ enabled: false, stub: false });
-        }
-      } catch {
-        setEmbeddedSignup({ enabled: false, stub: false });
-      }
-
       // Then verify health via the API (decrypts token + pings Meta)
       if (data) {
         try {
@@ -265,46 +236,6 @@ export function WhatsAppConfig() {
     loadedAccountIdRef.current = accountId;
     fetchConfig(accountId);
   }, [authLoading, profileLoading, user?.id, accountId, fetchConfig]);
-
-  async function handleEmbeddedSignup() {
-    if (!canEditSettings || connectingSignup) return;
-    setConnectingSignup(true);
-    try {
-      const res = await fetch('/api/whatsapp/config/embedded-signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: 'stub-code' }),
-      });
-      const payload = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast.error(
-          typeof payload.error === 'string'
-            ? payload.error
-            : t('embeddedSignupFailed'),
-        );
-        return;
-      }
-      if (typeof payload.phone_number_id === 'string') {
-        setPhoneNumberId(payload.phone_number_id);
-      }
-      if (typeof payload.waba_id === 'string') {
-        setWabaId(payload.waba_id);
-      }
-      setAccessToken(MASKED_TOKEN);
-      setTokenEdited(false);
-      toast.success(
-        payload.stub
-          ? t('embeddedSignupStubDone')
-          : t('embeddedSignupDone'),
-      );
-      if (accountId) await fetchConfig(accountId);
-    } catch (err) {
-      console.error('embedded signup failed:', err);
-      toast.error(t('embeddedSignupFailed'));
-    } finally {
-      setConnectingSignup(false);
-    }
-  }
 
   async function handleToggleMirrorMedia(next: boolean) {
     if (!config || !accountId || savingMirror) return;
@@ -792,39 +723,6 @@ export function WhatsAppConfig() {
               </div>
             )}
           </Alert>
-        )}
-
-        {/* Embedded Signup — only when WHATSAPP_EMBEDDED_SIGNUP is on */}
-        {embeddedSignup?.enabled && canEditSettings && (
-          <Card data-testid="embedded-signup-card">
-            <CardHeader>
-              <CardTitle className="text-foreground">
-                {t('embeddedSignupTitle')}
-              </CardTitle>
-              <CardDescription className="text-muted-foreground">
-                {embeddedSignup.stub
-                  ? t('embeddedSignupStubDesc')
-                  : t('embeddedSignupDesc')}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button
-                type="button"
-                onClick={handleEmbeddedSignup}
-                disabled={connectingSignup}
-                className="bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                {connectingSignup ? (
-                  <>
-                    <Loader2 className="size-4 animate-spin" />
-                    {t('embeddedSignupConnecting')}
-                  </>
-                ) : (
-                  t('embeddedSignupConnect')
-                )}
-              </Button>
-            </CardContent>
-          </Card>
         )}
 
         {/* API Credentials */}

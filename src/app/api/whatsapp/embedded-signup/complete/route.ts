@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireRole } from '@/lib/auth/account';
+import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/auth/account';
 import { connect, enabled, publicError, signupInput, SignupError } from '@/lib/whatsapp/embedded-signup/core';
 export async function POST(request: Request) {
   if (!enabled()) return NextResponse.json({ error: 'not_found' }, { status: 404 });
@@ -9,11 +9,10 @@ export async function POST(request: Request) {
     if (!input.success) throw new SignupError('invalid_request', 400);
     return NextResponse.json(await connect(input.data, ctx.accountId));
   } catch (error) {
+    if (error instanceof UnauthorizedError || error instanceof ForbiddenError) {
+      return NextResponse.json({ error: 'forbidden' }, { status: error.status });
+    }
     const result = publicError(error);
-    // Auth errors must preserve 403, even for absent session.
-    const status = error instanceof Error && 'status' in error && (error as {status:number}).status <= 403
-      ? 403 : result.status;
-    return NextResponse.json(status === 403 && !(error instanceof SignupError)
-      ? {error:'forbidden'} : result.body, {status});
+    return NextResponse.json(result.body, { status: result.status });
   }
 }

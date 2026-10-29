@@ -26,6 +26,13 @@ describe('embedded signup flags', () => {
     expect(isEmbeddedSignupEnabled()).toBe(false)
   })
 
+  it('disables old scaffolding when the Phase 1 flag is enabled', () => {
+    vi.stubEnv('WACRM_EMBEDDED_SIGNUP', '1')
+    process.env.WHATSAPP_EMBEDDED_SIGNUP = '1'
+    expect(isEmbeddedSignupEnabled()).toBe(false)
+    vi.unstubAllEnvs()
+  })
+
   it('isMetaStubMode reads truthy env values', () => {
     delete process.env.META_STUB
     expect(isMetaStubMode()).toBe(false)

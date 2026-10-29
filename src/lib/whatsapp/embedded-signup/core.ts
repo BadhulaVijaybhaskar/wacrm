@@ -25,23 +25,22 @@ function graphVersion() {
   return version;
 }
 async function graph(path: string, token?: string, method = 'GET', data?: object) {
-  const response = await fetch('https://graph.facebook.com/' + graphVersion() + '/' + path, {
+  const version = graphVersion();
+  let response: Response;
+  try { response = await fetch('https://graph.facebook.com/' + version + '/' + path, {
     method, redirect: 'error',
     headers: { ...(token ? { Authorization: 'Bearer ' + token } : {}), ...(data ? { 'Content-Type': 'application/json' } : {}) },
     ...(data ? { body: JSON.stringify(data) } : {}),
     cache: 'no-store',
   });
+  } catch { throw new SignupError('meta_request_failed', 502); }
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     const metaCode = typeof body?.error?.code === 'number' ? body.error.code : undefined;
-    if (metaCode !== undefined) console.warn('[embedded-signup] Meta error code', metaCode);
-    if (response.status === 404) throw new SignupError('meta_not_found', 404, metaCode);
     throw new SignupError('meta_request_failed', 502, metaCode);
   }
+  if (!body || (method !== 'GET' && body.success !== true)) throw new SignupError('meta_request_failed', 502);
   return body;
-}
-export function alreadyRegistered(error: unknown): boolean {
-  return error instanceof SignupError && error.metaCode === 100 && error.code === 'meta_request_failed';
 }
 export async function connect(input: SignupInput, accountId: string) {
   const appId = process.env.META_APP_ID;
@@ -56,15 +55,12 @@ export async function connect(input: SignupInput, accountId: string) {
     throw new SignupError('asset_mismatch', 403);
   const phone = await graph(input.phone_number_id + '?fields=display_phone_number,verified_name,quality_rating', token);
   const pin = String(randomInt(0, 1000000)).padStart(6, '0');
-  try {
-    await graph(input.phone_number_id + '/register', token, 'POST', { messaging_product: 'whatsapp', pin });
-  } catch (error) {
-    // Meta 100 covers many unrelated errors; require explicit already-registered subcode
-    // before tolerating it. Never convert arbitrary registration failures to success.
-    if (!(error instanceof SignupError && error.metaCode === 136024)) throw error;
-  }
-  await graph(input.waba_id + '/subscribed_apps', token, 'POST');
   const service = createServiceClient().schema('wacrm');
+  // This fast rejection is backed by the atomic claim below (the race arbiter).
+  const { data: owner, error: ownershipError } = await service.from('wa_connections')
+    .select('account_id').eq('phone_number_id', input.phone_number_id).maybeSingle();
+  if (ownershipError) throw new SignupError('database_error', 500);
+  if (owner && owner.account_id !== accountId) throw new SignupError('phone_in_use', 409);
   const { data, error } = await service.rpc('claim_wa_connection', {
     p_account_id: accountId, p_waba_id: input.waba_id, p_phone_number_id: input.phone_number_id,
     p_business_id: input.business_id || null,
@@ -79,9 +75,27 @@ export async function connect(input: SignupInput, accountId: string) {
   }
   const result = Array.isArray(data) ? data[0] : data;
   if (!result) throw new SignupError('database_error', 500);
-  return result as {id:string;display_phone_number:string|null;verified_name:string|null;quality_rating:string|null;waba_id:string;status:string};
+  const update = async (status: string, last_error: string | null) => {
+    const { error: updateError } = await service.from('wa_connections')
+      .update({ status, last_error, updated_at: new Date().toISOString() })
+      .eq('account_id', accountId).eq('id', result.id);
+    if (updateError) throw new SignupError('database_error', 500);
+  };
+  try {
+    await graph(input.phone_number_id + '/register', token, 'POST', { messaging_product: 'whatsapp', pin });
+    await graph(input.waba_id + '/subscribed_apps', token, 'POST');
+    await update('connected', null);
+  } catch (error) {
+    await update('error', error instanceof SignupError ? error.code : 'meta_request_failed');
+    throw error instanceof SignupError ? error : new SignupError('meta_request_failed', 502);
+  }
+  // Explicit allowlist: even an unexpected RPC response cannot leak ciphertext.
+  return {
+    id: result.id, display_phone_number: result.display_phone_number,
+    verified_name: result.verified_name, quality_rating: result.quality_rating,
+    waba_id: result.waba_id, status: 'connected',
+  };
 }
 export async function unsubscribe(waba: string, token: string) {
-  try { await graph(waba + '/subscribed_apps', token, 'DELETE'); }
-  catch (error) { if (!(error instanceof SignupError && error.status === 404)) throw error; }
+  await graph(waba + '/subscribed_apps', token, 'DELETE');
 }

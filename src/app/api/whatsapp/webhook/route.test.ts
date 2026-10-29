@@ -1,7 +1,14 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // Shared, hoisted state the module mocks close over. Reset per test.
 const h = vi.hoisted(() => ({
+  embeddedRows: [] as Record<string, unknown>[],
+  embeddedLookupError: false,
+  ownerMissing: false,
+  validSignature: true,
+  scopedMessageIds: [] as string[],
+  scopedStatusFilters: [] as [string, unknown][],
+  lookups: [] as [string, unknown][],
   runAutomationsForTrigger: vi.fn(),
   dispatchInboundToFlows: vi.fn(),
   dispatchInboundToAiReply: vi.fn(),
@@ -56,10 +63,30 @@ vi.mock('next/server', () => ({
   },
 }))
 
+// Mock the shared service-client boundary, never require real credentials.
+vi.mock('@/lib/supabase/admin', async () => {
+  const { createClient } = await import('@supabase/supabase-js')
+  return { createServiceClient: () => createClient('https://example.supabase.co', 'dummy-test') }
+})
+
 vi.mock('@supabase/supabase-js', () => ({
   createClient: () => ({
+    schema(schema: string) { expect(schema).toBe('wacrm'); return this },
     from(table: string) {
       switch (table) {
+        case 'wa_connections':
+          return { select: () => ({ eq: (key: string, value: unknown) => {
+            h.lookups.push([key, value]);
+            return Promise.resolve({data:h.embeddedRows,error:h.embeddedLookupError ? {code:'test'} : null})
+          } }) }
+        case 'profiles': {
+          const q = {
+            eq: (key: string, value: unknown) => { h.lookups.push([key,value]);return q },
+            order: () => q, limit: () => q,
+            maybeSingle: async () => ({data:h.ownerMissing ? null : {user_id:'embedded-owner'},error:null}),
+          }
+          return {select: () => q}
+        }
         case 'whatsapp_config':
           return {
             select: () => ({
@@ -100,8 +127,15 @@ vi.mock('@supabase/supabase-js', () => ({
           //   handleStatusUpdate:      select().eq().maybeSingle(), then
           //                            update().eq()
           return {
-            select: () => ({
-              eq: () => ({
+            select: (columns: string) => {
+              if (columns.includes('!inner') && columns.includes('status')) {
+                const q = {
+                  eq: (key: string, value: unknown) => { h.scopedStatusFilters.push([key,value]); return q },
+                  maybeSingle: async () => ({data:null,error:null}),
+                }
+                return q;
+              }
+              return { eq: () => ({
                 eq: () => ({
                   in: () => ({
                     order: () => ({
@@ -116,7 +150,7 @@ vi.mock('@supabase/supabase-js', () => ({
                     error: null,
                   }),
               }),
-            }),
+            } },
             update: (patch: Record<string, unknown>) => {
               h.state.recipientUpdates.push(patch)
               return { eq: () => Promise.resolve({ error: null }) }
@@ -168,8 +202,19 @@ vi.mock('@supabase/supabase-js', () => ({
             // Two different chains land here, told apart by the count
             // option: the prior-message count (head request) and the
             // reply-context parent lookup.
-            select: (_columns: string, options?: { head?: boolean }) =>
-              options?.head
+            select: (_columns: string, options?: { head?: boolean }) => {
+              if (_columns.includes('!inner')) {
+                const q = {
+                  eq: (key: string, value: unknown) => { h.scopedStatusFilters.push([key,value]); return q },
+                  limit: () => q,
+                  maybeSingle: async () => ({data:null,error:null}),
+                  then: (resolve: (r: unknown) => unknown) => Promise.resolve({
+                    data:h.scopedMessageIds.map(id => ({id})),error:null,
+                  }).then(resolve),
+                }
+                return q;
+              }
+              return options?.head
                 ? // priorCustomerMsgCount: select('id',{count,head}).eq().eq()
                   {
                     eq: () => ({
@@ -196,11 +241,17 @@ vi.mock('@supabase/supabase-js', () => ({
                           Promise.resolve({ data: null, error: null }),
                       }),
                     }),
-                  },
+                  };
+            },
             // Status webhook mirror (#535): update(...).eq('message_id', ...)
             update: (patch: Record<string, unknown>) => {
               h.state.messageUpdates.push(patch)
-              return { eq: () => Promise.resolve({ error: null }) }
+              const q = {
+                eq: (key: string, value: unknown) => { h.scopedStatusFilters.push([key,value]); return q },
+                in: (key: string, value: unknown) => { h.scopedStatusFilters.push([key,value]); return q },
+                then: (resolve: (r: unknown) => unknown) => Promise.resolve({error:null}).then(resolve),
+              }
+              return q
             },
             // Idempotent insert: upsert(...).select('id')
             upsert: (row: Record<string, unknown>, options: unknown) => {
@@ -262,7 +313,7 @@ vi.mock('@/lib/contacts/dedupe', () => ({
 }))
 
 vi.mock('@/lib/whatsapp/webhook-signature', () => ({
-  verifyMetaWebhookSignature: () => true,
+  verifyMetaWebhookSignature: () => h.validSignature,
   isMetaWebhookPayloadFresh: () => true,
 }))
 vi.mock('@/lib/whatsapp/template-webhook', () => ({
@@ -292,6 +343,7 @@ vi.mock('@/lib/webhooks/deliver', () => ({
 }))
 
 import { POST } from './route'
+import { encryptToken } from '@/lib/whatsapp/embedded-signup/crypto'
 import { getMediaUrl, downloadMedia } from '@/lib/whatsapp/meta-api'
 import { findExistingContact } from '@/lib/contacts/dedupe'
 import { handleTemplateWebhookChange } from '@/lib/whatsapp/template-webhook'
@@ -373,6 +425,9 @@ async function runStatusWebhook(status: Record<string, unknown>) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  h.embeddedRows=[];h.embeddedLookupError=false;h.ownerMissing=false;h.lookups=[];h.validSignature=true
+  h.scopedMessageIds=[];h.scopedStatusFilters=[]
+  vi.stubEnv('WACRM_EMBEDDED_SIGNUP','0')
   h.state.messageUpsertResult = [{ id: 'msg-1' }]
   h.state.priorCustomerMsgCount = 0
   h.state.replyContextParent = null
@@ -1028,5 +1083,67 @@ describe('status webhook: failed statuses keep Meta\'s reason (#535)', () => {
     expect(h.state.recipientUpdates).toHaveLength(1)
     expect(h.state.recipientUpdates[0]).not.toHaveProperty('error_message')
     expect(h.state.recipientUpdates[0]).not.toHaveProperty('error_code')
+  })
+})
+
+
+afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks() })
+
+describe('Embedded Signup webhook routing', () => {
+  function useConnection(status = 'connected', accountId = 'embedded-account') {
+    vi.stubEnv('WACRM_EMBEDDED_SIGNUP','1')
+    vi.stubEnv('WACRM_TOKEN_ENC_KEY',Buffer.alloc(32,3).toString('base64'))
+    h.embeddedRows=[{account_id:accountId,phone_number_id:'pn-1',status,token_ciphertext:encryptToken('dummy-embedded-token')}]
+  }
+  it.each(['embedded-account','second-account'])('routes phone_number_id to %s and its owner',async accountId => {
+    useConnection('connected',accountId)
+    mockFindExistingContact.mockResolvedValue(null)
+    const r=await runWebhook()
+    expect(r.init?.status).toBe(200)
+    expect(h.lookups).toContainEqual(['phone_number_id','pn-1'])
+    expect(h.lookups).toContainEqual(['account_id',accountId])
+    expect(h.lookups).toContainEqual(['account_role','owner'])
+    expect(mockFindExistingContact).toHaveBeenCalledWith(expect.anything(),accountId,'15551230000')
+    expect(h.state.contactInserts[0]).toMatchObject({user_id:'embedded-owner',account_id:accountId})
+  })
+  it.each(['unknown','pending','disconnected','error'])('drops %s number with 200 without message or status mutations',async status => {
+    useConnection(status)
+    if(status==='unknown')h.embeddedRows=[]
+    const r=await runWebhook()
+    expect(r.init?.status).toBe(200)
+    expect(h.state.upsertCalls).toEqual([]);expect(mockFindExistingContact).not.toHaveBeenCalled()
+    await runStatusWebhook({id:'wamid.TEST1',status:'delivered',timestamp:'1700000000',recipient_id:'15551230000'})
+    expect(h.state.messageUpdates).toEqual([]);expect(h.state.recipientUpdates).toEqual([])
+  })
+  it.each(['lookup','owner','ciphertext'])('fails closed on %s error',async kind => {
+    useConnection()
+    if(kind==='lookup')h.embeddedLookupError=true
+    if(kind==='owner')h.ownerMissing=true
+    if(kind==='ciphertext')h.embeddedRows[0].token_ciphertext='bad'
+    await runWebhook();expect(h.state.upsertCalls).toEqual([])
+  })
+  it('scopes connected-number status updates to its own account, even when Meta ids collide',async () => {
+    useConnection();h.scopedMessageIds=['only-owned-message']
+    await runStatusWebhook({id:'wamid.COLLISION',status:'delivered',timestamp:'1700000000',recipient_id:'15551230000'})
+    expect(h.state.messageUpdates).toEqual([{status:'delivered'}])
+    expect(h.scopedStatusFilters).toContainEqual(['conversations.account_id','embedded-account'])
+    expect(h.scopedStatusFilters).toContainEqual(['broadcasts.account_id','embedded-account'])
+    expect(h.scopedStatusFilters).toContainEqual(['id',['only-owned-message']])
+  })
+  it('does not mutate another accounts status when no owned message matches',async () => {
+    useConnection();h.scopedMessageIds=[]
+    await runStatusWebhook({id:'wamid.OTHER',status:'delivered',timestamp:'1700000000',recipient_id:'15551230000'})
+    expect(h.state.messageUpdates).toEqual([]);expect(h.state.recipientUpdates).toEqual([])
+  })
+  it('keeps legacy routing unchanged with flag off',async () => {
+    await runWebhook()
+    expect(h.lookups).toEqual([])
+    expect(h.state.upsertCalls).toHaveLength(1)
+    expect(mockFindExistingContact).toHaveBeenCalledWith(expect.anything(),'acc-1','15551230000')
+  })
+  it('requires HMAC before resolving any account or processing a message',async () => {
+    useConnection();h.validSignature=false
+    const r=await runWebhook()
+    expect(r.init?.status).toBe(401);expect(h.lookups).toEqual([]);expect(h.state.afterCallbacks).toEqual([])
   })
 })

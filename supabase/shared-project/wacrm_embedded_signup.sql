@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS wacrm.wa_connections (
  quality_rating text,
  token_ciphertext text NOT NULL,
  pin_ciphertext text,
- status text NOT NULL DEFAULT 'connected' CHECK (status IN ('connected','disconnected','error')),
+ status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','connected','disconnected','error')),
  last_error text,
  created_at timestamptz NOT NULL DEFAULT now(),
  updated_at timestamptz NOT NULL DEFAULT now()
@@ -42,6 +42,7 @@ CREATE OR REPLACE FUNCTION wacrm.claim_wa_connection(
  quality_rating text,waba_id text,status text)
  LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
  AS $$
+ #variable_conflict use_column
  BEGIN
  IF current_setting('role',true) <> 'service_role' THEN
    RAISE EXCEPTION 'service_role only' USING ERRCODE='42501';
@@ -51,12 +52,12 @@ CREATE OR REPLACE FUNCTION wacrm.claim_wa_connection(
  (account_id,waba_id,phone_number_id,business_id,display_phone_number,
  verified_name,quality_rating,token_ciphertext,pin_ciphertext,status)
  VALUES (p_account_id,p_waba_id,p_phone_number_id,p_business_id,p_display_phone_number,
- p_verified_name,p_quality_rating,p_token_ciphertext,p_pin_ciphertext,'connected')
+ p_verified_name,p_quality_rating,p_token_ciphertext,p_pin_ciphertext,'pending')
  ON CONFLICT (phone_number_id) DO UPDATE SET
  waba_id=EXCLUDED.waba_id,business_id=EXCLUDED.business_id,
  display_phone_number=EXCLUDED.display_phone_number,verified_name=EXCLUDED.verified_name,
  quality_rating=EXCLUDED.quality_rating,token_ciphertext=EXCLUDED.token_ciphertext,
- pin_ciphertext=EXCLUDED.pin_ciphertext,status='connected',last_error=NULL,updated_at=now()
+ pin_ciphertext=EXCLUDED.pin_ciphertext,status='pending',last_error=NULL,updated_at=now()
  WHERE c.account_id=EXCLUDED.account_id
  RETURNING c.id,c.display_phone_number,c.verified_name,c.quality_rating,c.waba_id,c.status;
  IF NOT FOUND THEN RAISE EXCEPTION 'wa_connection_owned' USING ERRCODE='23505'; END IF;

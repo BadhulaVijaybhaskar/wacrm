@@ -23,7 +23,7 @@ function envFlagOn(name: string): boolean {
 }
 
 export function isEmbeddedSignupEnabled(): boolean {
-  return envFlagOn('WHATSAPP_EMBEDDED_SIGNUP')
+  return process.env.WACRM_EMBEDDED_SIGNUP !== '1' && envFlagOn('WHATSAPP_EMBEDDED_SIGNUP')
 }
 
 export function isMetaStubMode(): boolean {
