@@ -88,6 +88,12 @@ describe('staging Dockerfile inlines every NEXT_PUBLIC_* read in src', () => {
     ).toEqual([]);
   });
 
+  it('loads the callback state secret from env_file without overriding it', () => {
+    const compose = readFileSync(join(ROOT, 'deploy/staging/docker-compose.staging.yml'), 'utf8');
+    expect(compose).toMatch(/env_file:\s*\n\s*- \.env\.staging/);
+    expect(compose).not.toMatch(/^\s*WACRM_ES_STATE_SECRET:/m);
+  });
+
   it('compose fail-closes schema + bucket prefix build args and runtime env', () => {
     const compose = readFileSync(
       join(ROOT, 'deploy/staging/docker-compose.staging.yml'),

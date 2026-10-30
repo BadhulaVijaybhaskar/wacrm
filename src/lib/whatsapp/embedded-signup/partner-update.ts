@@ -1,4 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/admin';
+import { sanitizeLastError } from './errors';
+
+const removableStatuses = ['connected', 'pending', 'error'];
 
 function record(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === 'object' ? value as Record<string, unknown> : {};
@@ -10,7 +13,11 @@ function id(value: unknown): string | undefined {
 /** account_update value.waba_info is optional; entry.id is normally the WABA. */
 export async function handlePartnerUpdate(value: unknown, time: unknown, entryId?: string) {
   const event = record(value);
-  if (event.event !== 'PARTNER_ADDED' && event.event !== 'PARTNER_REMOVED') return;
+  if (event.event === 'PARTNER_ADDED') {
+    console.info('[webhook] partner added acknowledged; complete signup to connect');
+    return;
+  }
+  if (event.event !== 'PARTNER_REMOVED') return;
   const info = record(event.waba_info);
   const wabaId = id(info.waba_id) || id(entryId);
   const businessId = id(info.owner_business_id);
@@ -22,11 +29,11 @@ export async function handlePartnerUpdate(value: unknown, time: unknown, entryId
   const db = createServiceClient().schema('wacrm');
   const columns = 'id,status,updated_at,waba_id,business_id';
   let result = wabaId
-    ? await db.from('wa_connections').select(columns).eq('waba_id', wabaId)
+    ? await db.from('wa_connections').select(columns).in('status', removableStatuses).eq('waba_id', wabaId)
     : { data: [], error: null };
   if (result.error) throw new Error('partner_connection_lookup_failed');
   if (!result.data?.length && businessId) {
-    result = await db.from('wa_connections').select(columns).eq('business_id', businessId);
+    result = await db.from('wa_connections').select(columns).in('status', removableStatuses).eq('business_id', businessId);
     if (result.error) throw new Error('partner_connection_lookup_failed');
     // Business ownership alone must not change another WABA's connections.
     if (wabaId) result.data = result.data?.filter(row => row.waba_id === wabaId);
@@ -35,15 +42,14 @@ export async function handlePartnerUpdate(value: unknown, time: unknown, entryId
     console.warn('[webhook] unknown partner connection; skipping event');
     return;
   }
-  const status = event.event === 'PARTNER_ADDED' ? 'connected' : 'disconnected';
   for (const row of result.data) {
+    if (!removableStatuses.includes(row.status)) continue;
     if (!Number.isFinite(Date.parse(row.updated_at)) || Date.parse(row.updated_at) >= millis) continue;
-    // A newer same-status event still needs this safe no-op update to advance
-    // the watermark, or a delayed opposite event could reverse it.
     // No event-time column exists. The DB trigger sets updated_at to receipt time.
     // Compare event time with that conservative watermark; CAS prevents races with
     // disconnect, transfer, provisioning, or another webhook after this read.
-    const { error } = await db.from('wa_connections').update({ status, last_error: null })
+    const { error } = await db.from('wa_connections').update({ status: 'disconnected', last_error: sanitizeLastError('partner_removed') })
+      .in('status', removableStatuses)
       .eq('id', row.id).eq('status', row.status).eq('updated_at', row.updated_at)
       .lt('updated_at', eventTime);
     if (error) throw new Error('partner_connection_update_failed');

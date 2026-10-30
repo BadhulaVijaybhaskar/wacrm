@@ -80,13 +80,19 @@ vi.mock('@supabase/supabase-js', () => ({
         case 'wa_connections':
           return {
             update: (patch: Record<string, unknown>) => {
-              const q = { eq: () => q, lt: async () => { h.partnerWrites.push(patch); return {error:null}; } };
+              const q = { in: () => q, eq: () => q, lt: async () => { h.partnerWrites.push(patch); return {error:null}; } };
               return q;
             },
-            select: () => ({ eq: (key: string, value: unknown) => {
-            h.lookups.push([key, value]);
-            return Promise.resolve({data:h.embeddedRows,error:h.embeddedLookupError ? {code:'test',message:'private-db-details pn-1 dummy-embedded-token'} : null})
-          } }) }
+            select: () => {
+              const q = {
+                in: () => q,
+                eq: (key: string, value: unknown) => {
+                  h.lookups.push([key, value]);
+                  return Promise.resolve({data:h.embeddedRows,error:h.embeddedLookupError ? {code:'test',message:'private-db-details pn-1 dummy-embedded-token'} : null});
+                },
+              };
+              return q;
+            } }
         case 'profiles': {
           const q = {
             eq: (key: string, value: unknown) => { h.lookups.push([key,value]);return q },
@@ -1228,7 +1234,7 @@ describe('account_update webhook routing and signature gate',()=>{
     return new Request('https://test.invalid/api/whatsapp/webhook', {
       method:'POST', headers: signature ? {'x-hub-signature-256':signature} : {},
       body:JSON.stringify({entry:[{id:'waba',time:1793354400,changes:[{
-        field:'account_update',value:{event:'PARTNER_ADDED',waba_info:{waba_id:'waba'}}
+        field:'account_update',value:{event:'PARTNER_REMOVED',waba_info:{waba_id:'waba'}}
       }]}]}),
     });
   }
@@ -1247,7 +1253,7 @@ describe('account_update webhook routing and signature gate',()=>{
     const signature='sha256='+createHmac('sha256','partner-test-secret').update(body).digest('hex');
     const response=await POST(new Request(unsigned.url,{method:'POST',headers:{'x-hub-signature-256':signature},body}));
     for(const cb of h.state.afterCallbacks)await cb();
-    expect(response.init?.status).toBe(200);expect(h.partnerWrites).toEqual([{status:'connected',last_error:null}]);
+    expect(response.init?.status).toBe(200);expect(h.partnerWrites).toEqual([{status:'disconnected',last_error:'WhatsApp: Partner access removed. Reconnect WhatsApp.'}]);
     expect(h.lookups).toEqual([['waba_id','waba']]);expect(h.state.upsertCalls).toEqual([]);
   });
   it('acks unknown WABA with no writes',async()=>{

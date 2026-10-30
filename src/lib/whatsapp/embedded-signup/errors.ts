@@ -6,6 +6,7 @@ const safeMessages: Record<string, string> = {
   database_error: 'Connection state could not be saved.',
   configuration_error: 'Connection configuration is unavailable.',
   token_invalid: 'WhatsApp authorization is invalid or expired. Reconnect WhatsApp.',
+  partner_removed: 'Partner access removed. Reconnect WhatsApp.',
   state_changed: 'Connection state changed. Retry the request.',
 };
 

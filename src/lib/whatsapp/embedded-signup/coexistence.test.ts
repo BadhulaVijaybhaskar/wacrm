@@ -31,7 +31,7 @@ describe('coexistence conversation previews',()=>{
   const filters:Record<string,unknown>={};
   const update=vi.fn((patch:typeof snapshot)=>{
    const q={eq:(key:string,value:unknown)=>{filters[key]=value;return q;},or:vi.fn(async(predicate:string)=>{
-    expect(predicate).toBe(`last_message_at.is.null,last_message_at.lt.${patch.last_message_at}`);
+    expect(predicate).toBe(`last_message_at.is.null,last_message_at.lt."${patch.last_message_at}"`);
     if(!snapshot.last_message_at||Date.parse(snapshot.last_message_at)<Date.parse(patch.last_message_at!))Object.assign(snapshot,patch);
     return {error:null};
    })};return q;
@@ -44,6 +44,7 @@ describe('coexistence conversation previews',()=>{
   await ingestCoexistence('smb_message_echoes',{message_echoes:[msg]}, {contact:async()=> 'contact',save:async(_id,messages)=>updateSyncPreview(h.db,'account','conversation',messages)});
   expect(h.snapshot).toEqual({last_message_text:'app reply',last_message_at:new Date(1700000000000).toISOString()});
   expect(h.filters).toEqual({account_id:'account',id:'conversation'});
+  expect(h.update.mock.results[0].value.or).toHaveBeenCalledWith('last_message_at.is.null,last_message_at.lt."2023-11-14T22:13:20.000Z"');
  });
  it('does not overwrite a newer preview with older history',async()=>{
   const h=database('2026-01-01T00:00:00Z');

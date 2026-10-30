@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { sanitizeLastError } from './errors';
 
 describe('Embedded Signup last_error sanitizer',()=>{
+  it('stores fixed reconnect instructions for removed partner access',()=>{
+    expect(sanitizeLastError('partner_removed')).toBe('WhatsApp: Partner access removed. Reconnect WhatsApp.');
+  });
   it('stores a numeric Meta code with an allowlisted safe message',()=>{
     expect(sanitizeLastError('meta_request_failed',100)).toBe('Meta 100: WhatsApp connection request failed.');
     expect(sanitizeLastError('pin_mismatch',133005)).toBe('Meta 133005: Two-step verification PIN is incorrect. Turn off two-step verification for this number in WhatsApp Manager, then retry.');

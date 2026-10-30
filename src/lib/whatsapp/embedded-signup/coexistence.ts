@@ -44,6 +44,6 @@ export async function updateSyncPreview(db:import('@supabase/supabase-js').Supab
   const timestamp=new Date(ms).toISOString();
   const {error}=await db.from('conversations').update({last_message_text:message.text?.body||`[${message.type}]`,last_message_at:timestamp})
     .eq('account_id',accountId).eq('id',conversationId)
-    .or(`last_message_at.is.null,last_message_at.lt.${timestamp}`);
+    .or(`last_message_at.is.null,last_message_at.lt."${timestamp}"`);
   if(error)throw new Error('coexistence_preview_update_failed');
 }
