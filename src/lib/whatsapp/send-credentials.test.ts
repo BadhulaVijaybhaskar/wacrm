@@ -13,7 +13,7 @@ vi.mock('@/lib/supabase/admin',()=>({createServiceClient:()=>{
   const filters:Record<string,unknown>={};let patch:Record<string,unknown>|undefined;
   const result=()=>{
    h.calls.push({table,filters:{...filters}});
-   let data=table==='wa_connections'?h.rows.filter(r=>h.foreign||Object.entries(filters).every(([k,v])=>r[k]===v)):table==='messages'?h.messageRows:[];
+   const data=table==='wa_connections'?h.rows.filter(r=>h.foreign||Object.entries(filters).every(([k,v])=>r[k]===v)):table==='messages'?h.messageRows:[];
    if(patch){h.writes.push(patch);for(const row of data)Object.assign(row,patch);}
    return {data,error:h.error?{message:'private-db-details'}:null};
   };
@@ -128,7 +128,8 @@ describe('Token health',()=>{
  it('marks invalid tokens error with a safe reconnect message',async()=>{
   h.rows=[row()];vi.mocked(fetch).mockResolvedValue(Response.json({data:{is_valid:false,app_id:'app'}}));
   expect(await checkAccountConnections('a')).toEqual({connections:[{id:'connection',status:'error'}]});
-  expect(h.writes[0]).toMatchObject({status:'error',last_error:expect.stringContaining('Reconnect WhatsApp')});
+  expect(h.writes.find(write=>write.status==='error')).toMatchObject({status:'error',last_error:expect.stringContaining('Reconnect WhatsApp')});
+  expect(h.writes[0]).toHaveProperty('last_health_check_at');
   expect(JSON.stringify(h.writes)).not.toContain('business-token');
  });
  it('does not mark an invalid token after it was rotated by reconnect',async()=>{

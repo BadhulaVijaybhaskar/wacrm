@@ -1,7 +1,7 @@
 // Documented payloads only; historical/Business-app messages never run bots.
 // https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/onboarding-business-app-users#webhooks
 import { z } from 'zod';
-const message=z.object({id:z.string(),timestamp:z.string().regex(/^\d+$/),type:z.string(),from:z.string().optional(),to:z.string().optional(),
+const message=z.object({id:z.string(),timestamp:z.string().regex(/^\d+$/).refine(t=>Number(t)>0&&Number(t)*1000<=8640000000000000),type:z.string(),from:z.string().optional(),to:z.string().optional(),
   text:z.object({body:z.string()}).optional(),history_context:z.object({status:z.string().optional()}).optional()}).passthrough();
 const history=z.object({history:z.array(z.object({threads:z.array(z.object({id:z.string(),messages:z.array(message)})).optional()}))});
 const echoes=z.object({message_echoes:z.array(message)});
@@ -31,4 +31,19 @@ export async function ingestCoexistence(field:string,value:unknown,hooks:SyncHoo
     return true;
   }
   return false;
+}
+
+// Use the same preview fields/text fallback as inbound messages, without its unread RPC.
+// The timestamp predicate runs in SQL, so concurrent inbound messages also win.
+export async function updateSyncPreview(db:import('@supabase/supabase-js').SupabaseClient,accountId:string,conversationId:string,messages:SyncMessage[]){
+  const dated=messages.map(message=>({message,ms:Number(message.timestamp)*1000}))
+    .filter(row=>/^\d+$/.test(row.message.timestamp)&&Number.isFinite(row.ms)&&row.ms>0&&row.ms<=8640000000000000)
+    .sort((a,b)=>b.ms-a.ms);
+  if(!dated.length)return;
+  const {message,ms}=dated[0];
+  const timestamp=new Date(ms).toISOString();
+  const {error}=await db.from('conversations').update({last_message_text:message.text?.body||`[${message.type}]`,last_message_at:timestamp})
+    .eq('account_id',accountId).eq('id',conversationId)
+    .or(`last_message_at.is.null,last_message_at.lt.${timestamp}`);
+  if(error)throw new Error('coexistence_preview_update_failed');
 }

@@ -2062,6 +2062,8 @@
       "copied": "Secret copied"
     },
     "whatsappConnections": {
+      "numberPickerLabel": "Choose a WhatsApp number",
+      "numberPickerComplete": "Connect selected number",
       "title": "Connect WhatsApp",
       "description": "Connect a business number to your account.",
       "loadFailed": "Unable to load WhatsApp connections.",

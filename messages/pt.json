@@ -2062,6 +2062,8 @@
     },
     "title": "Configurações",
     "whatsappConnections": {
+      "numberPickerLabel": "Escolha um número do WhatsApp",
+      "numberPickerComplete": "Conectar o número selecionado",
       "title": "Conectar WhatsApp",
       "description": "Conecte um número comercial à sua conta.",
       "loadFailed": "Não foi possível carregar as conexões do WhatsApp.",

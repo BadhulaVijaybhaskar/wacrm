@@ -17,3 +17,15 @@ describe('Embedded Signup settings wiring', () => {
     expect(card).toContain("source:'popup',state:callbackState.current");
   });
 });
+
+it('shows choices only for multiple numbers and sends the selected id with the continuation',()=>{
+ const card=readFileSync('src/components/settings/embedded-signup-card.tsx','utf8');
+ expect(card).toContain("body.status==='selection_required' && body.choices?.length>1");
+ expect(card).toContain('choices.length>1&&<NumberPicker');
+ expect(card).toContain('void complete(selected)');
+ expect(card).toContain("<RadioGroup value={mode} disabled={state==='connecting'||choices.length>1}");
+ expect(card).toContain('phone_number_id:phoneId');
+ expect(card).toContain('continuation:continuation.current');
+ expect(card).toContain('onChange={e=>onSelect(e.target.value)}');
+ expect(card).toContain('onClick={onComplete}');
+});

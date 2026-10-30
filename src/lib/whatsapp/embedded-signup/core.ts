@@ -7,6 +7,7 @@ import { sanitizeLastError } from './errors';
 export const enabled = () => process.env.WACRM_EMBEDDED_SIGNUP === '1';
 export const signupInput = z.object({
   code: z.string().min(1).max(4096),
+  continuation: z.string().max(16384).optional(),
   waba_id: z.string().regex(/^\d{1,32}$/).optional(),
   phone_number_id: z.string().regex(/^\d{1,32}$/).optional(),
   mode: z.enum(['coexistence','standard']).optional(),
@@ -57,7 +58,8 @@ export async function inspectBusinessToken(token: string) {
   const body=await graph('debug_token?'+new URLSearchParams({input_token:token}),appId+'|'+secret);
   return body.data;
 }
-async function resolveAssets(input: SignupInput,token:string):Promise<{waba:string;phoneId:string}> {
+export type PhoneChoice={id:string;display_phone_number:string|null;verified_name:string|null};
+async function resolveAssets(input: SignupInput,token:string):Promise<{waba:string;phoneId:string|null;choices:PhoneChoice[]}> {
   let waba=input.waba_id;
   if(!waba){
     const data=await inspectBusinessToken(token);
@@ -68,13 +70,18 @@ async function resolveAssets(input: SignupInput,token:string):Promise<{waba:stri
     if(ids.length!==1)throw new SignupError('asset_selection_required',400);
     waba=ids[0];
   }
-  const assets=await graph(waba+'/phone_numbers?fields=id',token);
+  const assets=await graph(waba+'/phone_numbers?fields=id,display_phone_number,verified_name',token);
   if(!Array.isArray(assets.data))throw new SignupError('asset_mismatch',403);
   const ids=assets.data.map((p:{id?:string})=>p.id).filter((id:unknown)=>typeof id==='string');
-  const phoneId=input.phone_number_id || (ids.length===1?ids[0]:null);
-  if(!phoneId)throw new SignupError('asset_selection_required',400);
-  if(!ids.includes(phoneId))throw new SignupError('asset_mismatch',403);
-  return {waba,phoneId};
+  if(input.phone_number_id && !ids.includes(input.phone_number_id))throw new SignupError('asset_mismatch',403);
+  // Popup FINISH can include a default number; still let the admin choose for multi-number WABAs.
+  const phoneId=ids.length>1&&!input.continuation?null:input.phone_number_id || (ids.length===1?ids[0]:null);
+  const choices:PhoneChoice[]=assets.data.filter((p:{id?:unknown})=>typeof p.id==='string').map((p:Record<string,unknown>)=>({
+    id:String(p.id),display_phone_number:typeof p.display_phone_number==='string'?p.display_phone_number:null,
+    verified_name:typeof p.verified_name==='string'?p.verified_name:null,
+  }));
+  if(!phoneId && !choices.length)throw new SignupError('asset_selection_required',400);
+  return {waba,phoneId,choices};
 }
 // Meta: the one-time Business app data sync was already performed for this number.
 const ALREADY_SYNCED_META_CODE = 2593107;
@@ -82,11 +89,24 @@ export async function connect(input: SignupInput, accountId: string) {
   const appId = process.env.META_APP_ID;
   const secret = process.env.META_APP_SECRET?.split(',')[0]?.trim();
   if (!appId || !secret) throw new SignupError('configuration_error', 503);
-  const params = new URLSearchParams({ client_id: appId, client_secret: secret, code: input.code });
-  const exchange = await graph('oauth/access_token?' + params.toString());
-  if (typeof exchange.access_token !== 'string' || !exchange.access_token) throw new SignupError('exchange_failed', 502);
-  const token: string = exchange.access_token;
-  const {waba,phoneId}=await resolveAssets(input,token);
+  let token:string;
+  if(input.continuation){
+    try{
+      const saved=JSON.parse(decryptToken(input.continuation));
+      if(saved.kind!=='number_selection' || saved.accountId!==accountId || typeof saved.expires!=='number' || saved.expires<=Date.now() || typeof saved.token!=='string'
+        || saved.waba!==input.waba_id || saved.mode!==input.mode || saved.businessId!==input.business_id || saved.state!==input.state || saved.source!==input.source)
+        throw new Error('invalid');
+      token=saved.token;
+    }catch{throw new SignupError('invalid_continuation',403);}
+  }else{
+    const params = new URLSearchParams({ client_id: appId, client_secret: secret, code: input.code });
+    const exchange = await graph('oauth/access_token?' + params.toString());
+    if (typeof exchange.access_token !== 'string' || !exchange.access_token) throw new SignupError('exchange_failed', 502);
+    token=exchange.access_token;
+  }
+  const {waba,phoneId,choices}=await resolveAssets(input,token);
+  if(!phoneId)return {status:'selection_required',waba_id:waba,choices,
+    continuation:encryptToken(JSON.stringify({kind:'number_selection',accountId,token,waba,source:input.source,mode:input.mode,businessId:input.business_id,state:input.state,expires:Date.now()+600000}))};
   const phone = await graph(phoneId + '?fields=display_phone_number,verified_name,quality_rating,is_on_biz_app,platform_type', token);
   const mode=input.mode || (input.source==='hosted' && phone.is_on_biz_app===true?'coexistence':'standard');
   if(mode==='coexistence' && (phone.is_on_biz_app!==true || phone.platform_type!=='CLOUD_API'))

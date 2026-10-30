@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { readFileSync } from 'node:fs';
 import { createTranslator, NextIntlClientProvider } from 'next-intl';
 import { describe, expect, it, vi } from 'vitest';
-import { ConnectionRows, type Connection } from './embedded-signup-card';
+import { NumberPicker, ConnectionRows, type Connection } from './embedded-signup-card';
 
 vi.mock('@/hooks/use-auth',()=>({useAuth:()=>({canEditSettings:true,accountId:'test-account'})}));
 const rows = ['connected','pending','error','disconnected'].map((status,i):Connection=>({
@@ -40,4 +40,12 @@ describe('Embedded Signup localized connection rows',()=>{
     for(const key of Object.keys(expected))expect(t(key,{name:'Test',quality:'GREEN',id:'123'})).toBeTruthy();
     expect(onError).not.toHaveBeenCalled();
   });
+});
+
+it.each(['en','es','pt','ko'])('renders the translated number picker with numbers and verified names in %s',locale=>{
+ const html=renderToStaticMarkup(createElement(NextIntlClientProvider,{locale,messages:catalogue(locale),timeZone:'UTC'},
+  createElement(NumberPicker,{choices:[{id:'456',display_phone_number:'+123',verified_name:'First'},{id:'789',display_phone_number:'+789',verified_name:null}],selected:'789',busy:false,onSelect:vi.fn(),onComplete:vi.fn()})));
+ expect(html).toContain('+123 — First');expect(html).toContain('+789');
+ expect(html).toContain('value="789" selected=""');
+ expect(html).toContain(catalogue(locale).Settings.whatsappConnections.numberPickerComplete);
 });

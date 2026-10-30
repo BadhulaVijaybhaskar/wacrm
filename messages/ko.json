@@ -2062,6 +2062,8 @@
     },
     "title": "설정",
     "whatsappConnections": {
+      "numberPickerLabel": "WhatsApp 번호 선택",
+      "numberPickerComplete": "선택한 번호 연결",
       "title": "WhatsApp 연결",
       "description": "계정에 비즈니스 전화번호를 연결하세요.",
       "loadFailed": "WhatsApp 연결을 불러올 수 없습니다.",

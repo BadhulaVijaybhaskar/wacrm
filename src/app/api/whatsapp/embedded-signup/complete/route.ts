@@ -39,8 +39,8 @@ function isCrossSite(request: Request): boolean {
 
 export async function POST(request: Request) {
   if (!enabled()) return NextResponse.json({ error: 'not_found' }, { status: 404 });
-  // The callback state cookie is single-use: every response after a
-  // validation attempt (success or any rejection) clears it.
+  // Completion/rejections consume the callback cookie. A pending number
+  // selection keeps the original cookie and its original expiry.
   const reply = (response: NextResponse) => {
     response.cookies.set(CALLBACK_COOKIE, '', {
       httpOnly: true,
@@ -62,7 +62,10 @@ export async function POST(request: Request) {
     if (!validCallbackState(input.data.state, cookie, ctx.accountId, secret)) {
       throw new SignupError('callback_state_invalid', 403);
     }
-    return reply(NextResponse.json(await connect(input.data, ctx.accountId)));
+    const result=await connect(input.data, ctx.accountId);
+    // Keep the callback state valid only while the number picker is pending.
+    const response=NextResponse.json(result);
+    return result.status==='selection_required'?response:reply(response);
   } catch (error) {
     if (error instanceof UnauthorizedError || error instanceof ForbiddenError) {
       return reply(NextResponse.json({ error: 'forbidden' }, { status: error.status }));

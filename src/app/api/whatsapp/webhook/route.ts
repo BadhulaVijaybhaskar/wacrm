@@ -1,6 +1,6 @@
 import { NextResponse, after } from 'next/server'
 import { handlePartnerUpdate } from '@/lib/whatsapp/embedded-signup/partner-update';
-import { ingestCoexistence } from '@/lib/whatsapp/embedded-signup/coexistence';
+import { ingestCoexistence, updateSyncPreview } from '@/lib/whatsapp/embedded-signup/coexistence';
 import { createServiceClient } from '@/lib/supabase/admin'
 import { resolveEmbeddedWebhookConnection, type WebhookConnection } from '@/lib/whatsapp/embedded-signup/webhook-routing'
 import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption'
@@ -375,7 +375,8 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
             interactive_payload:{_wacrm_phone_number_id:value.metadata.phone_number_id},
           }));
           if(rows.length){const {error}=await supabaseAdmin().from('messages').upsert(rows,{onConflict:'conversation_id,message_id',ignoreDuplicates:true});
-            if(error)throw new Error('coexistence_history_persist_failed');}
+            if(error)throw new Error('coexistence_history_persist_failed');
+            await updateSyncPreview(supabaseAdmin(),connection!.account_id,found.conversation.id,messages);}
         },
       }))continue;
 

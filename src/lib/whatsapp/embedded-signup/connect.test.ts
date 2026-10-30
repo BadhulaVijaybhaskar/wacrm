@@ -16,7 +16,7 @@ const h = vi.hoisted(() => ({
   events: [] as string[],
   updates: [] as Record<string, unknown>[],
   claimError: false,
-  mismatch: false,
+  mismatch: false, multi:false,
   failure: '' as string,
   metaCode: 100,biz:false,syncs:[] as string[],debugTargets:['123'],syncErrorCode:null as number|null,
 }));
@@ -99,7 +99,7 @@ beforeEach(() => {
   vi.stubEnv('META_APP_ID', 'test-app'); vi.stubEnv('META_APP_SECRET', 'test-secret');
   vi.stubEnv('WACRM_TOKEN_ENC_KEY', Buffer.alloc(32, 1).toString('base64'));
   h.owner = null; h.claimed = null; h.events = []; h.updates = []; h.claimError = false;
-  h.mismatch = false; h.failure = ''; h.metaCode = 100;
+  h.multi=false;h.mismatch = false; h.failure = ''; h.metaCode = 100;
   h.ownerStatus='connected';h.pinCiphertext=null;h.atomicPin=null;h.liveToken='';h.writeFailure=false;h.pins=[];h.updatedAt=new Date(Date.now()).toISOString();h.legacyAccount=null;h.legacyError=false;h.updateAttempts=[];h.legacyFilters=[];h.selections=[];h.returnedPins=[];h.pinReadError=false;h.biz=false;h.syncs=[];h.debugTargets=['123'];h.syncErrorCode=null;
   vi.stubGlobal('fetch', vi.fn(async (url: string, options?: RequestInit) => {
     const step = url.includes('debug_token')?'debug':url.includes('smb_app_data')?'sync':url.includes('oauth/access_token') ? 'exchange' : url.includes('/phone_numbers') ? 'verify'
@@ -111,7 +111,7 @@ beforeEach(() => {
     if(step==='register')h.pins.push(JSON.parse(String(options?.body)).pin);
     if (h.failure === step) return Response.json({ error: { code: h.metaCode, message: 'test-business-token test-oauth-code' } }, { status: 400 });
     return Response.json(step === 'exchange' ? { access_token: 'test-business-token' }
-      : step === 'verify' ? { data: [{ id: h.mismatch ? '999' : '456' }] }
+      : step === 'verify' ? { data: h.multi?[{id:'456',display_phone_number:'+123',verified_name:'First'},{id:'789',display_phone_number:'+789',verified_name:'Second'}]:[{ id: h.mismatch ? '999' : '456' }] }
       : step === 'phone' ? { display_phone_number: '+123', verified_name: 'Test', quality_rating: 'GREEN',...(h.biz?{is_on_biz_app:true,platform_type:'CLOUD_API'}:{}) }
       : { success: true });
   }));
@@ -385,4 +385,31 @@ describe('Embedded Signup connect orchestration', () => {
     expect(sql.indexOf(signature)).toBeLessThan(sql.indexOf('CREATE OR REPLACE FUNCTION wacrm.claim_wa_connection'));
     expect(readFileSync('supabase/shared-project/rollback_wacrm_embedded_signup.sql','utf8')).toContain(signature);
   });
+});
+
+describe('number selection',()=>{
+ it('returns multi-number choices and resumes a valid choice without exchanging the code again',async()=>{
+  h.multi=true;
+  const selection=await connect(input,'a');
+  expect(selection).toMatchObject({status:'selection_required',choices:[{id:'456',display_phone_number:'+123',verified_name:'First'},{id:'789'}]});
+  expect(h.events).not.toContain('claim');
+  const result=await connect({...input,phone_number_id:'789',continuation:selection.continuation},'a');
+  expect(result.status).toBe('connected');
+  expect(h.events.filter(e=>e==='exchange')).toHaveLength(1);
+ });
+ it('rejects a foreign phone id before writes',async()=>{
+  h.multi=true;const selection=await connect({...input,phone_number_id:undefined},'a');
+  await expect(connect({...input,phone_number_id:'999',continuation:selection.continuation},'a')).rejects.toMatchObject({code:'asset_mismatch'});
+  expect(h.events).not.toContain('claim');
+ });
+ it('auto-selects a single number',async()=>{
+  expect((await connect({...input,phone_number_id:undefined},'a')).status).toBe('connected');
+ });
+ it('rejects tampered, expired, and cross-account continuations',async()=>{
+  h.multi=true;const selection=await connect({...input,phone_number_id:undefined},'a');
+  await expect(connect({...input,continuation:selection.continuation},'b')).rejects.toMatchObject({code:'invalid_continuation'});
+  await expect(connect({...input,continuation:'tampered'},'a')).rejects.toMatchObject({code:'invalid_continuation'});
+  vi.spyOn(Date,'now').mockReturnValue(Date.now()+600001);
+  await expect(connect({...input,continuation:selection.continuation},'a')).rejects.toMatchObject({code:'invalid_continuation'});
+ });
 });

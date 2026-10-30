@@ -9,7 +9,7 @@ import {issueCallbackState,validCallbackState,CALLBACK_COOKIE} from '@/lib/whats
 import { encryptToken } from '@/lib/whatsapp/embedded-signup/crypto';
 
 const h = vi.hoisted(() => ({
-  auth: vi.fn(), row: null as null | Record<string, unknown>, patches: [] as Record<string, unknown>[],
+  multi:false,auth: vi.fn(), row: null as null | Record<string, unknown>, patches: [] as Record<string, unknown>[],
   failure: '' as string, owner: null as null | string, dbError: false,
   legacyNumber:false,legacyAccount:null as string|null,legacyError:false,emptyUpdate:false,
   metaCode:100,siblings:[] as {id:string}[],siblingError:false,filters:[] as [string,unknown][],
@@ -71,11 +71,11 @@ beforeEach(() => {
   vi.stubEnv('WACRM_ES_STATE_SECRET','');
   vi.stubEnv('WACRM_EMBEDDED_SIGNUP','1'); vi.stubEnv('META_APP_ID','test-app'); vi.stubEnv('META_APP_SECRET','test-secret');
   vi.stubEnv('WACRM_TOKEN_ENC_KEY',Buffer.alloc(32,2).toString('base64'));
-  h.auth.mockResolvedValue({accountId:'a',role:'admin'}); h.row=null; h.patches=[];h.failure='';h.owner=null;h.dbError=false;h.siblings=[];h.siblingError=false;h.filters=[];h.metaCode=100;h.legacyNumber=false;h.legacyAccount=null;h.legacyError=false;h.emptyUpdate=false;
+  h.multi=false;h.auth.mockResolvedValue({accountId:'a',role:'admin'}); h.row=null; h.patches=[];h.failure='';h.owner=null;h.dbError=false;h.siblings=[];h.siblingError=false;h.filters=[];h.metaCode=100;h.legacyNumber=false;h.legacyAccount=null;h.legacyError=false;h.emptyUpdate=false;
   vi.stubGlobal('fetch',vi.fn(async (url: string) => {
     if(h.failure && url.includes(h.failure)) return Response.json({error:{code:h.metaCode,message:'test-code test-token'}},{status:400});
     return Response.json(url.includes('oauth') ? {access_token:'test-token'} : url.includes('/phone_numbers')
-      ? {data:[{id:'456'}]} : {success:true});
+      ? {data:h.multi?[{id:'456',display_phone_number:'+123',verified_name:'First'},{id:'789'}]:[{id:'456'}]} : {success:true});
   }));
 });
 afterEach(() => {vi.unstubAllEnvs();vi.unstubAllGlobals();vi.restoreAllMocks();});
@@ -271,4 +271,19 @@ describe('Embedded Signup routes', () => {
   it('disconnect query error is not misreported as auth or not found',async () => {
     h.dbError=true;expect((await disconnectReq()).status).toBe(500);
   });
+});
+
+it('retains callback cookie for choices and clears it after completing the selected number',async()=>{
+ h.multi=true;
+ const issued=signedState();
+ const payload={code:'test-code',waba_id:'123',phone_number_id:'456',source:'popup',state:issued.state};
+ const request=(body:unknown)=>new Request('https://test.invalid',{method:'POST',headers:{'Content-Type':'application/json',cookie:CALLBACK_COOKIE+'='+issued.cookie},body:JSON.stringify(body)});
+ const selection=await complete(request(payload));
+ expect(selection.status).toBe(200);expect(selection.headers.get('set-cookie')).toBeNull();
+ const body=await selection.json();expect(body.status).toBe('selection_required');expect(body.choices).toHaveLength(2);
+ expect(JSON.stringify(body)).not.toContain('test-token');
+ const connected=await complete(request({...payload,phone_number_id:'789',continuation:body.continuation}));
+ expect(connected.status).toBe(200);expect((await connected.json()).status).toBe('connected');
+ expect(connected.headers.get('set-cookie')).toContain('Max-Age=0');
+ expect(vi.mocked(fetch).mock.calls.filter(([url])=>String(url).includes('oauth'))).toHaveLength(1);
 });
