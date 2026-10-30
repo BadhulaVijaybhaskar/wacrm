@@ -30,6 +30,7 @@ services:
     env_file:
       - .env.staging
     environment:
+      WACRM_ES_STATE_SECRET: ${WACRM_ES_STATE_SECRET:-}
       PORT: "3000"
       GIT_COMMIT: ${GIT_COMMIT:-unknown}
       # Default: talk to the local Connect stub, never live Connect.

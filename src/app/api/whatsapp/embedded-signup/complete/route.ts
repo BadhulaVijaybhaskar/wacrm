@@ -1,4 +1,4 @@
-import {CALLBACK_COOKIE,validCallbackState} from '@/lib/whatsapp/embedded-signup/callback-state';
+import {callbackStateSecret,CALLBACK_COOKIE,validCallbackState} from '@/lib/whatsapp/embedded-signup/callback-state';
 import { NextResponse } from 'next/server';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/auth/account';
 import { connect, enabled, publicError, signupInput, SignupError } from '@/lib/whatsapp/embedded-signup/core';
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
     const input = signupInput.safeParse(await request.json().catch(() => null));
     if (!input.success) throw new SignupError('invalid_request', 400);
     const cookie = readCookie(request, CALLBACK_COOKIE);
-    const secret = process.env.META_APP_SECRET?.split(',')[0]?.trim() || '';
+    const secret = callbackStateSecret();
     if (!validCallbackState(input.data.state, cookie, ctx.accountId, secret)) {
       throw new SignupError('callback_state_invalid', 403);
     }

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { launchOptions, signupMessage, type OnboardingMode } from '@/lib/whatsapp/embedded-signup/launch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { useEmbeddedSignupEnabled } from './embedded-signup-provider';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,6 +31,7 @@ function errorMessageKey(code:unknown){
   return 'connectFailed';
 }
 export function EmbeddedSignupCard() {
+  const featureEnabled = useEmbeddedSignupEnabled();
   const t = useTranslations('Settings.whatsappConnections');
   const {canEditSettings,accountId} = useAuth();
   const [mode,setMode]=useState<OnboardingMode>('coexistence');
@@ -43,12 +45,13 @@ export function EmbeddedSignupCard() {
   const submitted=useRef(false);
   const alive=useRef(true);
   const refresh=useCallback(async()=>{
+    if (!featureEnabled) return;
     const r=await fetch('/api/whatsapp/embedded-signup/connections');
     if(r.status===404){setEnabled(false);return;}
     if(!r.ok){setMessage(t('loadFailed'));setState('error');return;}
     const data=await r.json();
     setList(data.connections||[]);setEnabled(true);
-  },[t]);
+  },[t,featureEnabled]);
   useEffect(()=>{alive.current=true;void refresh();return()=>{alive.current=false;}},[refresh,accountId]);
   const complete=useCallback(async()=>{
     if(!code.current || !finish.current || submitted.current) return;
@@ -107,7 +110,7 @@ export function EmbeddedSignupCard() {
       setMessage(t(r.ok?'checkComplete':'checkFailed'));setState('idle');await refresh();}
     catch{setState('error');setMessage(t('checkFailed'));}
   }
-  if(!enabled) return null;
+  if(!featureEnabled || !enabled) return null;
   return <Card className="mt-6">
     <CardHeader><CardTitle>{t('title')}</CardTitle><CardDescription>{t('description')}</CardDescription></CardHeader>
     <CardContent className="space-y-4">

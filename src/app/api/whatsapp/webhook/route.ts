@@ -1,4 +1,5 @@
 import { NextResponse, after } from 'next/server'
+import { handlePartnerUpdate } from '@/lib/whatsapp/embedded-signup/partner-update';
 import { ingestCoexistence } from '@/lib/whatsapp/embedded-signup/coexistence';
 import { createServiceClient } from '@/lib/supabase/admin'
 import { resolveEmbeddedWebhookConnection, type WebhookConnection } from '@/lib/whatsapp/embedded-signup/webhook-routing'
@@ -129,6 +130,7 @@ interface MetaStatusError {
 }
 
 interface WhatsAppWebhookEntry {
+  time?: number | string
   id: string
   changes: Array<{
     value: {
@@ -308,6 +310,12 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
 
   for (const entry of body.entry) {
     for (const change of entry.changes) {
+      if (change.field === 'account_update') {
+        if (process.env.WACRM_EMBEDDED_SIGNUP === '1') {
+          await handlePartnerUpdate(change.value, entry.time, entry.id);
+        }
+        continue;
+      }
       // Template-lifecycle events (status / quality / components
       // updates from Meta) come in on a different change.field and
       // have a different value shape — route them through the

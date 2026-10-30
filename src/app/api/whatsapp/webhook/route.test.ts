@@ -1,7 +1,10 @@
+import { createHmac } from 'node:crypto'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // Shared, hoisted state the module mocks close over. Reset per test.
 const h = vi.hoisted(() => ({
+  realSignature: false,
+  partnerWrites: [] as Record<string, unknown>[],
   embeddedRows: [] as Record<string, unknown>[],
   embeddedLookupError: false,
   ownerMissing: false,
@@ -75,7 +78,12 @@ vi.mock('@supabase/supabase-js', () => ({
     from(table: string) {
       switch (table) {
         case 'wa_connections':
-          return { select: () => ({ eq: (key: string, value: unknown) => {
+          return {
+            update: (patch: Record<string, unknown>) => {
+              const q = { eq: () => q, lt: async () => { h.partnerWrites.push(patch); return {error:null}; } };
+              return q;
+            },
+            select: () => ({ eq: (key: string, value: unknown) => {
             h.lookups.push([key, value]);
             return Promise.resolve({data:h.embeddedRows,error:h.embeddedLookupError ? {code:'test',message:'private-db-details pn-1 dummy-embedded-token'} : null})
           } }) }
@@ -312,10 +320,15 @@ vi.mock('@/lib/contacts/dedupe', () => ({
   isUniqueViolation: () => false,
 }))
 
-vi.mock('@/lib/whatsapp/webhook-signature', () => ({
-  verifyMetaWebhookSignature: () => {h.gates.push('hmac');return h.validSignature},
+vi.mock('@/lib/whatsapp/webhook-signature', async importOriginal => {
+  const real = await importOriginal<typeof import('@/lib/whatsapp/webhook-signature')>();
+  return {
+  verifyMetaWebhookSignature: (body: string, signature: string | null) => {
+    h.gates.push('hmac');return h.realSignature ? real.verifyMetaWebhookSignature(body, signature) : h.validSignature;
+  },
   isMetaWebhookPayloadFresh: () => true,
-}))
+  };
+})
 vi.mock('@/lib/rate-limit',async importOriginal => ({
   ...await importOriginal<typeof import('@/lib/rate-limit')>(),
   checkRateLimit: () => {h.gates.push('rate');return {success:!h.rateLimited,remaining:1,reset:Date.now()+60000,limit:100}},
@@ -430,6 +443,7 @@ async function runStatusWebhook(status: Record<string, unknown>) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  h.realSignature=false;h.partnerWrites=[];
   h.embeddedRows=[];h.embeddedLookupError=false;h.ownerMissing=false;h.lookups=[];h.validSignature=true;h.legacyFound=true;h.rateLimited=false;h.gates=[]
   h.scopedMessageIds=[];h.scopedStatusFilters=[]
   vi.stubEnv('WACRM_EMBEDDED_SIGNUP','0')
@@ -1207,3 +1221,44 @@ describe('Embedded Signup webhook routing', () => {
     expect(r.init?.status).toBe(401);expect(h.lookups).toEqual([]);expect(h.state.afterCallbacks).toEqual([])
   })
 })
+
+
+describe('account_update webhook routing and signature gate',()=>{
+  function request(signature: string | null) {
+    return new Request('https://test.invalid/api/whatsapp/webhook', {
+      method:'POST', headers: signature ? {'x-hub-signature-256':signature} : {},
+      body:JSON.stringify({entry:[{id:'waba',time:1793354400,changes:[{
+        field:'account_update',value:{event:'PARTNER_ADDED',waba_info:{waba_id:'waba'}}
+      }]}]}),
+    });
+  }
+  it.each([null,'sha256='+'0'.repeat(64)])('rejects signature %s before any DB access/writes or processing',async signature=>{
+    vi.stubEnv('WACRM_EMBEDDED_SIGNUP','1');h.realSignature=true;
+    const response=await POST(request(signature));
+    expect(response.init?.status).toBe(401);
+    expect(h.state.afterCallbacks).toEqual([]);expect(h.lookups).toEqual([]);
+    expect(h.partnerWrites).toEqual([]);expect(h.state.upsertCalls).toEqual([]);
+  });
+  it('routes authenticated account_update to the partner handler before message routing',async()=>{
+    vi.stubEnv('WACRM_EMBEDDED_SIGNUP','1');
+    h.embeddedRows=[{id:'row',waba_id:'waba',status:'pending',updated_at:'2026-10-29T00:00:00Z'}];
+    h.realSignature=true;vi.stubEnv('META_APP_SECRET','partner-test-secret');
+    const unsigned=request(null);const body=await unsigned.text();
+    const signature='sha256='+createHmac('sha256','partner-test-secret').update(body).digest('hex');
+    const response=await POST(new Request(unsigned.url,{method:'POST',headers:{'x-hub-signature-256':signature},body}));
+    for(const cb of h.state.afterCallbacks)await cb();
+    expect(response.init?.status).toBe(200);expect(h.partnerWrites).toEqual([{status:'connected',last_error:null}]);
+    expect(h.lookups).toEqual([['waba_id','waba']]);expect(h.state.upsertCalls).toEqual([]);
+  });
+  it('acks unknown WABA with no writes',async()=>{
+    vi.stubEnv('WACRM_EMBEDDED_SIGNUP','1');
+    const response=await POST(request('sha256=stub'));
+    for(const cb of h.state.afterCallbacks)await cb();
+    expect(response.init?.status).toBe(200);expect(h.partnerWrites).toEqual([]);
+  });
+  it('ignores account_update when the feature is disabled',async()=>{
+    const response=await POST(request('sha256=stub'));
+    for(const cb of h.state.afterCallbacks)await cb();
+    expect(response.init?.status).toBe(200);expect(h.lookups).toEqual([]);expect(h.partnerWrites).toEqual([]);
+  });
+});

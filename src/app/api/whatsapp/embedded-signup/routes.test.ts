@@ -5,7 +5,7 @@ import { POST as health } from './health/route';
 import { POST as complete } from './complete/route';
 import { GET as connections } from './connections/route';
 import { POST as disconnect } from './connections/[id]/disconnect/route';
-import {issueCallbackState,CALLBACK_COOKIE} from '@/lib/whatsapp/embedded-signup/callback-state';
+import {issueCallbackState,validCallbackState,CALLBACK_COOKIE} from '@/lib/whatsapp/embedded-signup/callback-state';
 import { encryptToken } from '@/lib/whatsapp/embedded-signup/crypto';
 
 const h = vi.hoisted(() => ({
@@ -68,6 +68,7 @@ const req = (body?: unknown) => {
 };
 const disconnectReq = () => disconnect(req(),{params:Promise.resolve({id})});
 beforeEach(() => {
+  vi.stubEnv('WACRM_ES_STATE_SECRET','');
   vi.stubEnv('WACRM_EMBEDDED_SIGNUP','1'); vi.stubEnv('META_APP_ID','test-app'); vi.stubEnv('META_APP_SECRET','test-secret');
   vi.stubEnv('WACRM_TOKEN_ENC_KEY',Buffer.alloc(32,2).toString('base64'));
   h.auth.mockResolvedValue({accountId:'a',role:'admin'}); h.row=null; h.patches=[];h.failure='';h.owner=null;h.dbError=false;h.siblings=[];h.siblingError=false;h.filters=[];h.metaCode=100;h.legacyNumber=false;h.legacyAccount=null;h.legacyError=false;h.emptyUpdate=false;
@@ -195,6 +196,20 @@ describe('Embedded Signup routes', () => {
         headers:{'Content-Type':'application/json',...(cookie?{cookie:CALLBACK_COOKIE+'='+cookie}:{}),...headers},body:JSON.stringify(body)});
       return request;
     };
+    it('uses the dedicated secret in both config issuance and completion verification',async()=>{
+      vi.stubEnv('WACRM_ES_STATE_SECRET','dedicated-test-key');
+      const response=await config();const body=await response.json();
+      const cookie=response.cookies.get(CALLBACK_COOKIE)!.value;
+      expect(validCallbackState(body.state,cookie,'a','dedicated-test-key')).toBe(true);
+      expect(validCallbackState(body.state,cookie,'a','test-secret')).toBe(false);
+      expect((await complete(withCookie(popupBody(body.state),cookie))).status).toBe(200);
+    });
+    it('rejects legacy-key state when the dedicated secret is configured',async()=>{
+      vi.stubEnv('WACRM_ES_STATE_SECRET','dedicated-test-key');
+      const issued=signedState();
+      const response=await complete(withCookie(popupBody(issued.state),issued.cookie));
+      expect(response.status).toBe(403);expect(fetch).not.toHaveBeenCalled();expect(h.patches).toEqual([]);
+    });
     it('rejects a popup completion without state with 403 and clears the cookie',async()=>{
       const issued=signedState();const r=await complete(withCookie(popupBody(),issued.cookie));
       expect(r.status).toBe(403);expect(await r.json()).toMatchObject({error:'callback_state_invalid'});
